@@ -59,7 +59,7 @@ function toPublicService(row, category, source) {
     metadata: {}
   };
 }
-async function requireApiKey(req, requiredScope = null) {
+export async function requireApiKey(req, requiredScope = null) {
   const raw = bearer(req);
   if ((!raw.startsWith(KEY_PREFIX) && !raw.startsWith(TEST_KEY_PREFIX)) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
   const hash = sha256(raw);
