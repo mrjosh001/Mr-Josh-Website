@@ -52,7 +52,7 @@ function toPublicService(row, category, source) {
     metadata: {}
   };
 }
-async function requireApiKey(req) {
+async function requireApiKey(req, requiredScope = null) {
   const raw = bearer(req);
   if ((!raw.startsWith(KEY_PREFIX) && !raw.startsWith(TEST_KEY_PREFIX)) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
   const hash = sha256(raw);
@@ -65,11 +65,20 @@ async function requireApiKey(req) {
     .eq('id', key.reseller_id).maybeSingle();
   if (resellerError || !reseller || reseller.status !== 'active') return { error: { status: 403, message: 'Reseller account is not active' } };
   const environment = key.environment || (raw.startsWith(TEST_KEY_PREFIX) ? 'sandbox' : 'live');
+  const scopes = Array.isArray(key.scopes) ? key.scopes : [];
+  if (requiredScope && !scopes.includes(requiredScope) && !scopes.includes('*')) {
+    return { error: { status: 403, message: 'API key does not have the required permission', code: 'INSUFFICIENT_SCOPE' } };
+  }
   if ((environment === 'sandbox') !== raw.startsWith(TEST_KEY_PREFIX)) return { error: { status: 401, message: 'Invalid API key' } };
   const allowedIps = Array.isArray(key.ip_allowlist) ? key.ip_allowlist : [];
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   const clientIp = String(req.headers['x-real-ip'] || forwarded || '').trim();
   if (allowedIps.length && !allowedIps.includes(clientIp)) return { error: { status: 403, message: 'Request IP is not allowed' } };
+  const { data: limitResult, error: limitError } = await supabase.rpc('reseller_consume_rate_limit', {
+    p_key_id: key.id, p_limit: 60, p_window_seconds: 60
+  });
+  if (limitError) return { error: { status: 503, message: 'Rate limit service is unavailable' } };
+  if (limitResult?.allowed === false) return { error: { status: 429, message: 'Rate limit exceeded. Retry after the indicated interval.', code: 'RATE_LIMITED', retry_after: Number(limitResult.retry_after) || 60 } };
   await supabase.from('reseller_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', key.id);
   key.environment = environment;
   reseller.environment = environment;
@@ -252,8 +261,12 @@ export default async function handler(req, res) {
     const action = String(req.query?.action || 'catalog').toLowerCase();
     if (action === 'keys') return handleKeyManagement(req, res);
     if (req.method !== 'GET') return json(res, 405, { success: false, message: 'Method not allowed' });
-    const auth = await requireApiKey(req);
-    if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
+    const requiredScope = action === 'balance' ? 'wallet:read' : action === 'mail_offers' || action === 'catalog' || action === 'services' ? 'catalog:read' : null;
+    const auth = await requireApiKey(req, requiredScope);
+    if (auth.error) {
+      if (auth.error.status === 429) res.setHeader('Retry-After', String(auth.error.retry_after));
+      return json(res, auth.error.status, { success: false, code: auth.error.code, message: auth.error.message });
+    }
     if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);
     if (action === 'mail_offers') return handleMailOffers(req, res, auth.reseller);
     if (action === 'balance') return handleBalance(req, res, auth.reseller);
