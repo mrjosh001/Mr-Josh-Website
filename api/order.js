@@ -542,138 +542,288 @@ function categorize(name) {
 
 
 // ---------------------------------------------------------------------------
-// Inactive user re-engagement (Resend) — runs after catalog sync on daily cron
-// No extra serverless function (Hobby 12/12). Env: RESEND_API_KEY, RESEND_FROM_EMAIL
+// Customer care emails (Resend → Mailtrap)
+// Track A: never bought  |  Track B: last order older than 14 days
+// Cadence: at most 1 email every 7 days per user. Batch capped per cron run.
 // profiles: nudge_week, last_nudge_at, email_unsubscribed
+// optional: lapse_week, last_lapse_at (Track B; skipped gracefully if missing)
+// Env: RESEND_API_KEY, RESEND_FROM_EMAIL, MAILTRAP_API_TOKEN, MAILTRAP_FROM_EMAIL
 // ---------------------------------------------------------------------------
-const NUDGE_MAX_WEEK = 4;
-const NUDGE_BATCH = 25;
+const NUDGE_MAX_WEEK = 6;
+const LAPSE_MAX_WEEK = 4;
+const NUDGE_BATCH = 40;
 const NUDGE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const LAPSE_IDLE_MS = 14 * 24 * 60 * 60 * 1000;
 
-async function resendEmail({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
-  if (!apiKey || !to) return { ok: false, skipped: true };
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ from, to: [to], subject, html })
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.error('[nudge-email] Resend error', res.status, json);
-    return { ok: false, error: json };
-  }
-  return { ok: true, id: json.id };
+function isProviderQuotaError(status, json) {
+  if (status === 429 || status === 402 || status === 403) return true;
+  const msg = JSON.stringify(json || {}).toLowerCase();
+  return /rate limit|quota|too many|monthly|daily limit|free tier|usage limit|exceeded|insufficient/i.test(msg);
 }
 
-function nudgeEmailContent(week, name, appUrl) {
+function parseFromAddress(raw, fallbackEmail) {
+  const s = String(raw || '').trim();
+  const m = s.match(/^(.+?)\s*<([^>]+)>$/);
+  if (m) {
+    return {
+      name: m[1].trim().replace(/^["']|["']$/g, '') || 'MJ Hub',
+      email: m[2].trim()
+    };
+  }
+  if (s.includes('@')) return { name: 'MJ Hub', email: s };
+  return { name: 'MJ Hub', email: fallbackEmail || 'noreply@mjhub.store' };
+}
+
+/** Send via Resend, then Mailtrap on quota. Never both for the same recipient. */
+async function sendCareEmail({ to, subject, html }) {
+  const resendKey = process.env.RESEND_API_KEY;
+  const mailtrapKey = process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_API_KEY;
+  const fromResend =
+    process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
+  const fromMailtrap =
+    process.env.MAILTRAP_FROM_EMAIL ||
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.RESEND_FROM ||
+    'MJ Hub <noreply@mjhub.store>';
+
+  if (!resendKey && !mailtrapKey) return { ok: false, skipped: true, error: 'no email keys' };
+
+  if (resendKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ from: fromResend, to: [to], subject, html })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) return { ok: true, provider: 'resend', id: json.id };
+      if (!isProviderQuotaError(res.status, json)) {
+        console.error('[care-email] Resend error', res.status, json);
+        return { ok: false, provider: 'resend', error: json };
+      }
+      console.warn('[care-email] Resend quota, trying Mailtrap for', to);
+    } catch (e) {
+      console.error('[care-email] Resend exception', e.message);
+      if (!mailtrapKey) return { ok: false, provider: 'resend', error: e.message };
+    }
+  }
+
+  if (!mailtrapKey) return { ok: false, provider: 'resend', error: 'quota and no Mailtrap' };
+
+  const from = parseFromAddress(fromMailtrap, 'noreply@mjhub.store');
+  try {
+    const res = await fetch('https://send.api.mailtrap.io/api/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${mailtrapKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: { email: from.email, name: from.name },
+        to: [{ email: to }],
+        subject,
+        html
+      })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && (json.success === true || json.message_ids || res.status === 200)) {
+      return { ok: true, provider: 'mailtrap' };
+    }
+    console.error('[care-email] Mailtrap error', res.status, json);
+    return { ok: false, provider: 'mailtrap', error: json };
+  } catch (e) {
+    console.error('[care-email] Mailtrap exception', e.message);
+    return { ok: false, provider: 'mailtrap', error: e.message };
+  }
+}
+
+// 28 short human messages. Rotated by user id + step so the same person
+// does not always get the same wording, and different people get variety.
+const CARE_MESSAGES = [
+  {
+    subject: 'Your MJ Hub account is ready',
+    body: 'You signed up a little while ago and your account is waiting for you.\n\nWhenever you are ready, fund your wallet and order SMS numbers, logs, boosters, eSIM plans, or Telegram Stars and blue tick help from one dashboard.\n\nWe are glad you joined.'
+  },
+  {
+    subject: 'A simple way to start on MJ Hub',
+    body: 'If you have not ordered yet, the easiest first step is usually an SMS number or a log.\n\nFund once in Naira, then order from the same wallet. Everything lands in your dashboard.\n\nWe are here if you need a hand.'
+  },
+  {
+    subject: 'SMS, logs, boosters and more in one place',
+    body: 'A quick look at what sits behind your MJ Hub login.\n\nSMS OTP and rental numbers across many countries.\nReviewed logs for Facebook, Instagram, X, Gmail and more.\nBoosters for Instagram, TikTok and other platforms.\neSIM plans when you need data.\nTelegram Stars and blue tick verification help.\n\nOne wallet covers all of it.'
+  },
+  {
+    subject: 'Stuck on funding or what to order?',
+    body: 'If funding or choosing a product slowed you down, that is normal.\n\nWhatsApp and Telegram support are there for that. Reply to this mail or open support in the app and we will help you through the first order.'
+  },
+  {
+    subject: 'A short note from the team',
+    body: 'No pressure to buy. Just checking in so you know the account is still yours.\n\nWhen you need SMS, logs, boosters, eSIM or Telegram help, we will be right here.'
+  },
+  {
+    subject: 'We will keep your account open',
+    body: 'This is a quiet note from us.\n\nYour MJ Hub account stays active. Come back anytime you need numbers, logs, growth tools, an eSIM, or Telegram Stars and blue tick help.\n\nThank you for signing up.'
+  },
+  {
+    subject: 'Country numbers are live on MJ Hub',
+    body: 'Looking for reliable numbers for online verification? We have SMS OTP and rental numbers from many countries.\n\nPick a country, fund your wallet, and place the order from your dashboard.'
+  },
+  {
+    subject: 'Fresh logs are on the catalog',
+    body: 'New log listings go up regularly. Social accounts, email logs and more, with the details shown before you pay.\n\nBrowse the catalog, fund your wallet, and grab what you need.'
+  },
+  {
+    subject: 'Need numbers for verification?',
+    body: 'Get the number, receive the code in your dashboard, and move on with your signup.\n\nFund your wallet, pick your number, and you are set.'
+  },
+  {
+    subject: 'While you rest, we keep the shop open',
+    body: 'We stay on so your digital tools stay easy to reach.\n\nSMS numbers, logs, boosters, eSIM plans, Telegram Stars and blue tick help are all in one wallet when you need them.'
+  },
+  {
+    subject: 'A fresh day on MJ Hub',
+    body: 'Stock updates through the day. If you have been meaning to grab a log or an SMS number, this is a good time.\n\nFund your wallet, browse, and order from the dashboard.'
+  },
+  {
+    subject: 'Your digital tools in one wallet',
+    body: 'SMS, logs, boosters, eSIM and Telegram services sit in the same MJ Hub account.\n\nFund once, then order what you need without jumping between apps.'
+  },
+  {
+    subject: 'It has been a little while',
+    body: 'We noticed you have not ordered in a couple of weeks. Everything still works the same way.\n\nSMS, logs, boosters, eSIM and Telegram tools are in your dashboard whenever you need them.'
+  },
+  {
+    subject: 'Need SMS or logs again?',
+    body: 'If you are back to verifying apps or stocking accounts, the catalog is live and stock updates daily.\n\nSame wallet, same dashboard.'
+  },
+  {
+    subject: 'We still have your back',
+    body: 'Just a friendly check in. Your balance and order history are where you left them.\n\nWhenever you need us again, we are ready.'
+  },
+  {
+    subject: 'Last note for now',
+    body: 'We will pause the reminders here so your inbox stays calm.\n\nYour account stays open. Come back anytime for SMS, logs, boosters, eSIM or Telegram help.\n\nSee you when you need us.'
+  },
+  {
+    subject: 'Telegram Stars and blue tick help',
+    body: 'If you have been meaning to sort Telegram Stars or blue tick verification, that path is available inside MJ Hub.\n\nOpen the Telegram section on your dashboard when you are ready.'
+  },
+  {
+    subject: 'Boosters when you need growth',
+    body: 'Instagram, TikTok and other growth packages sit under MJ Boosters.\n\nFund your wallet, choose a package, and track the order until delivery completes.'
+  },
+  {
+    subject: 'eSIM plans on MJHUB Wireless',
+    body: 'Need data without swapping your physical SIM? MJHUB Wireless eSIM plans are available from your dashboard.\n\nFund your wallet and pick a plan that fits.'
+  },
+  {
+    subject: 'Good morning from MJ Hub',
+    body: 'A new day is a good time to clear a small digital task.\n\nWhether that is an SMS number, a log, a booster, an eSIM or Telegram help, your wallet and catalog are ready.'
+  },
+  {
+    subject: 'Still online? We are too',
+    body: 'If you are up late working or browsing, the shop is open.\n\nFund your wallet and order SMS, logs, boosters, eSIM or Telegram services when it suits you.'
+  },
+  {
+    subject: 'One dashboard for the work you do',
+    body: 'Numbers for verification, logs for accounts, boosters for reach, eSIM for data, Telegram Stars and blue tick help.\n\nAll of that lives under the same MJ Hub login.'
+  },
+  {
+    subject: 'Stock moves every day',
+    body: 'Logs and numbers refresh often. If something you needed was out last week, it may be back now.\n\nOpen the catalog and take a quick look.'
+  },
+  {
+    subject: 'Fund once, order what you need',
+    body: 'Add money to your Naira wallet, then spend across SMS, logs, boosters, eSIM and Telegram services without another payment dance each time.'
+  },
+  {
+    subject: 'We built this for people who buy digital tools often',
+    body: 'Agencies, resellers and everyday users run orders from the same dashboard.\n\nWhen you are ready, fund your wallet and place the next one.'
+  },
+  {
+    subject: 'A quiet check in',
+    body: 'No hard sell. Just a short note so you know MJ Hub is still here for SMS, logs, boosters, eSIM and Telegram help.\n\nYour account is open whenever you need it.'
+  },
+  {
+    subject: 'WhatsApp and Telegram support are live',
+    body: 'If something about funding or ordering is unclear, support is a message away.\n\nReply to this email or use in app support and we will help you through it.'
+  },
+  {
+    subject: 'Your next order can be simple',
+    body: 'Open the dashboard, pick SMS, logs, boosters, eSIM or Telegram help, pay from your wallet, and track delivery in the same place.\n\nThat is the whole flow.'
+  }
+];
+
+function escapeNudge(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function pickCareMessage(userId, step) {
+  const n = CARE_MESSAGES.length;
+  let h = 0;
+  const s = String(userId || '') + ':' + String(step || 0);
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return CARE_MESSAGES[h % n];
+}
+
+function buildCareEmailHtml({ name, subject, body, appUrl }) {
   const safe = String(name || 'there').trim() || 'there';
-  const base = String(appUrl || 'https://www.mjhub.store').replace(/\/$/, '');
-  const unsub = `${base}/dashboard.html?unsubscribe=1`;
-  const subjects = {
-    1: 'Your MJ Hub account is ready',
-    2: 'SMS, logs and boosts in one wallet',
-    3: 'Need a hand getting started?',
-    4: 'We are here when you need MJ Hub'
-  };
-  const bodies = {
-    1: `You signed up for MJ Hub a week ago. Your account is ready whenever you are.\n\nFund your wallet, then grab SMS numbers, logs, or social boosts in a few taps.`,
-    2: `A reminder that MJ Hub covers SMS verification, logs, and boosters in one wallet.\n\nWhenever you are ready, fund and place your first order from the dashboard.`,
-    3: `If anything blocked you after signup — funding, a product question, or support — reply to this email or use in-app support. We are happy to help.`,
-    4: `This is our last check-in for now. Your MJ Hub account stays open. Come back anytime you need SMS, logs, or boosts.`
-  };
-  const w = Math.min(Math.max(Number(week) || 1, 1), 4);
-  const subject = subjects[w] || subjects[1];
-  const inner = escapeNudge(bodies[w] || bodies[1]).split(/\n\n/).map((p) =>
-    `<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;">${p.replace(/\n/g,'<br>')}</p>`
-  ).join('');
+  const base = String(appUrl || 'https://app.mjhub.store').replace(/\/$/, '');
+  const unsub = base + '/dashboard.html?unsubscribe=1';
+  const inner = escapeNudge(body)
+    .split(/\n\n/)
+    .map((p) => {
+      const withBr = p.replace(/\n/g, '<br>');
+      return (
+        '<p class="text-body" style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#1e293b;">' +
+        withBr +
+        '</p>'
+      );
+    })
+    .join('');
   const year = new Date().getFullYear();
-  const LOGO_DARK = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-logo-dark-clear.png';
-  const LOGO_LIGHT = 'https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/IMG_2796.jpeg';
-  const html = `<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="supported-color-schemes" content="light dark">
-<title>${subject}</title>
-<style>
-  :root { color-scheme: light dark; }
-  @media (prefers-color-scheme: dark) {
-    .page { background-color:#0b1220 !important; }
-    .card { background-color:#111827 !important; border-color:#1e293b !important; }
-    .text-title { color:#f8fafc !important; }
-    .text-body { color:#e2e8f0 !important; }
-    .text-muted { color:#94a3b8 !important; }
-    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-dark { display:block !important; }
-    .brand-word { color:#ffffff !important; }
-    .logo-light { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-dark { display:block !important; }
-    .brand-word { color:#ffffff !important; }
-    .rule { border-color:#1e293b !important; }
-  }
-  @media (prefers-color-scheme: light) {
-    .page { background-color:#e8eef8 !important; }
-    .card { background-color:#ffffff !important; border-color:#dbe4f0 !important; }
-    .text-title { color:#0f172a !important; }
-    .text-body { color:#1e293b !important; }
-    .text-muted { color:#64748b !important; }
-    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-light { display:block !important; }
-    .brand-word { color:#0f172a !important; }
-    .logo-dark { display:none !important; width:0 !important; height:0 !important; overflow:hidden !important; }
-    .logo-light { display:block !important; }
-    .brand-word { color:#0f172a !important; }
-    .rule { border-color:#e2e8f0 !important; }
-  }
-</style>
-</head>
-<body class="page" style="margin:0;padding:0;background-color:#e8eef8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background-color:#e8eef8;padding:28px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="560" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:20px;">
-        <tr>
-          <td align="center" style="padding:32px 24px 12px;background:transparent;">
-            <img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;outline:none;background:transparent;">
-            <div class="brand-word" style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:8px 32px 0;">
-            <p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ${safe},</p>
-          </td>
-        </tr>
-        <tr><td style="padding:0 32px 8px;">${inner}</td></tr>
-        <tr>
-          <td align="center" style="padding:8px 32px 28px;">
-            <a href="${base}/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:0 32px 28px;">
-            <hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
-            <p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
-              <a href="${unsub}" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>© ${year} MJ Hub
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+  const html =
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="color-scheme" content="light dark">' +
+    '<title>' +
+    escapeNudge(subject) +
+    '</title>' +
+    '<style>:root{color-scheme:light dark}' +
+    '@media (prefers-color-scheme:dark){.page{background-color:#0b1220!important}.card{background-color:#111827!important;border-color:#1e293b!important}' +
+    '.text-body{color:#e2e8f0!important}.text-muted{color:#94a3b8!important}.rule{border-color:#1e293b!important}}</style></head>' +
+    '<body class="page" style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="page" style="background:#f1f5f9;"><tr><td align="center" style="padding:24px 12px;">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="card" style="max-width:560px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;">' +
+    '<tr><td align="center" style="padding:28px 24px 8px;">' +
+    '<img src="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/mjhub-mark-only.png" alt="MJ Hub" width="120" style="display:block;height:44px;width:auto;border:0;">' +
+    '<div style="margin-top:6px;font-size:13px;font-weight:800;letter-spacing:0.14em;color:#0f172a;">MJ HUB</div></td></tr>' +
+    '<tr><td style="padding:8px 32px 0;"><p class="text-body" style="margin:0 0 16px;font-size:18px;font-weight:700;color:#0f172a;">Hi ' +
+    escapeNudge(safe) +
+    ',</p></td></tr>' +
+    '<tr><td style="padding:0 32px 8px;">' +
+    inner +
+    '</td></tr>' +
+    '<tr><td align="center" style="padding:8px 32px 28px;">' +
+    '<a href="' +
+    base +
+    '/dashboard.html" style="display:inline-block;background-color:#2563eb;color:#ffffff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 28px;border-radius:12px;">Open MJ Hub</a>' +
+    '</td></tr>' +
+    '<tr><td style="padding:0 32px 28px;"><hr class="rule" style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">' +
+    '<p class="text-muted" style="margin:0;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">' +
+    '<a href="' +
+    unsub +
+    '" style="color:#2563eb;text-decoration:none;">Unsubscribe</a><br>© ' +
+    year +
+    ' MJ Hub</p></td></tr></table></td></tr></table></body></html>';
   return { subject, html };
 }
-function escapeNudge(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 
 async function userHasPurchased(supabase, userId) {
   const checks = ['orders', 'number_orders', 'booster_orders'];
@@ -692,82 +842,192 @@ async function userHasPurchased(supabase, userId) {
   return false;
 }
 
+async function userLastOrderAt(supabase, userId) {
+  let latest = 0;
+  const tables = ['orders', 'number_orders', 'booster_orders'];
+  for (const table of tables) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select('created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data && data.created_at) {
+        const t = new Date(data.created_at).getTime();
+        if (t > latest) latest = t;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  return latest || null;
+}
+
 async function runInactiveNudges(supabase) {
-  if (!process.env.RESEND_API_KEY) {
-    return { sent: 0, skipped: true, reason: 'no RESEND_API_KEY' };
+  const hasResend = !!process.env.RESEND_API_KEY;
+  const hasMailtrap = !!(process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_API_KEY);
+  if (!hasResend && !hasMailtrap) {
+    return { sent: 0, skipped: true, reason: 'no RESEND_API_KEY or MAILTRAP_API_TOKEN' };
   }
-  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://app.mjhub.store').replace(/\/$/, '');
-  const cutoff = new Date(Date.now() - NUDGE_INTERVAL_MS).toISOString();
 
-  // Candidates: registered long enough, not unsubscribed, under max weeks
-  let q = supabase
-    .from('profiles')
-    .select('id, email, full_name, nudge_week, last_nudge_at, email_unsubscribed')
-    .or('email_unsubscribed.is.null,email_unsubscribed.eq.false')
-    .lt('nudge_week', NUDGE_MAX_WEEK)
-    .not('email', 'is', null)
-    .limit(80);
-
-  const { data: rows, error } = await q;
-  if (error) {
-    console.error('[nudge] profiles query', error.message);
-    return { sent: 0, error: error.message };
-  }
+  const appUrl = (process.env.APP_URL || process.env.SITE_URL || 'https://app.mjhub.store').replace(
+    /\/$/,
+    ''
+  );
 
   let sent = 0;
   let examined = 0;
   const errors = [];
+  const byTrack = { never_bought: 0, lapsed: 0 };
 
-  for (const row of rows || []) {
-    if (sent >= NUDGE_BATCH) break;
-    const email = String(row.email || '').trim();
-    if (!email || !email.includes('@')) continue;
+  // ---- Track A: never bought ----
+  try {
+    const { data: rows, error } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, nudge_week, last_nudge_at, email_unsubscribed')
+      .or('email_unsubscribed.is.null,email_unsubscribed.eq.false')
+      .lt('nudge_week', NUDGE_MAX_WEEK)
+      .order('last_nudge_at', { ascending: true, nullsFirst: true })
+      .limit(200);
 
-    const week = Number(row.nudge_week) || 0;
-    const last = row.last_nudge_at ? new Date(row.last_nudge_at).getTime() : 0;
-    if (week === 0) {
-      // profiles.created_at is not part of this database schema. Read the authoritative
-      // signup timestamp from Supabase Auth only for users who have not been nudged yet.
-      let signupCreatedAt = null;
-      try {
-        const authLookup = await supabase.auth.admin.getUserById(row.id);
-        signupCreatedAt = authLookup.data?.user?.created_at || null;
-      } catch (lookupError) {
-        console.warn('[nudge] signup timestamp lookup failed', lookupError?.message || lookupError);
+    if (error) {
+      console.error('[nudge] profiles query', error.message);
+    } else {
+      for (const row of rows || []) {
+        if (sent >= NUDGE_BATCH) break;
+        const email = String(row.email || '').trim();
+        if (!email || !email.includes('@')) continue;
+
+        const week = Number(row.nudge_week) || 0;
+        const last = row.last_nudge_at ? new Date(row.last_nudge_at).getTime() : 0;
+
+        if (week === 0) {
+          let signupCreatedAt = null;
+          try {
+            const authLookup = await supabase.auth.admin.getUserById(row.id);
+            signupCreatedAt = authLookup.data?.user?.created_at || null;
+          } catch (lookupError) {
+            console.warn('[nudge] signup lookup', lookupError?.message || lookupError);
+          }
+          const created = signupCreatedAt ? new Date(signupCreatedAt).getTime() : 0;
+          if (!created || Number.isNaN(created) || created > Date.now() - NUDGE_INTERVAL_MS) continue;
+        } else if (last && Date.now() - last < NUDGE_INTERVAL_MS) {
+          continue;
+        }
+
+        examined++;
+        if (await userHasPurchased(supabase, row.id)) {
+          await supabase
+            .from('profiles')
+            .update({ nudge_week: NUDGE_MAX_WEEK, last_nudge_at: new Date().toISOString() })
+            .eq('id', row.id);
+          continue;
+        }
+
+        const nextWeek = week + 1;
+        const msg = pickCareMessage(row.id, nextWeek);
+        const { subject, html } = buildCareEmailHtml({
+          name: row.full_name,
+          subject: msg.subject,
+          body: msg.body,
+          appUrl
+        });
+        const result = await sendCareEmail({ to: email, subject, html });
+        if (!result.ok) {
+          errors.push({ email, track: 'never_bought', error: result.error || result });
+          continue;
+        }
+        const { error: upErr } = await supabase
+          .from('profiles')
+          .update({ nudge_week: nextWeek, last_nudge_at: new Date().toISOString() })
+          .eq('id', row.id);
+        if (upErr) console.error('[nudge] update', upErr.message);
+        sent++;
+        byTrack.never_bought++;
       }
-      const created = signupCreatedAt ? new Date(signupCreatedAt).getTime() : 0;
-      if (!created || Number.isNaN(created) || created > Date.now() - NUDGE_INTERVAL_MS) continue;
-    } else if (last && Date.now() - last < NUDGE_INTERVAL_MS) {
-      continue; // wait another week between nudges
     }
-
-    examined++;
-    if (await userHasPurchased(supabase, row.id)) {
-      // mark as done so we don't keep scanning forever
-      await supabase.from('profiles').update({
-        nudge_week: NUDGE_MAX_WEEK,
-        last_nudge_at: new Date().toISOString()
-      }).eq('id', row.id);
-      continue;
-    }
-
-    const nextWeek = week + 1;
-    const { subject, html } = nudgeEmailContent(nextWeek, row.full_name, appUrl);
-    const result = await resendEmail({ to: email, subject, html });
-    if (!result.ok) {
-      errors.push({ email, error: result.error || result });
-      continue;
-    }
-
-    const { error: upErr } = await supabase.from('profiles').update({
-      nudge_week: nextWeek,
-      last_nudge_at: new Date().toISOString()
-    }).eq('id', row.id);
-    if (upErr) console.error('[nudge] update', upErr.message);
-    sent++;
+  } catch (e) {
+    console.error('[nudge] track A', e.message);
   }
 
-  return { sent, examined, errors: errors.slice(0, 5) };
+  // ---- Track B: bought before, idle 14+ days ----
+  if (sent < NUDGE_BATCH) {
+    try {
+      const { data: rows, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, lapse_week, last_lapse_at, email_unsubscribed, nudge_week')
+        .or('email_unsubscribed.is.null,email_unsubscribed.eq.false')
+        .or('lapse_week.is.null,lapse_week.lt.' + LAPSE_MAX_WEEK)
+        .order('last_lapse_at', { ascending: true, nullsFirst: true })
+        .limit(150);
+
+      if (error) {
+        // Column may not exist yet
+        if (/lapse_week|last_lapse_at|column/i.test(error.message || '')) {
+          console.warn(
+            '[nudge] Track B skipped: add columns lapse_week int default 0, last_lapse_at timestamptz on profiles'
+          );
+        } else {
+          console.error('[nudge] lapse query', error.message);
+        }
+      } else {
+        for (const row of rows || []) {
+          if (sent >= NUDGE_BATCH) break;
+          const email = String(row.email || '').trim();
+          if (!email || !email.includes('@')) continue;
+
+          const lapseWeek = Number(row.lapse_week) || 0;
+          if (lapseWeek >= LAPSE_MAX_WEEK) continue;
+          const lastLapse = row.last_lapse_at ? new Date(row.last_lapse_at).getTime() : 0;
+          if (lastLapse && Date.now() - lastLapse < NUDGE_INTERVAL_MS) continue;
+
+          examined++;
+          const lastOrderAt = await userLastOrderAt(supabase, row.id);
+          if (!lastOrderAt) continue; // never bought → Track A only
+          if (Date.now() - lastOrderAt < LAPSE_IDLE_MS) {
+            // recently active buyer: reset lapse counter
+            if (lapseWeek > 0) {
+              await supabase
+                .from('profiles')
+                .update({ lapse_week: 0, last_lapse_at: null })
+                .eq('id', row.id);
+            }
+            continue;
+          }
+
+          const nextWeek = lapseWeek + 1;
+          const msg = pickCareMessage(row.id, 'L' + nextWeek);
+          const { subject, html } = buildCareEmailHtml({
+            name: row.full_name,
+            subject: msg.subject,
+            body: msg.body,
+            appUrl
+          });
+          const result = await sendCareEmail({ to: email, subject, html });
+          if (!result.ok) {
+            errors.push({ email, track: 'lapsed', error: result.error || result });
+            continue;
+          }
+          const { error: upErr } = await supabase
+            .from('profiles')
+            .update({ lapse_week: nextWeek, last_lapse_at: new Date().toISOString() })
+            .eq('id', row.id);
+          if (upErr) {
+            console.error('[nudge] lapse update', upErr.message);
+            // still count send; progress may not persist without columns
+          }
+          sent++;
+          byTrack.lapsed++;
+        }
+      }
+    } catch (e) {
+      console.error('[nudge] track B', e.message);
+    }
+  }
+
+  return { sent, examined, byTrack, errors: errors.slice(0, 8) };
 }
 
 
