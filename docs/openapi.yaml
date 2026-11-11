@@ -18,7 +18,7 @@ tags:
   - name: Reseller API
     description: Reseller-key authenticated read endpoints.
 paths:
-  /api/reseller:
+  /api/v1/reseller:
     get:
       tags: [Reseller management, Reseller API]
       summary: Read reseller keys, catalogue, wallet balance, or MJ Mails offers
@@ -268,15 +268,13 @@ components:
           const: NGN
     CatalogItem:
       type: object
-      required: [id, category, source, name, price, available, metadata]
+      required: [id, category, name, price, available, metadata]
       properties:
         id:
           type: string
         category:
           type: string
           enum: [sms.server1, sms.server2, sms.server3, sms.usa_rental, sms.global_rental, telegram.premium, telegram.stars, boosting, logs, esim]
-        source:
-          type: string
         name:
           type: string
         country:
