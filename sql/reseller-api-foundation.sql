@@ -618,7 +618,9 @@ begin
      limit greatest(1, least(p_batch_size, 100))
   )
   update public.reseller_webhook_outbox o
-     set status = 'delivering', attempts = attempts + 1
+     set status = 'delivering',
+         attempts = attempts + 1,
+         next_attempt_at = now() + interval '2 minutes'
     from picked where o.id = picked.id
   returning o.*;
 end;
