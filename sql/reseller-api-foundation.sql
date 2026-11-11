@@ -349,3 +349,41 @@ revoke all on public.reseller_accounts, public.reseller_api_keys, public.reselle
   public.reseller_wallet_ledger, public.reseller_orders from anon, authenticated;
 grant all on public.reseller_accounts, public.reseller_api_keys, public.reseller_wallets,
   public.reseller_wallet_ledger, public.reseller_orders to service_role;
+
+
+-- Sandbox/live separation and key-level access controls.
+alter table public.reseller_api_keys
+  add column if not exists environment text not null default 'live'
+    check (environment in ('live','sandbox')),
+  add column if not exists ip_allowlist text[] not null default '{}',
+  add column if not exists expires_at timestamptz,
+  add column if not exists revoked_at timestamptz;
+
+create index if not exists reseller_api_keys_active_lookup
+  on public.reseller_api_keys (key_hash, status, environment);
+
+-- Sandbox balances are separate from live reseller funds.
+create table if not exists public.reseller_sandbox_wallets (
+  reseller_id uuid primary key references public.reseller_accounts(id) on delete cascade,
+  balance_minor bigint not null default 0 check (balance_minor >= 0),
+  currency text not null default 'NGN' check (currency = 'NGN'),
+  updated_at timestamptz not null default now()
+);
+alter table public.reseller_sandbox_wallets enable row level security;
+revoke all on public.reseller_sandbox_wallets from anon, authenticated;
+grant all on public.reseller_sandbox_wallets to service_role;
+
+create or replace function public.provision_reseller_wallet()
+returns trigger
+language plpgsql
+as $function$
+begin
+  insert into public.reseller_wallets (reseller_id, balance_minor, currency)
+  values (new.id, 0, coalesce(new.currency, 'NGN'))
+  on conflict (reseller_id) do nothing;
+  insert into public.reseller_sandbox_wallets (reseller_id, balance_minor, currency)
+  values (new.id, 0, coalesce(new.currency, 'NGN'))
+  on conflict (reseller_id) do nothing;
+  return new;
+end;
+$function$;
