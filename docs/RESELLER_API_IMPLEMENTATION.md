@@ -32,6 +32,7 @@ The public reseller API must expose one authentication key and one reseller acco
 - `GET /api/reseller?action=balance`: separate reseller wallet read.\n- `GET /api/reseller?action=mail_offers&site=telegram.com`: MJ Mails domain offers and MJ HUB retail pricing using the existing HeroSMS offer endpoint.\n- Catalogue reads are paginated with `page` and `per_page`; the response includes per-table next-page markers.
 - `GET /api/reseller?action=keys` with user JWT: list key metadata.
 - `POST /api/reseller?action=keys` with user JWT: create a key once, hash at rest.
+- `DELETE /api/reseller?action=keys&id=<key_id>` with user JWT: revoke an active key owned by that reseller.
 - Reseller account defaults to pending; API keys cannot be created until an administrator activates the reseller account.
 - SQL schema draft in `sql/reseller-api-foundation.sql`, including atomic order reservation/debit, idempotent wallet posting, and a supplier-confirmation-gated, one-time order-refund RPC. These functions are draft code only and have not been applied to Supabase.
 
