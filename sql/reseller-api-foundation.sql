@@ -625,3 +625,77 @@ end;
 $function$;
 revoke all on function public.reseller_claim_webhook_outbox(integer) from public, anon, authenticated;
 grant execute on function public.reseller_claim_webhook_outbox(integer) to service_role;
+
+
+-- Sandbox-only order ledger and wallet. Sandbox credits are fictitious and never
+-- transferable to the live wallet or redeemable for cash/services.
+create table if not exists public.reseller_sandbox_orders (
+  id uuid primary key default gen_random_uuid(),
+  reseller_id uuid not null references public.reseller_accounts(id) on delete cascade,
+  idempotency_key text not null,
+  request_hash text not null,
+  category text not null,
+  service_id text not null,
+  status text not null default 'completed' check (status in ('processing','completed','failed')),
+  amount_minor bigint not null check (amount_minor > 0),
+  currency text not null default 'NGN',
+  request_payload jsonb not null default '{}'::jsonb,
+  response_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (reseller_id, idempotency_key)
+);
+alter table public.reseller_sandbox_orders enable row level security;
+revoke all on public.reseller_sandbox_orders from anon, authenticated;
+grant all on public.reseller_sandbox_orders to service_role;
+
+-- Provide a clearly fictitious test balance only when a reseller account is created.
+-- Existing accounts are not auto-credited by this migration.
+update public.reseller_sandbox_wallets
+   set balance_minor = 100000000, updated_at = now()
+ where balance_minor = 0;
+
+create or replace function public.reseller_sandbox_order_create(
+  p_reseller_id uuid, p_idempotency_key text, p_request_hash text,
+  p_category text, p_service_id text, p_amount_minor bigint, p_request_payload jsonb
+) returns jsonb
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+declare
+  v_wallet public.reseller_sandbox_wallets%rowtype;
+  v_order public.reseller_sandbox_orders%rowtype;
+  v_balance bigint;
+begin
+  if p_reseller_id is null or length(trim(coalesce(p_idempotency_key,''))) < 8
+     or length(coalesce(p_request_hash,'')) <> 64 or p_amount_minor <= 0
+     or p_category not in ('telegram.premium','telegram.stars','sms.server1','sms.server2','sms.server3',
+       'sms.usa_rental','sms.global_rental','esim','logs','boosting','mj_mails') then
+    raise exception 'INVALID_SANDBOX_ORDER';
+  end if;
+  select * into v_wallet from public.reseller_sandbox_wallets
+   where reseller_id = p_reseller_id for update;
+  if not found then raise exception 'SANDBOX_WALLET_NOT_FOUND'; end if;
+  select * into v_order from public.reseller_sandbox_orders
+   where reseller_id = p_reseller_id and idempotency_key = p_idempotency_key;
+  if found then
+    if v_order.request_hash <> p_request_hash then raise exception 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_ORDER'; end if;
+    return jsonb_build_object('created',false,'order',to_jsonb(v_order),'balance_minor',v_wallet.balance_minor);
+  end if;
+  if v_wallet.balance_minor < p_amount_minor then raise exception 'INSUFFICIENT_SANDBOX_BALANCE'; end if;
+  v_balance := v_wallet.balance_minor - p_amount_minor;
+  update public.reseller_sandbox_wallets set balance_minor=v_balance,updated_at=now()
+   where reseller_id=p_reseller_id;
+  insert into public.reseller_sandbox_orders(
+    reseller_id,idempotency_key,request_hash,category,service_id,status,amount_minor,request_payload,response_payload
+  ) values (
+    p_reseller_id,p_idempotency_key,p_request_hash,p_category,p_service_id,'completed',
+    p_amount_minor,coalesce(p_request_payload,'{}'::jsonb),
+    jsonb_build_object('sandbox',true,'message','Simulated order completed. No supplier was contacted.')
+  ) returning * into v_order;
+  return jsonb_build_object('created',true,'order',to_jsonb(v_order),'balance_minor',v_balance);
+end;
+$function$;
+revoke all on function public.reseller_sandbox_order_create(uuid,text,text,text,text,bigint,jsonb)
+ from public,anon,authenticated;
+grant execute on function public.reseller_sandbox_order_create(uuid,text,text,text,text,bigint,jsonb) to service_role;
