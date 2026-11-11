@@ -382,7 +382,7 @@ begin
   values (new.id, 0, coalesce(new.currency, 'NGN'))
   on conflict (reseller_id) do nothing;
   insert into public.reseller_sandbox_wallets (reseller_id, balance_minor, currency)
-  values (new.id, 0, coalesce(new.currency, 'NGN'))
+  values (new.id, 100000000, coalesce(new.currency, 'NGN'))
   on conflict (reseller_id) do nothing;
   return new;
 end;
@@ -649,11 +649,11 @@ alter table public.reseller_sandbox_orders enable row level security;
 revoke all on public.reseller_sandbox_orders from anon, authenticated;
 grant all on public.reseller_sandbox_orders to service_role;
 
--- Provide a clearly fictitious test balance only when a reseller account is created.
--- Existing accounts are not auto-credited by this migration.
-update public.reseller_sandbox_wallets
-   set balance_minor = 100000000, updated_at = now()
- where balance_minor = 0;
+-- Backfill sandbox wallets only when missing. Never reset an existing test balance
+-- when this migration is re-applied.
+insert into public.reseller_sandbox_wallets(reseller_id,balance_minor,currency)
+select id,100000000,coalesce(currency,'NGN') from public.reseller_accounts
+on conflict (reseller_id) do nothing;
 
 create or replace function public.reseller_sandbox_order_create(
   p_reseller_id uuid, p_idempotency_key text, p_request_hash text,
@@ -702,6 +702,3 @@ grant execute on function public.reseller_sandbox_order_create(uuid,text,text,te
 
 -- Ensure accounts that existed before the sandbox wallet table was introduced
 -- also receive an isolated fictitious test balance.
-insert into public.reseller_sandbox_wallets(reseller_id,balance_minor,currency)
-select id,100000000,coalesce(currency,'NGN') from public.reseller_accounts
-on conflict (reseller_id) do nothing;
