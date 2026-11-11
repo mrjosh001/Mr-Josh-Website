@@ -121,6 +121,18 @@ async function handleKeyManagement(req, res) {
   if (req.method !== 'POST') return json(res, 405, { success: false, message: 'Method not allowed' });
   if (reseller.status !== 'active') return json(res, 403, { success: false, message: 'Reseller access is awaiting approval' });
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+  if (body.rotate_key_id) {
+    const replacementKey = newApiKey('live');
+    const { data: rotated, error: rotateError } = await supabase.rpc('reseller_rotate_api_key', {
+      p_reseller_id: reseller.id,
+      p_old_key_id: String(body.rotate_key_id),
+      p_new_key_hash: sha256(replacementKey),
+      p_new_key_hint: replacementKey.slice(-6),
+      p_label: String(body.label || 'Rotated API key').trim().slice(0, 60)
+    });
+    if (rotateError) return json(res, 400, { success: false, message: 'Could not rotate API key' });
+    return json(res, 200, { success: true, key: replacementKey, warning: 'Copy this key now. It cannot be displayed again.', data: rotated });
+  }
   const environment = body.environment === 'sandbox' ? 'sandbox' : 'live';
   const key = newApiKey(environment);
   const { data, error } = await supabase.from('reseller_api_keys').insert({
