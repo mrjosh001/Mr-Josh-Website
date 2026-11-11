@@ -330,3 +330,39 @@ Sandbox keys are isolated from live keys. Their balance endpoint returns a fixed
 - Webhook delivery uses HMAC-SHA256 over `timestamp.raw_body`, sent in `X-MJ-Signature` as `v1=<hex>`, with `X-MJ-Timestamp`, `X-MJ-Event`, and `X-MJ-Delivery`. Receivers should reject timestamps older than five minutes and compare signatures in constant time.
 - Webhook secrets are encrypted at rest with AES-256-GCM. Configure `RESELLER_WEBHOOK_ENCRYPTION_KEY` as a base64-encoded 32-byte key and `RESELLER_WEBHOOK_DISPATCH_SECRET` for the internal dispatcher.
 - The internal dispatcher retries failed deliveries with exponential backoff and marks deliveries dead after ten attempts.
+
+
+## Orders API
+
+### Create an order
+
+`POST /api/v1/orders`
+
+Required headers:
+- `Authorization: Bearer <reseller_api_key>`
+- `Idempotency-Key: <unique value, 8–128 characters>`
+- `Content-Type: application/json`
+
+Example request:
+
+```json
+{
+  "category": "sms.server1",
+  "service_id": "catalogue-service-id",
+  "amount_minor": 125000,
+  "parameters": {
+    "country": "Nigeria",
+    "product": "example"
+  }
+}
+```
+
+`amount_minor` is an integer number of kobo. The request body and amount are for sandbox contract testing only. Sandbox orders use fictitious test credits and never call a supplier. Replaying the same idempotency key and payload returns the original order; reusing it with a different payload returns HTTP 409.
+
+### Retrieve an order
+
+`GET /api/v1/orders?id=<order_id>`
+
+Orders are scoped to the authenticated reseller and environment.
+
+**Live ordering is deliberately disabled.** Requests using live keys currently return `501 LIVE_ADAPTER_NOT_READY`. Live ordering will only be enabled after each supplier-specific adapter has verified pricing, atomic reservation/capture/refund, supplier timeout reconciliation and fulfilment lifecycle tests.
