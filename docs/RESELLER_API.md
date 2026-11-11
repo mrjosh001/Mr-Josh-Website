@@ -367,3 +367,10 @@ Example request:
 Orders are scoped to the authenticated reseller and environment.
 
 **Live ordering is deliberately disabled.** Requests using live keys currently return `501 LIVE_ADAPTER_NOT_READY`. Live ordering will only be enabled after each supplier-specific adapter has verified pricing, atomic reservation/capture/refund, supplier timeout reconciliation and fulfilment lifecycle tests.
+
+
+## Webhook delivery guarantees
+
+Webhook delivery is at-least-once, not exactly-once. Receivers must deduplicate using `X-MJ-Delivery` because a receiver may accept a request while MJ HUB fails to persist the delivery acknowledgement. The dispatcher uses a two-minute claim lease to prevent two workers from immediately claiming the same pending delivery. Failed deliveries are retried with exponential backoff and become dead after ten attempts.
+
+The dispatcher accepts only HTTPS URLs on the standard port and checks DNS answers against private, loopback, link-local and other non-public address ranges before delivery. Redirects are not followed. Endpoint registration is not yet exposed to resellers; endpoints must remain trusted/admin-provisioned. DNS checks reduce SSRF risk but do not eliminate DNS rebinding between validation and the outbound connection.
