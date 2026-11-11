@@ -1,0 +1,157 @@
+import crypto from 'crypto';
+import { getServiceSupabase, requireUser, applyApiCors, handleOptions } from '../lib/secure.js';
+
+const supabase = getServiceSupabase();
+const KEY_PREFIX = 'mj_live_';
+
+function json(res, status, payload) {
+  return res.status(status).json(payload);
+}
+function sha256(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a || ''));
+  const y = Buffer.from(String(b || ''));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+function newApiKey() {
+  return KEY_PREFIX + crypto.randomBytes(32).toString('hex');
+}
+function bearer(req) {
+  const h = String(req.headers.authorization || '');
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : '';
+}
+function toPublicService(row, category, source) {
+  const price = Number(row.price ?? row.sell_price ?? row.price_ngn ?? row.amount_ngn ?? 0);
+  if (!(price > 0)) return null;
+  return {
+    id: String(row.api_service_id || row.service_id || row.product_key || row.id),
+    category,
+    source,
+    name: String(row.name || row.service_name || row.plan_name || 'Service'),
+    country: row.country_name || row.country || null,
+    price: { amount: Math.round(price * 100) / 100, currency: 'NGN' },
+    available: row.is_available !== false && row.hidden !== true && row.admin_hidden !== true &&
+      (row.stock_quantity == null || Number(row.stock_quantity) > 0) &&
+      (row.available_quantity == null || Number(row.available_quantity) > 0),
+    metadata: {}
+  };
+}
+async function requireApiKey(req) {
+  const raw = bearer(req);
+  if (!raw.startsWith(KEY_PREFIX) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
+  const hash = sha256(raw);
+  const { data: key, error } = await supabase.from('reseller_api_keys')
+    .select('id,reseller_id,status,scopes,last_used_at')
+    .eq('key_hash', hash).maybeSingle();
+  if (error || !key || key.status !== 'active') return { error: { status: 401, message: 'Invalid or revoked API key' } };
+  const { data: reseller, error: resellerError } = await supabase.from('reseller_accounts')
+    .select('id,user_id,status,currency')
+    .eq('id', key.reseller_id).maybeSingle();
+  if (resellerError || !reseller || reseller.status !== 'active') return { error: { status: 403, message: 'Reseller account is not active' } };
+  await supabase.from('reseller_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', key.id);
+  return { key, reseller };
+}
+async function createOrGetReseller(user) {
+  const { data: existing, error } = await supabase.from('reseller_accounts')
+    .select('id,user_id,status,currency')
+    .eq('user_id', user.id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (existing) return existing;
+  const { data, error: insertError } = await supabase.from('reseller_accounts')
+    .insert({ user_id: user.id, status: 'pending', currency: 'NGN' })
+    .select('id,user_id,status,currency').single();
+  if (insertError) throw new Error(insertError.message);
+  return data;
+}
+async function handleKeyManagement(req, res) {
+  const auth = await requireUser(req);
+  if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
+  const reseller = await createOrGetReseller(auth.user);
+  if (req.method === 'GET') {
+    const { data, error } = await supabase.from('reseller_api_keys')
+      .select('id,label,key_hint,status,scopes,created_at,last_used_at')
+      .eq('reseller_id', reseller.id).order('created_at', { ascending: false });
+    if (error) return json(res, 500, { success: false, message: 'Could not load API keys' });
+    return json(res, 200, { success: true, reseller, keys: data || [] });
+  }
+  if (req.method !== 'POST') return json(res, 405, { success: false, message: 'Method not allowed' });
+  if (reseller.status !== 'active') return json(res, 403, { success: false, message: 'Reseller access is awaiting approval' });
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const key = newApiKey();
+  const { data, error } = await supabase.from('reseller_api_keys').insert({
+    reseller_id: reseller.id,
+    key_hash: sha256(key),
+    key_hint: key.slice(-6),
+    label: String(body.label || 'Default API key').trim().slice(0, 60),
+    status: 'active',
+    scopes: ['catalog:read', 'wallet:read', 'orders:read', 'orders:write']
+  }).select('id,label,key_hint,status,scopes,created_at').single();
+  if (error) return json(res, 500, { success: false, message: 'Could not create API key' });
+  return json(res, 201, { success: true, key, warning: 'Copy this key now. It cannot be displayed again.', data });
+}
+async function handleCatalog(req, res, reseller) {
+  const [numbers, products, boosters, esim] = await Promise.all([
+    supabase.from('number_services').select('id,source,service_id,service_name,country_id,country_name,price,sell_price,price_ngn,is_available,available_quantity,hidden,admin_hidden').limit(2000),
+    supabase.from('products').select('id,product_key,name,price,source,is_available,stock_quantity,admin_hidden,category').limit(2000),
+    supabase.from('booster_services').select('*').limit(2000),
+    supabase.from('esim_plans').select('*').limit(100)
+  ]);
+  const errors = [numbers, products, boosters, esim].filter(x => x.error);
+  if (errors.length) return json(res, 503, { success: false, message: 'Service catalogue is temporarily unavailable' });
+  const items = [];
+  for (const row of numbers.data || []) {
+    const src = String(row.source || '').toLowerCase();
+    const category = src === 'gotsms' ? 'sms.usa_rental' :
+      src === 'smsbus_rent' ? 'sms.global_rental' :
+      src === 'smsbus' || src === 'grizzly' || src === 'virtualsms' ? 'sms.activation' : 'sms.other';
+    const item = toPublicService(row, category, src);
+    if (item && item.available) items.push(item);
+  }
+  for (const row of products.data || []) {
+    const item = toPublicService(row, 'logs', String(row.source || 'manual'));
+    if (item && item.available) items.push(item);
+  }
+  for (const row of boosters.data || []) {
+    const src = String(row.source || '').toLowerCase();
+    const category = src === 'smmkings' ? 'telegram' : 'boosting';
+    const item = toPublicService(row, category, src);
+    if (item && item.available) items.push(item);
+  }
+  for (const row of esim.data || []) {
+    if (row.is_active === false) continue;
+    const item = toPublicService({ ...row, name: row.name || row.id, price: row.amount_ngn }, 'esim', 'mjhub_wireless');
+    if (item) items.push(item);
+  }
+  return json(res, 200, { success: true, currency: reseller.currency || 'NGN', count: items.length, data: items });
+}
+async function handleBalance(req, res, reseller) {
+  const { data, error } = await supabase.from('reseller_wallets')
+    .select('balance_minor,currency,updated_at').eq('reseller_id', reseller.id).maybeSingle();
+  if (error) return json(res, 500, { success: false, message: 'Could not load reseller wallet' });
+  return json(res, 200, {
+    success: true,
+    balance: { amount: Number(data?.balance_minor || 0) / 100, currency: data?.currency || reseller.currency || 'NGN' },
+    updated_at: data?.updated_at || null
+  });
+}
+
+export default async function handler(req, res) {
+  applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
+  if (handleOptions(req, res)) return;
+  try {
+    const action = String(req.query?.action || 'catalog').toLowerCase();
+    if (action === 'keys') return handleKeyManagement(req, res);
+    if (req.method !== 'GET') return json(res, 405, { success: false, message: 'Method not allowed' });
+    const auth = await requireApiKey(req);
+    if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
+    if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);
+    if (action === 'balance') return handleBalance(req, res, auth.reseller);
+    return json(res, 404, { success: false, message: 'Unknown reseller API action' });
+  } catch (error) {
+    console.error('[reseller-api]', error?.message || error);
+    return json(res, 500, { success: false, message: 'Reseller API temporarily unavailable' });
+  }
+}
