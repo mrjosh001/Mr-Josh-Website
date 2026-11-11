@@ -544,3 +544,35 @@ end;
 $function$;
 revoke all on function public.reseller_idempotency_bind_order(uuid,text,uuid) from public, anon, authenticated;
 grant execute on function public.reseller_idempotency_bind_order(uuid,text,uuid) to service_role;
+
+
+-- Rotate a key atomically: revoke the old key and create the replacement in one transaction.
+create or replace function public.reseller_rotate_api_key(
+  p_reseller_id uuid, p_old_key_id uuid, p_new_key_hash text, p_new_key_hint text, p_label text
+) returns jsonb
+language plpgsql security invoker
+set search_path = public, pg_temp
+as $function$
+declare
+  v_old public.reseller_api_keys%rowtype;
+  v_new public.reseller_api_keys%rowtype;
+begin
+  select * into v_old from public.reseller_api_keys
+   where id = p_old_key_id and reseller_id = p_reseller_id and status = 'active'
+   for update;
+  if not found then raise exception 'ACTIVE_API_KEY_NOT_FOUND'; end if;
+  if length(coalesce(p_new_key_hash,'')) <> 64 then raise exception 'INVALID_API_KEY_HASH'; end if;
+  update public.reseller_api_keys set status = 'revoked', revoked_at = now()
+   where id = v_old.id;
+  insert into public.reseller_api_keys(
+    reseller_id, label, key_hash, key_hint, status, scopes, environment, ip_allowlist
+  ) values (
+    p_reseller_id, left(coalesce(nullif(trim(p_label),''), v_old.label),60),
+    p_new_key_hash, p_new_key_hint, 'active', v_old.scopes, v_old.environment, v_old.ip_allowlist
+  ) returning * into v_new;
+  return jsonb_build_object('id',v_new.id,'label',v_new.label,'key_hint',v_new.key_hint,
+    'status',v_new.status,'scopes',v_new.scopes,'environment',v_new.environment,'created_at',v_new.created_at);
+end;
+$function$;
+revoke all on function public.reseller_rotate_api_key(uuid,uuid,text,text,text) from public, anon, authenticated;
+grant execute on function public.reseller_rotate_api_key(uuid,uuid,text,text,text) to service_role;
