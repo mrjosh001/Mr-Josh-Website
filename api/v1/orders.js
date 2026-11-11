@@ -4,8 +4,8 @@ import { requireApiKey } from '../reseller.js';
 
 const supabase = getServiceSupabase();
 const CATEGORIES = new Set([
-  'telegram.premium','telegram.stars','sms.server1','sms.server2','sms.server3',
-  'sms.usa_rental','sms.global_rental','esim','logs','boosting','mj_mails'
+  'telegram.premium','telegram.stars','sms.activation','sms.server1','sms.server2','sms.server3',
+  'sms.usa_rental','sms.global_rental','sms.long_term_rental','esim','logs','boosting','mj_mails'
 ]);
 
 function stable(value) {
