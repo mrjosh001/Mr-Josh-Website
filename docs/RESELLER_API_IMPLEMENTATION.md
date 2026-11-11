@@ -33,7 +33,7 @@ The public reseller API must expose one authentication key and one reseller acco
 - `GET /api/reseller?action=keys` with user JWT: list key metadata.
 - `POST /api/reseller?action=keys` with user JWT: create a key once, hash at rest.
 - Reseller account defaults to pending; API keys cannot be created until an administrator activates the reseller account.
-- SQL schema draft in `sql/reseller-api-foundation.sql`, including a row-locked, idempotent wallet-post RPC and a supplier-confirmation-gated, one-time order-refund RPC. These functions are draft code only and have not been applied to Supabase.
+- SQL schema draft in `sql/reseller-api-foundation.sql`, including atomic order reservation/debit, idempotent wallet posting, and a supplier-confirmation-gated, one-time order-refund RPC. These functions are draft code only and have not been applied to Supabase.
 
 ## Not yet implemented
 
@@ -47,7 +47,7 @@ The first catalogue adapter is intentionally read-only and best-effort. It expos
 
 - Store only API key hashes; reveal plaintext only at creation.
 - Add per-reseller request limits and scoped keys.
-- Use transactional SQL functions for reserve/debit/settlement/refund with unique idempotency keys. The current draft covers wallet posting and single-refund protection; order reservation/settlement and supplier reconciliation remain to be built.
+- Use transactional SQL functions for reserve/debit/settlement/refund with unique idempotency keys. The current draft covers atomic order reservation/debit, wallet posting, and single-refund protection. Order settlement/state-transition controls and supplier reconciliation remain to be built.
 - Never call suppliers before the debit reservation commits.
 - On supplier timeouts, retain an `unknown` state and reconcile; do not blindly retry purchases.
 - Verify supplier terms and allowed resale rights for each category.
