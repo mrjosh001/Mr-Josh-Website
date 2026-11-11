@@ -3433,7 +3433,7 @@ export default async function handler(req, res) {
         if (!resellerId) result = { status: 400, body: { success: false, message: 'reseller_id is required' } };
         else {
           const { data: account, error: updateError } = await supabase.from('reseller_accounts')
-            .update({ status: action === 'approve' ? 'active' : 'rejected', updated_at: new Date().toISOString() })
+            .update({ status: action === 'approve' ? 'active' : 'suspended', updated_at: new Date().toISOString() })
             .eq('id', resellerId).select('id,user_id,status').maybeSingle();
           if (updateError) result = { status: 500, body: { success: false, message: 'Could not update reseller account: ' + updateError.message } };
           else if (!account) result = { status: 404, body: { success: false, message: 'Reseller account not found' } };
