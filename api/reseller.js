@@ -8,6 +8,7 @@ const esimSupabase = process.env.ESIM_SUPABASE_URL && process.env.ESIM_SUPABASE_
   ? createClient(process.env.ESIM_SUPABASE_URL, process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 const KEY_PREFIX = 'mj_live_';
+const TEST_KEY_PREFIX = 'mj_test_';
 
 function json(res, status, payload) {
   if (status >= 400) {
@@ -28,8 +29,8 @@ function json(res, status, payload) {
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
-function newApiKey() {
-  return KEY_PREFIX + crypto.randomBytes(32).toString('hex');
+function newApiKey(environment = 'live') {
+  return (environment === 'sandbox' ? TEST_KEY_PREFIX : KEY_PREFIX) + crypto.randomBytes(32).toString('hex');
 }
 function bearer(req) {
   const h = String(req.headers.authorization || '');
@@ -53,17 +54,24 @@ function toPublicService(row, category, source) {
 }
 async function requireApiKey(req) {
   const raw = bearer(req);
-  if (!raw.startsWith(KEY_PREFIX) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
+  if ((!raw.startsWith(KEY_PREFIX) && !raw.startsWith(TEST_KEY_PREFIX)) || raw.length < 40) return { error: { status: 401, message: 'Invalid API key' } };
   const hash = sha256(raw);
   const { data: key, error } = await supabase.from('reseller_api_keys')
-    .select('id,reseller_id,status,scopes,last_used_at')
+    .select('id,reseller_id,status,scopes,last_used_at,environment,ip_allowlist')
     .eq('key_hash', hash).maybeSingle();
   if (error || !key || key.status !== 'active') return { error: { status: 401, message: 'Invalid or revoked API key' } };
   const { data: reseller, error: resellerError } = await supabase.from('reseller_accounts')
     .select('id,user_id,status,currency')
     .eq('id', key.reseller_id).maybeSingle();
   if (resellerError || !reseller || reseller.status !== 'active') return { error: { status: 403, message: 'Reseller account is not active' } };
+  const environment = key.environment || (raw.startsWith(TEST_KEY_PREFIX) ? 'sandbox' : 'live');
+  if ((environment === 'sandbox') !== raw.startsWith(TEST_KEY_PREFIX)) return { error: { status: 401, message: 'Invalid API key' } };
+  const allowedIps = Array.isArray(key.ip_allowlist) ? key.ip_allowlist : [];
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const clientIp = String(req.headers['x-real-ip'] || forwarded || '').trim();
+  if (allowedIps.length && !allowedIps.includes(clientIp)) return { error: { status: 403, message: 'Request IP is not allowed' } };
   await supabase.from('reseller_api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', key.id);
+  key.environment = environment;
   return { key, reseller };
 }
 async function createOrGetReseller(user) {
@@ -103,17 +111,19 @@ async function handleKeyManagement(req, res) {
   if (req.method !== 'POST') return json(res, 405, { success: false, message: 'Method not allowed' });
   if (reseller.status !== 'active') return json(res, 403, { success: false, message: 'Reseller access is awaiting approval' });
   const body = req.body && typeof req.body === 'object' ? req.body : {};
-  const key = newApiKey();
+  const environment = body.environment === 'sandbox' ? 'sandbox' : 'live';
+  const key = newApiKey(environment);
   const { data, error } = await supabase.from('reseller_api_keys').insert({
     reseller_id: reseller.id,
     key_hash: sha256(key),
     key_hint: key.slice(-6),
     label: String(body.label || 'Default API key').trim().slice(0, 60),
     status: 'active',
+    environment,
     scopes: ['catalog:read', 'wallet:read', 'orders:read', 'orders:write']
   }).select('id,label,key_hint,status,scopes,created_at').single();
   if (error) return json(res, 500, { success: false, message: 'Could not create API key' });
-  return json(res, 201, { success: true, key, warning: 'Copy this key now. It cannot be displayed again.', data });
+  return json(res, 201, { success: true, environment, key, warning: 'Copy this key now. It cannot be displayed again.', data });
 }
 async function handleCatalog(req, res, reseller) {
   const page = Math.max(1, Math.min(10000, Number(req.query?.page) || 1));
@@ -180,7 +190,8 @@ async function handleCatalog(req, res, reseller) {
     data: items
   });
 }
-async function handleMailOffers(req, res) {
+async function handleMailOffers(req, res, reseller) {
+  if (reseller.environment === 'sandbox') return json(res, 200, { success: true, environment: 'sandbox', category: 'mj_mails', site: String(req.query?.site || '').toLowerCase(), count: 0, data: [] });
   const site = String(req.query?.site || '').trim().toLowerCase();
   const domain = String(req.query?.domain || '').trim().toLowerCase();
   if (!site || !/^[a-z0-9.-]{3,253}$/.test(site)) {
@@ -242,7 +253,7 @@ export default async function handler(req, res) {
     const auth = await requireApiKey(req);
     if (auth.error) return json(res, auth.error.status, { success: false, message: auth.error.message });
     if (action === 'catalog' || action === 'services') return handleCatalog(req, res, auth.reseller);
-    if (action === 'mail_offers') return handleMailOffers(req, res);
+    if (action === 'mail_offers') return handleMailOffers(req, res, auth.reseller);
     if (action === 'balance') return handleBalance(req, res, auth.reseller);
     return json(res, 404, { success: false, message: 'Unknown reseller API action' });
   } catch (error) {
