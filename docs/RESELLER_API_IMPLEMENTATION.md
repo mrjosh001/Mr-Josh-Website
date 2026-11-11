@@ -40,6 +40,12 @@ The public reseller API must expose one authentication key and one reseller acco
 
 Purchase adapters, atomic wallet debit/refund RPCs, webhook signing/delivery, reseller dashboard, admin approval UI, key rotation/revocation UI, rate limiting, supplier reconciliation and full automated tests. These must be completed before external reseller use.
 
+## Existing customer endpoint separation
+
+The current customer purchase endpoints are not reseller-ready drop-in adapters. SMS routes such as `/api/grizzly-sync` and `/api/sms-bus` authenticate a Supabase user JWT, bind orders to that user's identity, and execute the customer's existing wallet debit/refund logic. The reseller API must call supplier-specific operations through server-side adapter code while using the reseller wallet transaction functions. It must never forward a reseller key as a customer JWT or invoke customer-wallet debit/refund paths.
+
+Server 1 combines GrizzlySMS and HeroSMS pools; Server 2 uses SMS-BUS; Server 3 uses VirtualSMS. USA rentals use GotSMS through the SMS-BUS route, while global/monthly rentals use SMS-BUS rental actions. These flows have distinct request fields and cancellation/refund semantics. eSIM has a separate Supabase project and includes manual fulfilment, so it must not be treated as an instant supplier order.
+
 ## Catalogue limitation
 
 The first catalogue adapter is intentionally read-only and best-effort. It exposes the existing normalized service rows and a separate site-specific MJ Mails offer lookup. Supplier-specific order details and every dynamic plan/stock shape still require explicit adapter mapping. The exact catalogue schema for each supplier must be mapped before order creation is enabled. No generic order endpoint should be enabled until each adapter has a tested compensating/refund strategy.
