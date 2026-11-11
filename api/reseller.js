@@ -31,6 +31,11 @@ function json(res, status, payload) {
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
+function opaqueServiceId(value) {
+  const secret = String(process.env.RESELLER_SERVICE_ID_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '');
+  if (!secret) throw new Error('Service ID signing secret is not configured');
+  return crypto.createHmac('sha256', secret).update(String(value)).digest('hex').slice(0, 32);
+}
 function newApiKey(environment = 'live') {
   return (environment === 'sandbox' ? TEST_KEY_PREFIX : KEY_PREFIX) + crypto.randomBytes(32).toString('hex');
 }
@@ -43,7 +48,7 @@ function toPublicService(row, category, source) {
   const price = Number(row.price ?? row.sell_price ?? row.price_ngn ?? row.amount_ngn ?? 0);
   if (!(price > 0)) return null;
   return {
-    id: sha256(String(row.api_service_id || row.product_key || row.id)).slice(0, 32),
+    id: opaqueServiceId(String(row.api_service_id || row.product_key || row.id)),
     category,
     name: String(row.name || row.service_name || row.plan_name || 'Service'),
     country: row.country_name || row.country || null,
