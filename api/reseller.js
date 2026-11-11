@@ -15,11 +15,6 @@ function json(res, status, payload) {
 function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
-function safeEqual(a, b) {
-  const x = Buffer.from(String(a || ''));
-  const y = Buffer.from(String(b || ''));
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
-}
 function newApiKey() {
   return KEY_PREFIX + crypto.randomBytes(32).toString('hex');
 }
@@ -32,7 +27,7 @@ function toPublicService(row, category, source) {
   const price = Number(row.price ?? row.sell_price ?? row.price_ngn ?? row.amount_ngn ?? 0);
   if (!(price > 0)) return null;
   return {
-    id: String(row.api_service_id || row.service_id || row.product_key || row.id),
+    id: String(row.api_service_id || row.product_key || row.id),
     category,
     source,
     name: String(row.name || row.service_name || row.plan_name || 'Service'),
@@ -117,24 +112,39 @@ async function handleCatalog(req, res, reseller) {
       src === 'smsbus_rent' ? 'sms.global_rental' :
       src === 'grizzlysms' || src === 'herosms' ? 'sms.server1' :
       src === 'smsbus' ? 'sms.server2' :
-      src === 'virtualsms' ? 'sms.server3' : 'sms.other';
-    const item = toPublicService(row, category, src);
-    if (item && item.available) items.push(item);
+      src === 'virtualsms' ? 'sms.server3' : null;
+    if (!category) continue;
+    const item = toPublicService({ ...row, api_service_id: category + ':' + src + ':' + (row.country_id || 'all') + ':' + row.service_id }, category, src);
+    if (item && item.available) {
+      item.metadata = { provider_service_id: String(row.service_id), country_id: row.country_id || null };
+      items.push(item);
+    }
   }
   for (const row of products.data || []) {
-    const item = toPublicService(row, 'logs', String(row.source || 'manual'));
+    const item = toPublicService({ ...row, api_service_id: 'logs:' + (row.source || 'manual') + ':' + (row.product_key || row.id) }, 'logs', String(row.source || 'manual'));
     if (item && item.available) items.push(item);
   }
   for (const row of boosters.data || []) {
     const src = String(row.source || '').toLowerCase();
-    const category = src === 'smmkings' ? 'telegram' : 'boosting';
-    const item = toPublicService(row, category, src);
-    if (item && item.available) items.push(item);
+    const supplierCategory = String(row.category || '');
+    let category = 'boosting';
+    if (src === 'smmkings') {
+      if (/telegram\s+premium\s+to\s+any/i.test(supplierCategory)) category = 'telegram.premium';
+      else if (/telegram\s+stars\s+to\s+any/i.test(supplierCategory)) category = 'telegram.stars';
+      else continue;
+    }
+    const item = toPublicService({ ...row, api_service_id: category + ':' + src + ':' + row.service_id }, category, src);
+    if (item && item.available) {
+      item.metadata = { provider_service_id: String(row.service_id), service_type: row.service_type || null,
+        min_quantity: Number(row.min_quantity) || null, max_quantity: Number(row.max_quantity) || null,
+        refill: row.refill === true, cancel: row.cancel === true };
+      items.push(item);
+    }
   }
   for (const row of esim.data || []) {
     if (row.is_active === false) continue;
-    const item = toPublicService({ ...row, name: row.name || row.id, price: row.amount_ngn }, 'esim', 'mjhub_wireless');
-    if (item) items.push(item);
+    const item = toPublicService({ ...row, api_service_id: 'esim:' + row.id, name: row.name || row.id, price: row.amount_ngn }, 'esim', 'mjhub_wireless');
+    if (item) { item.metadata = { plan_id: String(row.id), days: Number(row.days) || null }; items.push(item); }
   }
   return json(res, 200, {
     success: true, currency: reseller.currency || 'NGN', count: items.length, page, per_page: perPage,
