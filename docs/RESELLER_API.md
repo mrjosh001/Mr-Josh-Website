@@ -7,7 +7,7 @@
 The handler is mounted at:
 
 ```
-/api/reseller
+/api/v1/reseller
 ```
 
 Use the host of the deployment containing this branch. Do not assume the production host has this code.
@@ -57,7 +57,7 @@ The key is shown only once at creation. MJ HUB stores its SHA-256 hash. The asso
 ## 1. List reseller account and API keys
 
 ```http
-GET /api/reseller?action=keys
+GET /api/v1/reseller?action=keys
 Authorization: Bearer <supabase_user_access_token>
 ```
 
@@ -83,7 +83,7 @@ Key metadata includes `id`, `label`, `key_hint`, `status`, `scopes`, `created_at
 ## 2. Create a reseller API key
 
 ```http
-POST /api/reseller?action=keys
+POST /api/v1/reseller?action=keys
 Authorization: Bearer <supabase_user_access_token>
 Content-Type: application/json
 
@@ -117,7 +117,7 @@ The listed scopes are currently stored as metadata. The middleware does not yet 
 ## 3. Revoke an API key
 
 ```http
-DELETE /api/reseller?action=keys&id=<key_id>
+DELETE /api/v1/reseller?action=keys&id=<key_id>
 Authorization: Bearer <supabase_user_access_token>
 ```
 
@@ -140,7 +140,7 @@ A missing ID returns HTTP 400. A key that is not an active key owned by that res
 ## 4. Read the service catalogue
 
 ```http
-GET /api/reseller?action=catalog&page=1&per_page=50
+GET /api/v1/reseller?action=catalog&page=1&per_page=50
 Authorization: Bearer mj_live_<secret>
 ```
 
@@ -214,7 +214,7 @@ The handler applies the same page number and page size independently to each bac
 ## 5. Read reseller wallet balance
 
 ```http
-GET /api/reseller?action=balance
+GET /api/v1/reseller?action=balance
 Authorization: Bearer mj_live_<secret>
 ```
 
@@ -236,7 +236,7 @@ The reseller wallet is designed to be separate from the normal MJ HUB customer w
 ## 6. Look up MJ Mails offers
 
 ```http
-GET /api/reseller?action=mail_offers&site=telegram.com
+GET /api/v1/reseller?action=mail_offers&site=telegram.com
 Authorization: Bearer mj_live_<secret>
 ```
 
