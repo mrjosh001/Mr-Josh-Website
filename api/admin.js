@@ -3414,7 +3414,33 @@ export default async function handler(req, res) {
     if (!admin.ok) return res.status(admin.status).json({ success: false, message: admin.message });
 
     let result;
-    if (resource === 'sub_admin') {
+    if (resource === 'reseller_admin') {
+      if (action === 'list') {
+        const { data: accounts, error: accountsError } = await supabase.from('reseller_accounts')
+          .select('id,user_id,status,currency,created_at').order('created_at', { ascending: false }).limit(200);
+        if (accountsError) result = { status: 500, body: { success: false, message: 'Could not load reseller accounts: ' + accountsError.message } };
+        else {
+          const ids = [...new Set((accounts || []).map(row => row.user_id).filter(Boolean))];
+          const profilesResult = ids.length ? await supabase.from('profiles').select('id,email,full_name,customer_id').in('id', ids) : { data: [], error: null };
+          if (profilesResult.error) result = { status: 500, body: { success: false, message: 'Could not load reseller profile details' } };
+          else {
+            const byId = new Map((profilesResult.data || []).map(profile => [profile.id, profile]));
+            result = { status: 200, body: { success: true, accounts: (accounts || []).map(row => Object.assign({}, row, { email: byId.get(row.user_id)?.email || null, full_name: byId.get(row.user_id)?.full_name || null, customer_id: byId.get(row.user_id)?.customer_id || null })) } };
+          }
+        }
+      } else if (action === 'approve' || action === 'reject') {
+        const resellerId = String(body.reseller_id || '').trim();
+        if (!resellerId) result = { status: 400, body: { success: false, message: 'reseller_id is required' } };
+        else {
+          const { data: account, error: updateError } = await supabase.from('reseller_accounts')
+            .update({ status: action === 'approve' ? 'active' : 'rejected', updated_at: new Date().toISOString() })
+            .eq('id', resellerId).select('id,user_id,status').maybeSingle();
+          if (updateError) result = { status: 500, body: { success: false, message: 'Could not update reseller account: ' + updateError.message } };
+          else if (!account) result = { status: 404, body: { success: false, message: 'Reseller account not found' } };
+          else result = { status: 200, body: { success: true, account } };
+        }
+      } else result = { status: 400, body: { success: false, message: 'Unknown reseller_admin action' } };
+    } else if (resource === 'sub_admin') {
       if (action === 'assign') result = await subAdminAssign(body);
       else if (action === 'revoke') result = await subAdminRevoke(body);
       else if (action === 'list') result = await subAdminList();
