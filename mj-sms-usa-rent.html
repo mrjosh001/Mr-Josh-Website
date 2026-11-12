@@ -539,7 +539,7 @@ async function loadServices(){
   if(cached&&cached.services.length){
     allServices=dedupeServices(cached.services);sortServices();renderServices();
     refreshVirtualSmsCatalog();
-    if(note)note.textContent='Cached · '+allServices.length+' services · refreshes in background';
+    if(note)note.textContent='Services loaded. Updating in background…';
     fetchAllServices().then(async function(r){
       if(r.ok&&r.services.length){
         allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
@@ -619,7 +619,7 @@ async function loadPlans(){
   }catch(err){
     gotPlansError=String(err&&err.message||err||'GotSMS plans unavailable');
   }
-  plans=(j&&j.success&&Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms',supplier:'GotSMS'},p);});
+  plans=(j&&j.success&&Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms'},p);});
   if(j&&j.success===false)gotPlansError=String(j.message||'GotSMS plans unavailable');
   if(!multiMode){
     var vsCode=String(selectedService.vs_service_id||'');
