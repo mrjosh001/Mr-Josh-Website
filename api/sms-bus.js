@@ -4203,7 +4203,7 @@ export default async function handler(req, res) {
 
         const g = await gotsmsFetch('/api/rents/bulk', { method: 'POST', body: payload });
         const rentedList = Array.isArray(g.data?.data) ? g.data.data : [];
-        const rented = Number(g.data?.meta?.rented || rentedList.length || 0);
+        const rented = rentedList.length;
         if (!g.ok || rented < 1) {
           for (const unitDebit of walletDebits) await refundWalletDebit(supabase, auth.userId, unitDebit.wallet_debit_id);
           return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'No numbers available') });
