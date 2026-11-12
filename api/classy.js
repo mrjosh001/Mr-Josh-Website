@@ -455,6 +455,7 @@ async function handleOrder(req, res) {
       description: (product.display_description || product.description || '').trim() || null,
       quantity: items.length || qty,
       amount: total,
+      wallet_debit_id: walletDebitId,
       status: 'completed',
       login_credentials: combinedCreds,
       login_credentials_raw: combinedRaw,
@@ -473,7 +474,9 @@ async function handleOrder(req, res) {
       title: productName,
       subtitle: 'Qty: ' + qty + ' · ClassyTee',
       amount: '₦' + total.toLocaleString(),
-      amount_ngn: total,
+      amount_ngn: debit.ngn_debited,
+      amount_usd: debit.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'completed'
     });
 
