@@ -4,6 +4,7 @@ import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
 import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -760,80 +761,23 @@ function gotsmsSellPriceNgn(supplierUsd) {
 }
 
 
-/** Strict wallet debit result — fail closed (never call supplier if unclear). */
-function isDebitOk(debited, debErr) {
-  if (debErr) return false;
-  // Postgres RPCs that return SETOF/table rows arrive from supabase-js as arrays.
-  // The debit may already have happened even when the caller rejects that shape.
-  if (Array.isArray(debited)) {
-    if (debited.length !== 1 || debited[0] == null) return false;
-    return isDebitOk(debited[0], null);
-  }
-  if (debited === true || debited === 1) return true;
-  if (debited === false || debited === 0 || debited == null) return false;
-  if (typeof debited === 'object') {
-    if (debited.success === false || debited.ok === false || debited.error || debited.insufficient === true) return false;
-    if (debited.success === true || debited.ok === true) return true;
-    if (Number.isFinite(Number(debited.new_balance)) || Number.isFinite(Number(debited.balance))) return true;
-    return false;
-  }
-  return false;
-}
-
-/**
- * Debit wallet atomically. Returns { ok, balance_before, new_balance, message }.
- * Never returns ok:true unless balance actually covers amount and RPC confirms.
- */
+/** Shared dual-wallet debit. The database decides affordability atomically. */
 async function debitWalletStrict(userId, amount, label) {
-  const amt = Math.round(Number(amount) * 100) / 100;
-  if (!(amt > 0)) {
-    return { ok: false, message: 'Invalid charge amount' };
+  const result = await debitWallet(supabase, userId, amount);
+  if (!result.ok) {
+    console.error('[debitWalletStrict]', label || '', result.error || result.message);
+    return { ...result, balance_before: result.balance_ngn, new_balance: result.balance_ngn,
+      customer_id: null, amount: Number(amount) };
   }
-  const { data: profile, error: pErr } = await supabase
-    .from('profiles')
-    .select('balance, customer_id')
-    .eq('id', userId)
-    .single();
-  if (pErr || !profile) {
-    return { ok: false, message: 'Profile not found' };
-  }
-  const bal = Number(profile.balance) || 0;
-  if (bal + 1e-9 < amt) {
-    return {
-      ok: false,
-      message: 'Insufficient wallet balance. Need ₦' + amt.toLocaleString() + ', you have ₦' + bal.toLocaleString() + '.',
-      balance_before: bal
-    };
-  }
-  const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-    p_user_id: userId,
-    p_amount: amt
-  });
-  if (!isDebitOk(debited, debErr)) {
-    console.error('[debitWalletStrict]', label || '', debErr?.message || debited);
-    return {
-      ok: false,
-      message: 'Insufficient wallet balance. Fund your wallet and try again.',
-      balance_before: bal
-    };
-  }
-  // Verify row actually dropped (guards broken RPCs that return success without debiting)
-  const { data: after } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
-  const newBal = after != null ? Number(after.balance) : NaN;
-  if (Number.isFinite(newBal) && newBal > bal - amt + 0.5) {
-    console.error('[debitWalletStrict] balance did not decrease', { label, bal, newBal, amt, debited });
-    return { ok: false, message: 'Could not charge wallet. Try again.' };
-  }
-  const resolved =
-    (typeof debited === 'object' && debited != null && Number.isFinite(Number(debited.new_balance)))
-      ? Number(debited.new_balance)
-      : (Number.isFinite(newBal) ? newBal : bal - amt);
+  const { data: profile } = await supabase.from('profiles')
+    .select('customer_id').eq('id', userId).maybeSingle();
   return {
-    ok: true,
-    balance_before: bal,
-    new_balance: resolved,
-    customer_id: profile.customer_id,
-    amount: amt
+    ...result,
+    balance_before: result.balance_ngn + result.ngn_debited,
+    new_balance: result.balance_ngn,
+    new_balance_usd: result.balance_usd,
+    customer_id: profile?.customer_id || null,
+    amount: Number(amount)
   };
 }
 
@@ -1363,7 +1307,7 @@ function gotsmsIsMultiPackOrder(orderRow) {
   return /multi-pack|multipack|\[multi\]/i.test(n);
 }
 
-async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode }) {
+async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName, serviceId, priceNgn, supplierUsd, status, activeTill, planLabel, carrierName, areaCode, walletDebitId }) {
   const orderId = `GS-${String(rentId || '').slice(0, 8)}-${Date.now().toString(36)}`;
   // number_orders has no dedicated active_till/carrier columns on all envs —
   // store expiry ISO in `code` (rental marker) and extras in service_name suffix.
@@ -1384,6 +1328,7 @@ async function gotsmsSaveOrder({ userId, customerId, rentId, phone, serviceName,
     service_name: displayName,
     phone_number: phone || null,
     price: priceNgn,
+    wallet_debit_id: Number(walletDebitId) || null,
     supplier_price: supplierUsd,
     currency: 'NGN',
     status: status || 'active',
@@ -3860,14 +3805,10 @@ export default async function handler(req, res) {
         if (!g.ok || !g.data?.success || !g.data?.data) {
           let restored = false;
           try {
-            const before = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
-            const credit = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
-            const after = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
-            restored = !credit.error && !!before.data && !!after.data &&
-              Number(after.data.balance) >= Number(before.data.balance) + price - 0.5;
-            if (!restored) console.error('[gotsms] wallet restore not verified', {
-              userId: auth.userId, amount: price, rpcError: credit.error?.message,
-              before: before.data?.balance, after: after.data?.balance
+            const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+            restored = refund.ok;
+            if (!restored) console.error('[gotsms] exact wallet refund not verified', {
+              userId: auth.userId, amount: price, debitId: debit.wallet_debit_id, error: refund.error || refund.message
             });
           } catch (e) {
             console.error('[gotsms] restore failed', e.message || e);
@@ -3899,7 +3840,8 @@ export default async function handler(req, res) {
           activeTill: rent.active_till,
           planLabel: rent.plan?.duration_translation || plan?.duration_translation,
           carrierName: rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
-          areaCode: body.area_code || rent.area_code || null
+          areaCode: body.area_code || rent.area_code || null,
+          walletDebitId: debit.wallet_debit_id
           });
         } catch (orderError) {
           console.error('[gotsms] rental provisioned but order persistence failed', {
