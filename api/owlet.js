@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { applyApiCors, handleOptions } from '../lib/secure.js';
@@ -1066,7 +1067,7 @@ async function handleOrder(req, res) {
 
   const { data: profile, error: pErr } = await supabase
     .from('profiles')
-    .select('id, balance, customer_id')
+    .select('id, balance, balance_usd, customer_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -1074,62 +1075,31 @@ async function handleOrder(req, res) {
     return res.status(400).json({ success: false, message: 'Could not load your profile' });
   }
 
-  const originalBalance = Number(profile.balance) || 0;
-  if (originalBalance < totalNgn) {
-    return res.status(400).json({
+  const debit = await debitWallet(supabase, user.id, totalNgn);
+  if (!debit.ok) {
+    return res.status(402).json({
       success: false,
-      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, you have ₦${originalBalance.toLocaleString()}`,
+      message: debit.message || 'Insufficient combined wallet balance.',
       required: totalNgn,
-      available: originalBalance
+      balance_ngn: debit.balance_ngn,
+      balance_usd: debit.balance_usd
     });
   }
-
-  // Atomic debit — blocks double-click races (same RPC as SMS)
-  let newBalance = originalBalance - totalNgn;
-  const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-    p_user_id: user.id,
-    p_amount: totalNgn
-  });
-  if (debErr) {
-    console.error('[booster order] debit_balance_if_sufficient', debErr.message);
-    // Fallback optimistic lock only if RPC missing
-    if (/function|does not exist|schema cache/i.test(debErr.message || '')) {
-      const { error: d1 } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', user.id)
-        .eq('balance', originalBalance);
-      if (d1) {
-        return res.status(400).json({ success: false, message: 'Insufficient balance or concurrent debit. Try again.' });
-      }
-    } else {
-      return res.status(500).json({ success: false, message: 'Could not debit wallet. Try again.' });
-    }
-  } else if (debited === false || debited === null) {
-    return res.status(400).json({
-      success: false,
-      message: `Insufficient balance. Need ₦${totalNgn.toLocaleString()}, you have ₦${originalBalance.toLocaleString()}`,
-      required: totalNgn,
-      available: originalBalance
-    });
-  } else {
-    try {
-      const { data: pb } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
-      if (pb && pb.balance != null) newBalance = Number(pb.balance);
-    } catch (_) {}
-  }
+  const originalBalance = Number(profile.balance || 0);
+  const originalBalanceUsd = Number(profile.balance_usd || 0);
+  const newBalance = debit.balance_ngn;
+  const newBalanceUsd = debit.balance_usd;
+  const walletDebitId = debit.wallet_debit_id;
 
   async function restoreWallet() {
-    try {
-      const { error: cErr } = await supabase.rpc('credit_balance', { p_user_id: user.id, p_amount: totalNgn });
-      if (cErr) {
-        console.error('[booster order] credit_balance restore', cErr.message);
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id);
-      }
-    } catch (e) {
-      console.error('[booster order] restore', e);
-      try { await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user.id); } catch (_) {}
+    const refund = await refundWalletDebit(supabase, user.id, walletDebitId);
+    if (!refund.ok) {
+      console.error('[booster order] exact wallet refund failed', {
+        userId: user.id, debitId: walletDebitId, error: refund.error || refund.message
+      });
+      return false;
     }
+    return true;
   }
 
   // Submit only the service ID validated against this supplier's live catalogue.
@@ -1162,6 +1132,7 @@ async function handleOrder(req, res) {
     quantity,
     charge_usd: null,
     price_ngn: totalNgn,
+    wallet_debit_id: walletDebitId,
     rate_per_1k: ratePer1k,
     status: 'Pending',
     start_count: null,
@@ -1205,6 +1176,7 @@ async function handleOrder(req, res) {
         link,
         quantity,
         price_ngn: totalNgn,
+        wallet_debit_id: walletDebitId,
         status: 'Pending',
         created_at: nowIso
       };
@@ -1269,6 +1241,9 @@ async function handleOrder(req, res) {
       order: { supplier_order_id: supplierOrderId, service_name: service.name, quantity, price_ngn: totalNgn, status: 'Pending', link },
       supplier_order_id: supplierOrderId,
       new_balance: newBalance,
+      new_balance_usd: newBalanceUsd,
+      ngn_debited: debit.ngn_debited,
+      usd_debited: debit.usd_debited,
       status: statusData,
       history_saved: false
     });
@@ -1296,6 +1271,9 @@ async function handleOrder(req, res) {
     order: saved || orderRow,
     supplier_order_id: supplierOrderId,
     new_balance: newBalance,
+    new_balance_usd: newBalanceUsd,
+    ngn_debited: debit.ngn_debited,
+    usd_debited: debit.usd_debited,
     status: statusData,
     history_saved: true
   });
