@@ -395,8 +395,8 @@ async function refreshVirtualSmsCatalog(){
  }
 }
 
-function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
-function writeCache(services){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services}));}catch(e){}}
+function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!Array.isArray(o.vsPlans)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
+function writeCache(services){try{if(!Array.isArray(vsRentPlans)||!vsRentPlans.length)return;localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services,vsPlans:vsRentPlans}));}catch(e){}}
 
 function dedupeServices(list){
   var seen={}, out=[];
@@ -537,7 +537,9 @@ async function loadServices(){
   var note=document.getElementById('cacheNote');
   var cached=readCache();
   if(cached&&cached.services.length){
-    allServices=dedupeServices(cached.services);sortServices();renderServices();
+    allServices=dedupeServices(cached.services);
+    vsRentPlans=Array.isArray(cached.vsPlans)?cached.vsPlans:[];
+    sortServices();renderServices();
     if(note)note.textContent=allServices.length+' services loaded from your 7-day cache.';
   }else{
     grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
