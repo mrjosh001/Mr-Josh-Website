@@ -636,9 +636,11 @@ async function loadServices(){
     var r=await fetchAllServices();
     if(!r.ok){allServices=[];await refreshVirtualSmsCatalog();if(!allServices.length){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}renderServices();if(note)note.textContent=allServices.length+' services';return;}
     allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
-    await refreshVirtualSmsCatalog();
     if(note)note.textContent=allServices.length+' services';
   }
+  // Refresh VirtualSMS stock on both fresh visits and 7-day cache hits.
+  // The browser cache is for fast rendering, never the source of live stock truth.
+  await refreshVirtualSmsCatalog();
   api('carriers').then(function(c){carriers=c.data||[];});
 }
 document.getElementById('svcSearch').oninput=renderServices;
