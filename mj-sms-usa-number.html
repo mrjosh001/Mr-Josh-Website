@@ -334,7 +334,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
     var st = computeState();
     var active = st.active;
-    var withinRefundWindow = !!(rent && rent.created_at && Date.now()-new Date(rent.created_at).getTime()<=20*60*1000);
+    var vsAgeMs = isVsRent && rent && rent.created_at ? Math.max(0,Date.now()-new Date(rent.created_at).getTime()) : 0;
+    var withinRefundWindow = !!(isVsRent && rent && rent.created_at && vsAgeMs>=2*60*1000 && vsAgeMs<=20*60*1000);
     var canCancel = active && !hasReceivedCode && (!isVsRent || withinRefundWindow);
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var ph = splitPhone(rent.phone || rent.number);
@@ -387,7 +388,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
               (renewPrice>0 ? 'Charges ₦'+renewPrice.toLocaleString()+' from your wallet when this period ends.' : 'Renews from your wallet when this period ends.')+
             '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
           '<div id="refundSlot">'+
-            (canCancel ? '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>' : (active && hasReceivedCode ? LOCKED : ''))+
+            (isVsRent && active && !hasReceivedCode ? '' : (canCancel ? '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>' : (active && hasReceivedCode ? LOCKED : '')))+
           '</div>'+
           (active ? '<div class="n3-tip"><b>Tip:</b> use a USA VPN when verifying. '+(isMultiPack?'Codes for <b>both apps</b> land in this same inbox. ':'')+'If no SMS arrives, tap Wake up, then request the code in the app.</div>' : '')+
         '</div></div>'+
@@ -452,6 +453,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     };
     var b1 = document.getElementById('btnAddService'); if(b1) b1.onclick = openAddServiceModal;
     var b2 = document.getElementById('btnSwitchPlan'); if(b2) b2.onclick = openPlanModal;
+    updateVirtualSmsCancelUi();
     var cancel = document.getElementById('btnCancel');
     if(cancel) cancel.onclick = openRefundModal;
 
@@ -508,6 +510,32 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
   };
 
+  function updateVirtualSmsCancelUi(){
+    if(!isVsRent || !rent || !rent.created_at) return;
+    var slot=document.getElementById('refundSlot');
+    if(!slot) return;
+    if(hasReceivedCode){
+      slot.innerHTML=computeState().active?LOCKED:'';
+      return;
+    }
+    if(!computeState().active){slot.innerHTML='';return;}
+    var age=Math.max(0,Date.now()-new Date(rent.created_at).getTime());
+    var openAt=2*60*1000,closeAt=20*60*1000;
+    if(age<openAt){
+      var wait=Math.ceil((openAt-age)/1000);
+      slot.innerHTML='<p class="refund-locked">Cancellation opens in '+String(Math.floor(wait/60)).padStart(2,'0')+':'+String(wait%60).padStart(2,'0')+'. You can cancel and receive a full wallet refund until 20 minutes after purchase.</p>';
+      return;
+    }
+    if(age<=closeAt){
+      var left=Math.ceil((closeAt-age)/1000);
+      slot.innerHTML='<p class="refund-locked">Cancellation is available now. You have '+Math.floor(left/60)+'m '+String(left%60).padStart(2,'0')+'s left to cancel and receive a full wallet refund. After 20 minutes, cancellation and refunds are no longer available.</p><button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>';
+      var btn=document.getElementById('btnCancel');
+      if(btn)btn.onclick=openRefundModal;
+      return;
+    }
+    slot.innerHTML='<p class="refund-locked">The 20-minute cancellation and refund window has closed. This rental can no longer be cancelled or refunded.</p>';
+  }
+
   function startCountdown(){
     if(cdTimer) clearTimeout(cdTimer);
     cdTimer = null;
@@ -553,6 +581,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         var tr = document.getElementById('cdTrack'); if(tr) tr.style.display = 'none';
         return;
       }
+      if(isVsRent) updateVirtualSmsCancelUi();
       if(bar && total) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, left/total)) + ')';
       var d = Math.floor(left/86400000);
       var h = Math.floor((left%86400000)/3600000);
