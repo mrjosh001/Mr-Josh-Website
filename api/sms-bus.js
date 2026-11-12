@@ -2813,7 +2813,7 @@ export default async function handler(req, res) {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, balance, customer_id')
+        .select('id, balance, balance_usd, customer_id')
         .eq('id', auth.userId)
         .single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
@@ -2864,19 +2864,12 @@ export default async function handler(req, res) {
         }
       }
 
-      const bal = Number(profile.balance) || 0;
-      if (bal < price) {
-        return json(res, 400, {
-          success: false,
-          message: `Need ₦${price.toLocaleString()} to reuse this number`,
-          required: price,
-          available: bal
-        });
-      }
-
-      const originalBalance = bal;
-      const newBalance = bal - price;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', auth.userId);
+      const debit = await debitWallet(supabase, auth.userId, price);
+      if (!debit.ok) return json(res, 402, {
+        success: false, message: debit.message || 'Insufficient combined wallet balance.',
+        required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
+      });
+      const newBalance = debit.balance_ngn;
 
       let bus;
       try {
@@ -2886,7 +2879,7 @@ export default async function handler(req, res) {
           mobile_number
         });
       } catch (e) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
         return json(res, 502, { success: false, message: 'Could not reach the SMS server. Try again or contact support.' });
       }
 
@@ -2927,6 +2920,7 @@ export default async function handler(req, res) {
         service_name: serviceName,
         phone_number: phone,
         price,
+        wallet_debit_id: debit.wallet_debit_id,
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
@@ -3081,16 +3075,11 @@ export default async function handler(req, res) {
       let price = expected;
       const quoted = Number(body.quoted_price_ngn || 0);
       if (quoted > 0 && Math.abs(quoted - expected) <= 50) price = Math.round(quoted);
-      const bal = Number(profile.balance) || 0;
-      if (bal < price) {
-        return json(res, 400, {
-          success: false,
-          message: `Insufficient balance. Need ₦${price.toLocaleString()}`
-        });
-      }
-
-      const originalBalance = bal;
-      await supabase.from('profiles').update({ balance: bal - price }).eq('id', auth.userId);
+      const debit = await debitWallet(supabase, auth.userId, price);
+      if (!debit.ok) return json(res, 402, {
+        success: false, message: debit.message || 'Insufficient combined wallet balance.',
+        required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
+      });
 
       const bus = await smsbusGet(RENT_BASE, '/v1/rent/get/number', {
         area_code,
@@ -3098,7 +3087,7 @@ export default async function handler(req, res) {
       });
 
       if (!busOk(bus.data) || !bus.data?.data) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
         return json(res, 400, {
           success: false,
           message: 'Rental is unavailable for this area right now. Contact support if you need help.'
@@ -3123,6 +3112,7 @@ export default async function handler(req, res) {
         service_name: `Rental ${time} mo · ${rentCountryName(d.area_code || area_code, d.area_title || d.area_name)}`,
         phone_number: fullPhone || phone,
         price,
+        wallet_debit_id: debit.wallet_debit_id,
         supplier_price: supplierUsd,
         currency: 'NGN',
         status: 'active',
