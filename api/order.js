@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
@@ -1372,6 +1373,9 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+  let walletDebitId = null;
+  let newBalance = 0;
+  let newBalanceUsd = 0;
     // Idempotency: duplicate click with same external_order_id
     if (external_order_id) {
       const existing = await findExistingLogOrder(user_id, external_order_id);
@@ -1471,45 +1475,20 @@ export default async function handler(req, res) {
     originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
-    // Purchases are priced in NGN. Spend the NGN wallet first, then cover
-    // any remainder from USD at the configured wallet conversion rate.
-    const walletUsdRate = Number(process.env.WALLET_USD_RATE) || 1450;
-    const ngnFromWallet = Math.min(originalBalance, total);
-    const remainingNgn = Math.max(0, total - ngnFromWallet);
-    const usdToDebit = remainingNgn > 0
-      ? Math.ceil((remainingNgn / walletUsdRate) * 100) / 100
-      : 0;
-    const convertedUsdValue = usdToDebit * walletUsdRate;
-    const newBalance = Math.max(0, originalBalance - ngnFromWallet);
-    const newBalanceUsd = Math.max(0, Math.round((originalBalanceUsd - usdToDebit) * 100) / 100);
-
-    if (originalBalance + (originalBalanceUsd * walletUsdRate) + 0.000001 < total || originalBalanceUsd + 0.000001 < usdToDebit) {
+    // The database atomically allocates NGN first and USD for the remainder.
+    const debit = await debitWallet(supabase, user_id, total);
+    if (!debit.ok) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient combined wallet balance',
+        message: debit.message || 'Insufficient combined wallet balance',
         required_ngn: total,
-        available_ngn_equivalent: Math.round((originalBalance + originalBalanceUsd * walletUsdRate) * 100) / 100,
-        balance_ngn: originalBalance,
-        balance_usd: originalBalanceUsd,
-        usd_ngn_rate: walletUsdRate
+        balance_ngn: debit.balance_ngn,
+        balance_usd: debit.balance_usd
       });
     }
-
-    // -------------------------------------------------
-    // 3. Debit both wallets as one purchase
-    // -------------------------------------------------
-    const { error: deductErr } = await supabase
-      .from('profiles')
-      .update({ balance: newBalance, balance_usd: newBalanceUsd })
-      .eq('id', user_id);
-
-    if (deductErr) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not debit your balance. Please try again.'
-      });
-    }
-
+    walletDebitId = debit.wallet_debit_id;
+    newBalance = debit.balance_ngn;
+    newBalanceUsd = debit.balance_usd;
     deducted = true;
 
     // -------------------------------------------------
@@ -1539,11 +1518,12 @@ export default async function handler(req, res) {
     // 5. Supplier failed → automatic refund
     // -------------------------------------------------
     if (!orderData.success) {
-      // Refund user
-      await supabase
-        .from('profiles')
-        .update({ balance: originalBalance, balance_usd: originalBalanceUsd })
-        .eq('id', user_id);
+      // Refund the exact debit split, never restore a stale profile snapshot.
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      if (!refund.ok) {
+        return res.status(500).json({ success: false, message: 'Order failed and wallet refund needs support review.' });
+      }
+      deducted = false;
 
       // Record failed purchase → Log Orders tab
       await supabase.from('transactions').insert({
@@ -1616,6 +1596,7 @@ export default async function handler(req, res) {
       description: orderDescription,
       quantity: items.length || safeQty,
       amount: total,
+      wallet_debit_id: walletDebitId,
       status: 'completed',
       login_credentials: combinedCreds,
       login_credentials_raw: combinedRaw,
@@ -1706,10 +1687,9 @@ export default async function handler(req, res) {
     // Safety net: refund if we already debited
     if (deducted) {
       try {
-        await supabase
-          .from('profiles')
-          .update({ balance: originalBalance, balance_usd: originalBalanceUsd })
-          .eq('id', user_id);
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
+        deducted = false;
 
         await supabase.from('transactions').insert({
           user_id,
