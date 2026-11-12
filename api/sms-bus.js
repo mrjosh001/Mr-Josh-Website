@@ -1130,18 +1130,15 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
       }
     } catch (_) {}
 
-    const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-      p_user_id: userId,
-      p_amount: price
-    });
-    if (debErr || debited === false || debited === null) {
+    const debit = await debitWallet(supabase, userId, price);
+    if (!debit.ok) {
       try {
         if (autoOn) await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
       } catch (_) {}
       return {
         charged: false,
         disabled: true,
-        message: 'Renewal blocked — insufficient balance (₦' + price.toLocaleString() + ' required). Auto-renew is off.'
+        message: 'Renewal blocked because your combined wallet balance is insufficient. Auto-renew is off.'
       };
     }
     try {
@@ -1153,7 +1150,8 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
         title: 'USA rental auto-renew',
         subtitle: idem,
         amount: '₦' + price.toLocaleString(),
-        amount_ngn: price,
+        amount_ngn: debit.ngn_debited,
+        external_reference: String(debit.wallet_debit_id),
         status: 'completed'
       });
     } catch (e) {
@@ -1162,7 +1160,8 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
     try {
       await supabase.from('number_orders').update({
         code: new Date(liveTill).toISOString(),
-        status: 'active'
+        status: 'active',
+        wallet_debit_id: debit.wallet_debit_id
       }).eq('id', order.id);
     } catch (_) {}
     return { charged: true, disabled: false, amount: price };
