@@ -17,11 +17,11 @@ button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--b
 <body>
 <main>
 <h1>Rental payment review</h1>
-<p>This admin-only check verifies the purchase record before either restoring the wallet or attaching an existing rental. It will not issue a second charge.</p>
+<p>This admin-only action cancels the failed purchase and restores the customer’s wallet after you have verified no rental or supplier charge was created.</p>
 <div class="ref">Reference: 53d0e672-ebbd-4705-8ec7-04abbbd78610</div>
-<button id="run">Verify purchase and resolve payment</button>
+<button id="run">Confirm failed purchase and refund ₦5,550</button>
 <div id="result" role="status">Sign in to MJ HUB in this same browser tab, then run the check.</div>
-<p class="small">Access is restricted by the server's admin permission check. A refund is only issued when the account records show no completed rental and no corresponding charge.</p>
+<p class="small">Access is restricted by the server's admin permission check. Only use this action after verifying that no rental and no supplier charge were created. The server checks the local order, inbox, admin role, and original debit before restoring the wallet.</p>
 </main>
 <script>
 (function(){
@@ -30,16 +30,16 @@ button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--b
  const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
  const btn=document.getElementById('run'),out=document.getElementById('result');
  btn.addEventListener('click',async function(){
-  btn.disabled=true;out.textContent='Checking the purchase and payment records…';
+  btn.disabled=true;out.textContent='Cancelling the failed purchase and restoring the wallet…';
   try{
    const {data:{session}}=await sb.auth.getSession();
    if(!session){out.textContent='Your session was not found in this tab. Open MJ HUB, sign in, then open this page in the same tab.';return;}
-   const res=await fetch('/api/sms-bus?action=vsrent_admin_reconcile',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({reference:'53d0e672-ebbd-4705-8ec7-04abbbd78610'})});
+   const res=await fetch('/api/sms-bus?action=vsrent_admin_fail_refund',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({reference:'53d0e672-ebbd-4705-8ec7-04abbbd78610',confirm_no_supplier_charge:true})});
    const raw=await res.text();let j={};try{j=JSON.parse(raw)}catch(_){}
    if(!res.ok||!j.success){out.textContent=j.message||'The payment could not be resolved yet. No further purchase was made.';return;}
-   if(j.status==='refunded')out.textContent='Resolved: ₦'+Number(j.amount_ngn||5550).toLocaleString('en-NG')+' has been restored to the wallet.';
+   if(j.status==='refunded')out.textContent='Confirmed: ₦'+Number(j.amount_ngn||5550).toLocaleString('en-NG')+' has been restored to the wallet. The failed order is marked refunded.';
    else if(j.status==='active'||j.status==='completed')out.textContent='Resolved: the existing rental was found and linked to the account. No second debit was made.';
-   else out.textContent='The purchase is still being checked. No second debit or refund was made.';
+   else out.textContent='The failed purchase was not refunded. Review the message and try again only after checking the order.';
   }catch(e){out.textContent='The check could not be completed. Please retry from the admin page.';}
   finally{btn.disabled=false;}
  });
