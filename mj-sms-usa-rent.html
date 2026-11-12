@@ -575,7 +575,7 @@ async function loadPlans(){
       selectedService.gotsms_id
         ? api('plans',{query:'service_id='+encodeURIComponent(selectedService.gotsms_id)+'&per_page=100&include_unavailable=1'}).catch(function(e){return{success:false,message:e&&e.message||'GotSMS plans unavailable'};})
         : Promise.resolve({success:true,data:[]}),
-      selectedService.gotsms_id ? loadCarriers() : Promise.resolve()
+      selectedService.gotsms_id ? loadCarriers().catch(function(){return null;}) : Promise.resolve()
     ]);
     j=results[0];
   }catch(err){
