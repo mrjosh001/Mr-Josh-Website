@@ -3657,10 +3657,7 @@ export default async function handler(req, res) {
           const pageMeta = gotsmsMetaPayload(g.data);
           lastPage = Number(pageMeta.last_page || pageMeta.lastPage || pageMeta.total_pages || 1);
           page += 1;
-          if (page > 100 && page <= lastPage) {
-            return json(res, 502, { success: false, message: 'The supplier plan catalogue exceeds the supported page limit. No partial plan list was returned.' });
-          }
-        } while (page <= lastPage);
+        } while (page <= lastPage && page <= 8);
 
         // Overlay admin prices / hidden flags from number_services (source=gotsms, service_id = plan id)
         let enriched = all.map(gotsmsEnrichPlan);
