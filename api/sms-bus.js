@@ -1777,7 +1777,6 @@ async function reclaimAndCompleteSmsBus(order, userId, code) {
 
   const price = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
-  let newBalance = null;
   let newBalanceUsd = null;
   let walletDebitId = null;
   if (price > 0) {
