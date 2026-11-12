@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
+import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { applyApiCors, handleOptions } from '../lib/secure.js';
@@ -85,7 +86,7 @@ function isCustomerSource(src) {
   return CUSTOMER_SOURCES.includes(normalizePanelSource(src));
 }
 /** JAP rates are USD. $1 → ₦1450, matching the wallet conversion rate. */
-const USD_TO_NGN = 1450;
+const USD_TO_NGN = WALLET_USD_RATE;
 /** Flat ₦ buffer added on top of converted cost before markup. */
 const COST_BUFFER_NGN = Math.max(0, Number(process.env.BOOSTER_COST_BUFFER_NGN) || 1000);
 
