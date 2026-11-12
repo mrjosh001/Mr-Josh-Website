@@ -2610,7 +2610,7 @@ async function vsHandleOrder(req, res) {
         return res.status(200).json({ success: true, replayed: true, message: 'Order already completed', data: {
           order_id: ex.order_id, number: ex.phone_number, status: ex.status || 'waiting_for_code',
           service_name: ex.service_name || serviceName, country_name: ex.country_name || countryName,
-          price: ex.price != null ? Number(ex.price) : price, new_balance: originalBalance, created_at: ex.created_at
+          price: ex.price != null ? Number(ex.price) : price, new_balance: originalBalance, new_balance_usd: Number(profile.balance_usd || 0), created_at: ex.created_at
         } });
       }
     }
@@ -2655,7 +2655,7 @@ async function vsHandleOrder(req, res) {
         await supabase.from('transactions').insert({
           user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
           subtitle: `Failed: ${noStock ? 'No stock' : 'Unavailable'}`, amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price, status: 'failed', notes: (r.text || r.err || '').slice(0, 500)
+          amount_ngn: debit.ngn_debited, amount_usd: debit.usd_debited, external_reference: String(walletDebitId), status: 'failed', notes: (r.text || r.err || '').slice(0, 500)
         });
       } catch (_) { /* optional */ }
       return res.status(400).json({
