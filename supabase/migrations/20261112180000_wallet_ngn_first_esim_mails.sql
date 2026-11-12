@@ -52,4 +52,70 @@ begin
  insert into public.transactions(user_id,customer_id,type,category,title,subtitle,amount,status,amount_ngn,amount_usd,product_details,external_reference,currency,meta) select p_user_id,customer_id,'email','email','MJ Mails · Reuse',lower(v_source.site)||' · '||lower(v_source.domain),'₦'||to_char(p_retail_ngn,'FM999,999,999,990.00'),'completed',v_ngn_debit,v_usd_debit,jsonb_build_object('mail_order_id',v_order.id,'reused_from_order_id',v_source.id,'email',v_source.email_address,'supplier_cost',p_supplier_cost,'wallet_ngn_debited',v_ngn_debit,'wallet_usd_debited',v_usd_debit)::text,'MJMAIL-'||v_order.id::text,'NGN',jsonb_build_object('source','mj_mails','wallet_debit_id',v_debit_id,'usd_ngn_rate',v_rate) from public.profiles where id=p_user_id;
  return jsonb_build_object('created',true,'order',to_jsonb(v_order));
 end;$function$;
+alter table public.booster_refund_credits add column if not exists amount_usd numeric not null default 0;
+alter table public.booster_refund_credits add column if not exists wallet_debit_id bigint;
+
+create or replace function public.credit_booster_order_refund(
+ p_order_id uuid,
+ p_amount numeric,
+ p_reason text default 'supplier_refund'
+) returns jsonb
+language plpgsql security definer set search_path=public
+as $function$
+declare
+ v_user uuid;
+ v_price numeric;
+ v_debit_id bigint;
+ v_debit public.wallet_debits%rowtype;
+ v_existing public.booster_refund_credits%rowtype;
+ v_refund_ngn numeric(14,2);
+ v_refund_usd numeric(14,2);
+ v_ratio numeric;
+ v_balance numeric;
+ v_balance_usd numeric;
+begin
+ if p_amount is null or p_amount<=0 then raise exception 'Refund amount must be positive'; end if;
+ select user_id,price_ngn,wallet_debit_id into v_user,v_price,v_debit_id
+ from public.booster_orders where id=p_order_id for update;
+ if v_user is null then raise exception 'Booster order not found'; end if;
+ if p_amount>coalesce(v_price,0) then raise exception 'Refund exceeds original order charge'; end if;
+ select * into v_existing from public.booster_refund_credits where order_id=p_order_id for update;
+ if found then
+  select balance,balance_usd into v_balance,v_balance_usd from public.profiles where id=v_user;
+  return jsonb_build_object('credited',false,'already_credited',true,
+   'amount',v_existing.amount_ngn,'amount_ngn',v_existing.amount_ngn,
+   'amount_usd',coalesce(v_existing.amount_usd,0),'wallet_debit_id',v_existing.wallet_debit_id,
+   'balance',v_balance,'balance_usd',v_balance_usd);
+ end if;
+ if v_debit_id is not null then
+  select * into v_debit from public.wallet_debits where id=v_debit_id and user_id=v_user for update;
+  if not found then raise exception 'Original wallet debit not found'; end if;
+  if v_debit.refunded then raise exception 'Original wallet debit has already been fully refunded'; end if;
+  v_ratio:=least(1,p_amount/greatest(coalesce(v_price,0),0.01));
+  if p_amount>=v_price then
+   v_refund_ngn:=coalesce(v_debit.ngn_amt,0);
+   v_refund_usd:=coalesce(v_debit.usd_amt,0);
+  else
+   v_refund_ngn:=round(coalesce(v_debit.ngn_amt,0)*v_ratio,2);
+   v_refund_usd:=round(coalesce(v_debit.usd_amt,0)*v_ratio,2);
+  end if;
+ else
+  v_refund_ngn:=p_amount;
+  v_refund_usd:=0;
+ end if;
+ update public.profiles
+ set balance=coalesce(balance,0)+v_refund_ngn,
+     balance_usd=coalesce(balance_usd,0)+v_refund_usd,updated_at=now()
+ where id=v_user returning balance,balance_usd into v_balance,v_balance_usd;
+ if not found then raise exception 'User profile not found'; end if;
+ insert into public.booster_refund_credits(order_id,user_id,amount_ngn,amount_usd,wallet_debit_id,reason)
+ values(p_order_id,v_user,p_amount,v_refund_usd,v_debit_id,p_reason);
+ if v_debit_id is not null and p_amount>=v_price then
+  update public.wallet_debits set refunded=true where id=v_debit_id and user_id=v_user and refunded=false;
+ end if;
+ return jsonb_build_object('credited',true,'already_credited',false,
+  'amount',p_amount,'amount_ngn',v_refund_ngn,'amount_usd',v_refund_usd,
+  'wallet_debit_id',v_debit_id,'balance',v_balance,'balance_usd',v_balance_usd);
+end;
+$function$;
 commit;
