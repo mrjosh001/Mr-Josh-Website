@@ -679,7 +679,7 @@ export default async function handler(req, res) {
     if (String(body.action || '') === 'my_orders') {
       const { data, error } = await supabase
         .from('esim_orders')
-        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,status,created_at,customer_email')
+        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,wallet_debit_id,status,created_at,customer_email')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
