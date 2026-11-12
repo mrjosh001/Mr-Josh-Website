@@ -1132,7 +1132,7 @@ async function doRent(){
     var rentObj=Array.isArray(j.data)?j.data[0]:j.data;
     var rid=rentObj&&(rentObj.id||rentObj.rent_id||rentObj.order_id||(j.data&&j.data.id));
     if(okEl) okEl.textContent=j.message||'Number rented successfully';
-    showRentToast(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'Your number is ready. Opening inbox…':(j.message||(multiMode?'Both services ready on one number':'Number ready'+(rentObj&&rentObj.phone?': '+rentObj.phone:''))), true);
+    showRentToast(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'Your number is ready.':(j.message||(multiMode?'Both services ready on one number':'Number ready'+(rentObj&&rentObj.phone?': '+rentObj.phone:''))), true);
     if(rid){
       setTimeout(function(){
         location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid))+(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'&source=virtualsms_rent':'');
