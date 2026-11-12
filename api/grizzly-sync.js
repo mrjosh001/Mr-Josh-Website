@@ -2577,7 +2577,7 @@ async function vsHandleOrder(req, res) {
   }
   if (!vsApiKey()) return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
 
-  let originalBalance = 0, price = 0, deducted = false, customerId = null, serviceName = '', countryName = '';
+  let originalBalance = 0, price = 0, deducted = false, customerId = null, serviceName = '', countryName = '', walletDebitId = null, newBalanceUsd = null;
   try {
     const { data: svc } = await supabase.from('number_services')
       .select('service_name, country_name, price, supplier_price, price_source, is_available')
@@ -2621,22 +2621,17 @@ async function vsHandleOrder(req, res) {
         } });
       }
     }
-    // The atomic RPC is authoritative and supports NGN, USD, or mixed balances.
-    // Do not reject from a stale NGN-only snapshot and never fall back to a direct profile update.
-    const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: price });
-    if (debErr) {
-      console.error('[vsms order] safe wallet debit failed:', debErr.message);
-      return res.status(500).json({ success: false, code: 'WALLET_DEBIT_UNVERIFIED', message: 'Could not verify your wallet debit safely. Please try again.' });
-    }
-    const debitRow = Array.isArray(debited) ? debited[0] : debited;
-    if (!debitRow || debitRow.success !== true) {
+    // Central atomic debit: NGN first, USD remainder.
+    const debit = await debitWallet(supabase, user_id, price);
+    if (!debit.ok) {
       return res.status(402).json({
-        success: false, message: 'Insufficient balance', required: price,
-        available: Number(debitRow?.new_balance ?? originalBalance),
-        available_usd: Number(debitRow?.new_balance_usd ?? originalBalanceUsd)
+        success: false, message: debit.message || 'Insufficient combined wallet balance.',
+        required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
       });
     }
-    let newBalance = Number(debitRow.new_balance ?? originalBalance);
+    walletDebitId = debit.wallet_debit_id;
+    const newBalance = debit.balance_ngn;
+    newBalanceUsd = debit.balance_usd;
     deducted = true;
 
     let r = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000 });
@@ -2658,7 +2653,8 @@ async function vsHandleOrder(req, res) {
     const orderId = j.order_id || j.id || (j.order && (j.order.order_id || j.order.id));
     const phone = j.phone_number || j.number || (j.order && (j.order.phone_number || j.order.number)) || null;
     if (!r.ok || j.success === false || !orderId) {
-      await vsCreditWallet(user_id, price);
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
       deducted = false;
       const code = String(j.error || '').toLowerCase();
       const noStock = r.status === 404 || r.status === 409 || /no_numbers|not_available|out_of_stock|unavailable|no numbers/.test(code);
@@ -2684,7 +2680,7 @@ async function vsHandleOrder(req, res) {
     const row = {
       source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
       country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
-      phone_number: phone, price, supplier_price: costUsd, currency: 'NGN',
+      phone_number: phone, price, wallet_debit_id: walletDebitId, supplier_price: costUsd, currency: 'NGN',
       status: 'waiting_for_code', code: null, time_left: null, refunded: false
     };
     let { error: insErr } = await supabase.from('number_orders').insert(row);
@@ -2719,11 +2715,11 @@ async function vsHandleOrder(req, res) {
 
     return res.status(200).json({ success: true, message: 'Number purchased successfully', data: {
       order_id: String(orderId), number: phone, status: 'waiting_for_code', service_name: serviceName,
-      country_name: countryName, price, new_balance: newBalance, created_at: new Date().toISOString()
+      country_name: countryName, price, new_balance: newBalance, new_balance_usd: newBalanceUsd, wallet_debit_id: walletDebitId, created_at: new Date().toISOString()
     } });
   } catch (err) {
     console.error('vsms order error:', err);
-    if (deducted) { try { await vsCreditWallet(user_id, price); } catch (e) { console.error('CRITICAL vsms auto-restore failed', e); } }
+    if (deducted) { try { const refund = await refundWalletDebit(supabase, user_id, walletDebitId); if (!refund.ok) throw new Error(refund.error || refund.message); } catch (e) { console.error('CRITICAL vsms exact refund failed', e); } }
     return res.status(500).json({ success: false, message: deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.' });
   }
 }
