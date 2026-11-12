@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rental Payment Review · MJ HUB Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--card:#111827;--text:#f1f5f9;--muted:#94a3b8;--line:#263244;--blue:#3b82f6;--green:#22c55e;--red:#ef4444}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px}
+main{width:min(100%,520px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px}
+h1{font-size:21px;margin:0 0 8px}p{color:var(--muted);line-height:1.55}.ref{font:13px ui-monospace,monospace;overflow-wrap:anywhere;background:#0b1220;border:1px solid var(--line);padding:12px;border-radius:10px;color:#cbd5e1}
+button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--blue);color:white;font-weight:700;padding:14px;font-size:15px;cursor:pointer}button:disabled{opacity:.55;cursor:wait}
+#result{margin-top:16px;padding:12px;border-radius:10px;background:#0b1220;border:1px solid var(--line);white-space:pre-wrap;line-height:1.5}.small{font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Rental payment review</h1>
+<p>This admin-only check verifies the purchase record before either restoring the wallet or attaching an existing rental. It will not issue a second charge.</p>
+<div class="ref">Reference: 53d0e672-ebbd-4705-8ec7-04abbbd78610</div>
+<button id="run">Verify purchase and resolve payment</button>
+<div id="result" role="status">Sign in to MJ HUB in this same browser tab, then run the check.</div>
+<p class="small">Access is restricted by the server's admin permission check. A refund is only issued when the account records show no completed rental and no corresponding charge.</p>
+</main>
+<script>
+(function(){
+ const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
+ const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+ const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
+ const btn=document.getElementById('run'),out=document.getElementById('result');
+ btn.addEventListener('click',async function(){
+  btn.disabled=true;out.textContent='Checking the purchase and payment records…';
+  try{
+   const {data:{session}}=await sb.auth.getSession();
+   if(!session){out.textContent='Your session was not found in this tab. Open MJ HUB, sign in, then open this page in the same tab.';return;}
+   const res=await fetch('/api/sms-bus?action=vsrent_admin_reconcile',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({reference:'53d0e672-ebbd-4705-8ec7-04abbbd78610'})});
+   const raw=await res.text();let j={};try{j=JSON.parse(raw)}catch(_){}
+   if(!res.ok||!j.success){out.textContent=j.message||'The payment could not be resolved yet. No further purchase was made.';return;}
+   if(j.status==='refunded')out.textContent='Resolved: ₦'+Number(j.amount_ngn||5550).toLocaleString('en-NG')+' has been restored to the wallet.';
+   else if(j.status==='active'||j.status==='completed')out.textContent='Resolved: the existing rental was found and linked to the account. No second debit was made.';
+   else out.textContent='The purchase is still being checked. No second debit or refund was made.';
+  }catch(e){out.textContent='The check could not be completed. Please retry from the admin page.';}
+  finally{btn.disabled=false;}
+ });
+})();
+</script>
+</body>
+</html>
