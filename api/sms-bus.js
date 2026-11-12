@@ -3871,7 +3871,7 @@ export default async function handler(req, res) {
         if (!transactionSaved) {
           console.error('[gotsms] rental transaction persistence failed', { rentId: rent.id, userId: auth.userId, amount: price });
         }
-        const { data: fresh } = await supabase.from('profiles').select('balance').eq('id', auth.userId).single();
+        const { data: fresh } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).single();
         // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
         let autoRenew = false;
         const wantRenew = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
@@ -3915,7 +3915,9 @@ export default async function handler(req, res) {
             transaction_recorded: transactionSaved,
             price_ngn: price,
             auto_renew: autoRenew,
-            new_balance: Number(fresh?.balance ?? debit.new_balance)
+            new_balance: Number(fresh?.balance ?? debit.new_balance),
+            new_balance_usd: Number(fresh?.balance_usd ?? debit.new_balance_usd),
+            wallet_debit_id: debit.wallet_debit_id
           }
         });
         await notifyUserPush(
@@ -4139,7 +4141,9 @@ export default async function handler(req, res) {
             services: [name1, name2],
             price_ngn: price,
             supplier_usd: packUsd,
-            new_balance: debit.new_balance
+            new_balance: debit.new_balance,
+            new_balance_usd: debit.new_balance_usd,
+            wallet_debit_id: debit.wallet_debit_id
           })
         });
       }
