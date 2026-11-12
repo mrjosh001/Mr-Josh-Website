@@ -54,9 +54,7 @@ const VSMS_BASE = 'https://virtualsms.io/stubs/handler_api.php'; // legacy: only
 /** Deterministic customer NGN price from supplier USD (no random) — used for provider pools */
 function salePriceFromUsd(supplierPriceUsd) {
   const rate =
-    Number(process.env.USD_TO_NGN_RATE) ||
-    Number(process.env.USD_TO_NGN) ||
-    1500;
+    1450;
   const percent = 85; // mid-band of 70–100 markup
   const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
   const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
@@ -73,7 +71,7 @@ function salePriceFromUsd(supplierPriceUsd) {
 }
 
 function assertSaleCoversCost(priceNgn, supplierUsd) {
-  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const rate = 1450;
   const cost = Number(supplierUsd) * rate;
   const sale = Number(priceNgn);
   if (!(sale > 0)) return { ok: false, message: 'Price unavailable. Refresh and try again.' };
@@ -506,7 +504,7 @@ async function handleSync(req, res) {
   }
 
   const apiKey = process.env.GRIZZLYSMS_API_KEY;
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
+  const usdToNgn = 1450;
   const action = req.query?.action || null;
 
   try {
@@ -1863,7 +1861,7 @@ const vsApiKey = () => String(process.env.VIRTUALSMS_API_KEY || process.env.VIRT
 const vsVoip = (path) => (VS_INCLUDE_VOIP ? path + (path.includes('?') ? '&' : '?') + 'include_voip=true' : path);
 const vsSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Same inputs Servers 1 & 2 use for pricing (lib/pricing.js applyMarkup)
-const vsRate = () => Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+const vsRate = () => 1450;
 const vsMinProfit = () => Number(process.env.MIN_PROFIT_NGN) || 500;
 const vsFloorNgn = (usd) => Math.ceil(usd * vsRate() + vsMinProfit());
 
