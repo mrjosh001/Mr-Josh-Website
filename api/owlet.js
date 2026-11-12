@@ -1371,13 +1371,15 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
   try {
     await supabase.from('transactions').insert({
       user_id: order.user_id,
-      customer_id: order.customer_id || prof.customer_id || null,
+      customer_id: order.customer_id || null,
       type: 'deposit',
       category: 'deposit',
       title: isPartial ? 'Booster partial refund' : 'Booster order refund',
       subtitle: subtitle,
       amount: '₦' + refunded.toLocaleString(),
-      amount_ngn: refunded,
+      amount_ngn: Number(creditResult.amount_ngn || 0),
+      amount_usd: Number(creditResult.amount_usd || 0),
+      external_reference: String(creditResult.wallet_debit_id || order.wallet_debit_id || ''),
       status: 'completed',
       created_at: new Date().toISOString()
     });
