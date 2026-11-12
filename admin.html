@@ -3288,7 +3288,7 @@ function filterVirtualSmsRentPlans(){
    addCell(r.service_name);addCell(r.duration_label);addCell('$'+Number(r.supplier_price_usd||0).toFixed(4));
    addCell('₦'+Number(r.price_ngn||0).toLocaleString()+(r.price_source==='admin'?' · admin':''));
    const profitCell=addCell('');profitCell.innerHTML=smsProfitHtml(smsProfitOf(r.supplier_price_usd,r.price_ngn));
-   addCell(r.admin_hidden?'HIDDEN':'VISIBLE');
+   addCell(r.admin_hidden?'HIDDEN':(r.is_available?'LISTED':'NOT IN SUPPLIER CATALOG'));
    const actions=addCell('');
    const edit=document.createElement('button');edit.className='btn btn-ghost btn-sm';edit.textContent='Edit price';
    edit.onclick=()=>editVirtualSmsRentPrice(r.id,Number(r.price_ngn||0));actions.appendChild(edit);
