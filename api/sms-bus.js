@@ -3136,7 +3136,9 @@ export default async function handler(req, res) {
           title: `Number rental ${area_code}`,
           subtitle: `${fullPhone || phone} · ${time} month(s)`,
           amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price,
+          amount_ngn: debit.ngn_debited,
+          amount_usd: debit.usd_debited,
+          external_reference: String(debit.wallet_debit_id),
           status: 'completed'
         });
       } catch (_) {}
@@ -4535,9 +4537,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             title: 'USA rental add-on · ' + (svc.name || 'Service'),
             subtitle: String(parentOrder.phone_number || ''),
             amount: '₦' + price.toLocaleString(),
-            amount_ngn: debit.ngn_debited,
-            amount_usd: debit.usd_debited,
-            external_reference: String(debit.wallet_debit_id),
+            amount_ngn: debitAdd.ngn_debited,
+            amount_usd: debitAdd.usd_debited,
+            external_reference: String(debitAdd.wallet_debit_id),
             status: 'completed'
           });
         } catch (_) {}
