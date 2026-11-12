@@ -1,6 +1,7 @@
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { createClient } from '@supabase/supabase-js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import {
   joinRawLogDetails,
   formatCredentials,
@@ -211,7 +212,8 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
-  let balanceColumn = 'balance';
+  let walletDebitId = null;
+  let debitResult = null;
   let claimedRows = [];
 
   try {
@@ -262,7 +264,7 @@ export default async function handler(req, res) {
 
     let { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('customer_id, balance')
+      .select('customer_id, balance, balance_usd')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -279,6 +281,7 @@ export default async function handler(req, res) {
         full_name: name,
         customer_id,
         balance: 0,
+        balance_usd: 0,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
       if (upErr) {
@@ -287,7 +290,7 @@ export default async function handler(req, res) {
       }
       const again = await supabase
         .from('profiles')
-        .select('customer_id, balance')
+        .select('customer_id, balance, balance_usd')
         .eq('id', user_id)
         .maybeSingle();
       profile = again.data;
@@ -320,31 +323,20 @@ export default async function handler(req, res) {
       }
     }
 
-    // Atomic check-and-debit: the database re-verifies balance at write
-    // time under a row lock, so two near-simultaneous requests (e.g. a
-    // double-click) can't both read the same starting balance and both
-    // succeed — the second one correctly sees the already-reduced balance
-    // and fails with insufficient funds instead of silently overcharging.
-    const { data: debitResult, error: debitRpcErr } = await supabase
-      .rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: total })
-      .single();
-
-    if (debitRpcErr) {
-      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
-    }
-
-    if (!debitResult || !debitResult.success) {
+    // Central atomic debit: NGN first, USD remainder.
+    debitResult = await debitWallet(supabase, user_id, total);
+    if (!debitResult.ok) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient balance',
+        message: debitResult.message || 'Insufficient combined wallet balance.',
         required: total,
-        available: debitResult ? Number(debitResult.new_balance || 0) : 0
+        balance_ngn: debitResult.balance_ngn,
+        balance_usd: debitResult.balance_usd
       });
     }
-
-    originalBalance = Number(debitResult.new_balance) + total;
-    const newBalance = Number(debitResult.new_balance);
-    balanceColumn = 'balance';
+    walletDebitId = debitResult.wallet_debit_id;
+    const newBalance = debitResult.balance_ngn;
+    const newBalanceUsd = debitResult.balance_usd;
     deducted = true;
 
     const orderRef = external_order_id || `MJ-MAN-${String(user_id).slice(0, 8)}-${Date.now()}`;
@@ -376,7 +368,8 @@ export default async function handler(req, res) {
     if (claimedRows.length < qty) {
       if (!isShared) await releaseClaims(claimedRows);
       claimedRows = [];
-      await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
       if (!isShared) await syncStockCount(product_key);
 
       await supabase.from('transactions').insert({
@@ -459,6 +452,7 @@ export default async function handler(req, res) {
       description: orderDescription,
       quantity: claimedRows.length || qty,
       amount: total,
+      wallet_debit_id: walletDebitId,
       status: 'completed',
       login_credentials: combinedCreds || detailsText,
       login_credentials_raw: combinedRaw,
@@ -482,7 +476,9 @@ export default async function handler(req, res) {
       title: productName,
       subtitle: isShared ? `Qty: ${qty} · Shared` : `Qty: ${qty} · Manual`,
       amount: `₦${total.toLocaleString()}`,
-      amount_ngn: total,
+      amount_ngn: debitResult.ngn_debited,
+      amount_usd: debitResult.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'completed',
       product_details: detailsText
     });
@@ -544,6 +540,8 @@ export default async function handler(req, res) {
         login_credentials: combinedCreds || detailsText,
         total_amount: total,
         new_balance: newBalance,
+        new_balance_usd: newBalanceUsd,
+        wallet_debit_id: walletDebitId,
         order_id: orderRef,
         source: 'manual'
       }
