@@ -244,7 +244,7 @@ const supabase = createClient(
 // ---------- GotSMS (USA physical SIM rentals) — folded in to stay within Vercel 12-function limit ----------
 
 function assertSmsSaleCoversCost(priceNgn, supplierUsd) {
-  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const rate = 1450;
   const cost = Number(supplierUsd) * rate;
   const sale = Number(priceNgn);
   if (!(sale > 0)) return { ok: false, message: 'Price unavailable. Refresh and try again.' };
@@ -747,9 +747,7 @@ function gotsmsAddonsNgn({ area_code, cellular_carrier_id } = {}) {
 
 function gotsmsSellPriceNgn(supplierUsd) {
   const rate =
-    Number(process.env.USD_TO_NGN_RATE) ||
-    Number(process.env.USD_TO_NGN) ||
-    1500;
+    1450;
   const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 80;
   const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
   const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
@@ -1532,9 +1530,7 @@ const SMSBUS_EXPIRY_MS = 5 * 60 * 1000; // Server 2 numbers last 5 minutes
 /** Persist Server 2 catalog. Never overwrites admin selling price or forced hide. */
 async function syncSmsBusCatalog() {
   const usdToNgn =
-    Number(process.env.USD_TO_NGN_RATE) ||
-    Number(process.env.USD_TO_NGN) ||
-    1500;
+    1450;
   const [countriesRes, projectsRes] = await Promise.all([
     smsbusGet(OTP_BASE, '/list/countries'),
     smsbusGet(OTP_BASE, '/list/projects')
