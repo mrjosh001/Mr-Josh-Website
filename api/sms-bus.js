@@ -4892,13 +4892,15 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           if (!(renewPrice > 0)) {
             return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
           }
-          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
           const bal = Number(prof && prof.balance) || 0;
-          if (bal + 0.0001 < renewPrice) {
+          const balUsd = Number(prof && prof.balance_usd) || 0;
+          const combined = bal + balUsd * WALLET_USD_RATE;
+          if (combined + 0.0001 < renewPrice) {
             return json(res, 400, {
               success: false,
               message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance: bal }
+              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: balUsd, combined_value_ngn: combined }
             });
           }
         }
