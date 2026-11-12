@@ -1207,7 +1207,9 @@ async function handleOrder(req, res) {
       title: service.name || 'MJ Booster',
       subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
       amount: `₦${totalNgn.toLocaleString()}`,
-      amount_ngn: totalNgn,
+      amount_ngn: debit.ngn_debited,
+      amount_usd: debit.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'completed',
       created_at: nowIso
     });
