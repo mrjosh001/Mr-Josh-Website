@@ -366,7 +366,7 @@ function dedupeServices(list){
     var id=String(s&&s.id||'');
     if(!id||seen[id])return;
     seen[id]=1;
-    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null,gotsms_id:s.gotsms_id||id,vs_service_id:s.vs_service_id||null});
+    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null,gotsms_id:(s.gotsms_id!==undefined?s.gotsms_id:id),vs_service_id:s.vs_service_id||null});
   });
   return out;
 }
@@ -502,9 +502,10 @@ async function loadServices(){
     allServices=dedupeServices(cached.services);sortServices();renderServices();
     refreshVirtualSmsCatalog();
     if(note)note.textContent='Cached · '+allServices.length+' services · refreshes in background';
-    fetchAllServices().then(function(r){
+    fetchAllServices().then(async function(r){
       if(r.ok&&r.services.length){
         allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
+        await refreshVirtualSmsCatalog();
         if(note)note.textContent=allServices.length+' services';
       }
     });
@@ -512,7 +513,7 @@ async function loadServices(){
     grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
     grid.innerHTML='';for(var i=0;i<8;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
     var r=await fetchAllServices();
-    if(!r.ok){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}
+    if(!r.ok){allServices=[];await refreshVirtualSmsCatalog();if(!allServices.length){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}renderServices();if(note)note.textContent=allServices.length+' services';return;}
     allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
     await refreshVirtualSmsCatalog();
     if(note)note.textContent=allServices.length+' services';
@@ -615,7 +616,7 @@ function planIsAvailable(p){
   if(p.admin_hidden===true) return false;
   var st=String(p.stock_status||p.status||p.availability||'').toLowerCase();
   if(/sold\s*out|out_of_stock|unavailable|no\s*stock/.test(st)) return false;
-  for(var k of ['stock','quantity','available_count','remaining']){
+  for(var k of ['stock','stock_count','quantity','available_count','remaining']){
     if(p[k]!=null && isFinite(Number(p[k])) && Number(p[k])<=0) return false;
   }
   return true;
