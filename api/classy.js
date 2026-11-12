@@ -1,4 +1,5 @@
 /**
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
  * /api/classy — ClassyTee Logs supplier, ONE file (same pattern as /api/sujan).
  *
  *   GET  /api/classy            → sync categories + products into Supabase
@@ -325,7 +326,7 @@ async function handleOrder(req, res) {
   // falsely return "Profile not found".
   let { data: profile, error: profileErr } = await supabase
     .from('profiles')
-    .select('id, balance, customer_id')
+    .select('id, balance, balance_usd, customer_id')
     .eq('id', user_id)
     .maybeSingle();
 
@@ -349,6 +350,7 @@ async function handleOrder(req, res) {
       full_name: name,
       customer_id,
       balance: 0,
+      balance_usd: 0,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
     if (upErr) {
@@ -357,7 +359,7 @@ async function handleOrder(req, res) {
     }
     const again = await supabase
       .from('profiles')
-      .select('id, balance, customer_id')
+      .select('id, balance, balance_usd, customer_id')
       .eq('id', user_id)
       .maybeSingle();
     profile = again.data;
@@ -366,41 +368,47 @@ async function handleOrder(req, res) {
     }
   }
 
-  const balanceColumn = 'balance';
   const originalBalance = Number(profile.balance || 0);
-  if (originalBalance < total) {
-    return res.status(400).json({ success: false, message: 'Insufficient balance' });
-  }
-
+  const originalBalanceUsd = Number(profile.balance_usd || 0);
   let deducted = false;
-    if (external_order_id) {
-      const existing = await findExistingLogOrder(user_id, external_order_id);
-      if (existing) {
-        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
-        return res.status(200).json({
-          success: true,
-          replayed: true,
-          message: 'Order already completed',
-          data: {
-            order_id: existing.order_id,
-            login_credentials: existing.login_credentials,
-            items: existing.login_credentials ? [{ details: existing.login_credentials }] : [],
-            quantity: existing.quantity,
-            new_balance: Number(balRow?.balance || 0)
-          }
-        });
-      }
-    }
-
-  let newBalance = originalBalance - total;
+  let walletDebitId = null;
+  let newBalance = originalBalance;
+  let newBalanceUsd = originalBalanceUsd;
   const customerId = profile.customer_id || null;
 
+  if (external_order_id) {
+    const existing = await findExistingLogOrder(user_id, external_order_id);
+    if (existing) {
+      const { data: balRow } = await supabase.from('profiles').select('balance,balance_usd').eq('id', user_id).maybeSingle();
+      return res.status(200).json({
+        success: true,
+        replayed: true,
+        message: 'Order already completed',
+        data: {
+          order_id: existing.order_id,
+          login_credentials: existing.login_credentials,
+          items: existing.login_credentials ? [{ details: existing.login_credentials }] : [],
+          quantity: existing.quantity,
+          new_balance: Number(balRow?.balance || 0),
+          new_balance_usd: Number(balRow?.balance_usd || 0)
+        }
+      });
+    }
+  }
+
   try {
-    const { error: debitErr } = await supabase
-      .from('profiles')
-      .update({ [balanceColumn]: newBalance })
-      .eq('id', user_id);
-    if (debitErr) throw new Error(debitErr.message);
+    const debit = await debitWallet(supabase, user_id, total);
+    if (!debit.ok) {
+      return res.status(402).json({
+        success: false,
+        message: debit.message || 'Insufficient combined wallet balance.',
+        balance_ngn: debit.balance_ngn,
+        balance_usd: debit.balance_usd
+      });
+    }
+    walletDebitId = debit.wallet_debit_id;
+    newBalance = debit.balance_ngn;
+    newBalanceUsd = debit.balance_usd;
     deducted = true;
 
     const orderRef = external_order_id || ('CT-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
@@ -520,6 +528,9 @@ return res.status(200).json({
         login_credentials: combinedCreds,
         total_amount: total,
         new_balance: newBalance,
+        new_balance_usd: newBalanceUsd,
+        ngn_debited: Number(profile.balance || 0) - newBalance,
+        wallet_debit_id: walletDebitId,
         order_id: orderRef,
         supplier_order_id: supplierOrderId,
         supplier_wallet_remaining: remaining,
@@ -530,7 +541,8 @@ return res.status(200).json({
     console.error('[classy order]', err);
     if (deducted) {
       try {
-        await supabase.from('profiles').update({ [balanceColumn]: originalBalance }).eq('id', user_id);
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
         await supabase.from('transactions').insert({
           user_id,
           customer_id: customerId,
