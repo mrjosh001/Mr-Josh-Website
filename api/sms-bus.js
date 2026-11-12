@@ -1151,6 +1151,7 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
         subtitle: idem,
         amount: '₦' + price.toLocaleString(),
         amount_ngn: debit.ngn_debited,
+        amount_usd: debit.usd_debited,
         external_reference: String(debit.wallet_debit_id),
         status: 'completed'
       });
@@ -1248,7 +1249,7 @@ async function gotsmsApplyAdminPlanPrices(options) {
  *   cancel    -> same row becomes "refunded"
  * Never inserts a second purchase row for the same rental.
  */
-async function gotsmsRecordPurchaseTx({ userId, customerId, rent, priceNgn, orderId, title, subtitle }) {
+async function gotsmsRecordPurchaseTx({ userId, customerId, rent, priceNgn, orderId, title, subtitle, walletDebitId }) {
   const ref = String(rent && rent.id != null ? rent.id : '');
   if (!ref) return false;
   try {
@@ -1262,6 +1263,11 @@ async function gotsmsRecordPurchaseTx({ userId, customerId, rent, priceNgn, orde
       .limit(1);
     if (existing && existing.length) return true;
   } catch (_) {}
+  let debitSplit = null;
+  if (walletDebitId) {
+    const { data: debitRow } = await supabase.from('wallet_debits').select('ngn_amt, usd_amt').eq('id', walletDebitId).eq('user_id', userId).maybeSingle();
+    if (debitRow) debitSplit = debitRow;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     const tx = await supabase.from('transactions').insert({
       user_id: userId,
@@ -1271,7 +1277,8 @@ async function gotsmsRecordPurchaseTx({ userId, customerId, rent, priceNgn, orde
       title: title,
       subtitle: subtitle,
       amount: `₦${Number(priceNgn).toLocaleString()}`,
-      amount_ngn: priceNgn,
+      amount_ngn: debitSplit ? Number(debitSplit.ngn_amt || 0) : Number(priceNgn),
+      amount_usd: debitSplit ? Number(debitSplit.usd_amt || 0) : 0,
       status: 'pending',
       external_reference: ref,
       notes: orderId ? `order_id:${orderId}` : null,
@@ -3856,7 +3863,8 @@ export default async function handler(req, res) {
           priceNgn: price,
           orderId,
           title: `USA number rental · ${rent.service?.name || 'SMS'}`,
-          subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim()
+          subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
+          walletDebitId: debit.wallet_debit_id
         });
         if (!transactionSaved) {
           console.error('[gotsms] rental transaction persistence failed', { rentId: rent.id, userId: auth.userId, amount: price });
@@ -4105,7 +4113,8 @@ export default async function handler(req, res) {
             priceNgn: price,
             orderId: rentId,
             title: 'USA multi-pack · ' + combinedName,
-            subtitle: phone || planLabel
+            subtitle: phone || planLabel,
+            walletDebitId: debit.wallet_debit_id
           });
         } catch (_) {}
 
@@ -4258,7 +4267,8 @@ export default async function handler(req, res) {
             priceNgn: unitNgn,
             orderId: oid,
             title: `USA number rental · ${rent.service?.name || plan?.service?.name || 'SMS'}`,
-            subtitle: `${rent.phone || ''} · ${plan?.duration_translation || ''}`.trim()
+            subtitle: `${rent.phone || ''} · ${plan?.duration_translation || ''}`.trim(),
+            walletDebitId: unitDebit?.wallet_debit_id
           });
         }
         // Enable auto-renew on each rented number if requested
@@ -4525,7 +4535,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             title: 'USA rental add-on · ' + (svc.name || 'Service'),
             subtitle: String(parentOrder.phone_number || ''),
             amount: '₦' + price.toLocaleString(),
-            amount_ngn: price,
+            amount_ngn: debit.ngn_debited,
+            amount_usd: debit.usd_debited,
+            external_reference: String(debit.wallet_debit_id),
             status: 'completed'
           });
         } catch (_) {}
@@ -4590,7 +4602,9 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             title: 'USA rental plan switch',
             subtitle: `${order.phone_number || ''} · ${plan.duration_translation || ''}`.trim(),
             amount: '₦' + price.toLocaleString(),
-            amount_ngn: price,
+            amount_ngn: debit.ngn_debited,
+            amount_usd: debit.usd_debited,
+            external_reference: String(debit.wallet_debit_id),
             status: 'completed'
           });
         } catch (_) {}
