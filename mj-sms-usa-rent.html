@@ -1050,7 +1050,22 @@ async function doRent(){
       else j=await api('rent',{method:'POST',body:body});
     }
 
+    if(selectedPlan.source==='virtualsms_rent' && j && !j.success && j.code==='PRICE_UPDATED'){
+      await refreshVirtualSmsCatalog();
+      var refreshed=vsRentPlans.find(function(p){return String(p.service_id)===String(selectedPlan.service_id)&&Number(p.duration_hours)===Number(selectedPlan.duration_hours);});
+      if(refreshed){
+        selectedPlan.price_ngn=Number(refreshed.price_ngn||0);
+        selectedPlan.price_usd=Number(refreshed.supplier_price_usd||0);
+        selectedPlan.supplier_price_usd=Number(refreshed.supplier_price_usd||0);
+        plans=plans.map(function(p){return p.source==='virtualsms_rent'&&String(p.service_id)===String(selectedPlan.service_id)&&Number(p.duration_hours)===Number(selectedPlan.duration_hours)?Object.assign({},p,selectedPlan):p;});
+        renderDetailForm();updateTotal();
+      }
+      unlockFail();
+      showRentToast('VirtualSMS price changed. Review the updated price and confirm again.',false);
+      return;
+    }
     if(!j || !j.success){
+      if(selectedPlan.source==='virtualsms_rent' && j && j.data && j.data.out_of_stock) await refreshVirtualSmsCatalog();
       unlockFail();
       var msg2=(j&&j.message)||'Rental failed';
       if(/gotsms|unknown.*action|supplier|api\s*key/i.test(msg2)) msg2='Purchase could not be completed. Please refresh and try again.';
