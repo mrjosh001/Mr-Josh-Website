@@ -2511,18 +2511,6 @@ async function vsHandlePurgeLegacy(req, res) {
 }
 
 // ---------------------------------------------------------------- orders
-async function vsCreditWallet(userId, amount) {
-  // The database refund RPC is idempotent against wallet_debits. Never fall back
-  // to a direct profile update: an RPC timeout may mean the refund already committed.
-  const { data, error } = await supabase.rpc('credit_balance', { p_user_id: userId, p_amount: amount });
-  if (error) {
-    console.error('[vsms refund] credit_balance failed; refusing unsafe direct credit:', error.message);
-    throw error;
-  }
-  if (data && typeof data === 'object' && data.new_balance != null) return Number(data.new_balance);
-  if (typeof data === 'number') return data;
-  return null;
-}
 
 function vsExtractSmsCode(text) {
   if (text == null) return null;
