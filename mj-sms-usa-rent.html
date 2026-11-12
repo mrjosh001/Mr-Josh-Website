@@ -396,7 +396,19 @@ async function refreshVirtualSmsCatalog(){
 }
 
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!Array.isArray(o.vsPlans)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
-function writeCache(services){try{if(!Array.isArray(vsRentPlans)||!vsRentPlans.length)return;localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services,vsPlans:vsRentPlans}));}catch(e){}}
+function writeCache(services){
+ try{
+  // Persist the service list immediately, even if the VirtualSMS rental
+  // catalogue has not loaded yet. The catalogue is merged into this cache
+  // when its request completes.
+  var plans=Array.isArray(vsRentPlans)?vsRentPlans:[];
+  localStorage.setItem(CACHE_KEY,JSON.stringify({
+   ts:Date.now(),
+   services:dedupeServices(services||[]),
+   vsPlans:plans
+  }));
+ }catch(e){console.warn('[MJ services cache] Could not save local cache',e&&e.message||e);}
+}
 
 function dedupeServices(list){
   var seen={}, out=[];
