@@ -1,3 +1,4 @@
+import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser } from '../lib/push.js';
 
@@ -848,7 +849,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'Your account has no valid email address. Contact support.' });
     }
 
-    const usdRate = Number(process.env.WALLET_USD_RATE) || 1450;
+    const usdRate = WALLET_USD_RATE;
     const planLabel = carrierInfo.label + ' · ' + plan.name;
     const { data: rpcData, error: rpcError } = await supabase.rpc('create_esim_wallet_order', {
       p_user_id: user.id,
