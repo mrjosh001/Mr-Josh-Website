@@ -4,7 +4,7 @@ import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
 import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
-import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
+import { debitWallet, refundWalletDebit, WALLET_USD_RATE } from '../lib/wallet.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -1086,9 +1086,10 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 
   if (autoOn && price > 0) {
     try {
-      const { data: prof } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+      const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', userId).maybeSingle();
       const bal = Number(prof && prof.balance) || 0;
-      if (bal + 0.0001 < price) {
+      const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
+      if (combined + 0.0001 < price) {
         try {
           await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
         } catch (_) {}
@@ -3489,20 +3490,31 @@ export default async function handler(req, res) {
       else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
       else monthlyNgn = applyMarkup(unitUsd);
       const price = Math.round(monthlyNgn * time);
-      const bal = Number(profile?.balance) || 0;
-      if (bal < price) return json(res, 400, { success: false, message: 'Insufficient balance' });
-
-      await supabase.from('profiles').update({ balance: bal - price }).eq('id', auth.userId);
-      const bus = await smsbusGet(RENT_BASE, '/v1/rent/renew/number', {
-        area_code,
-        mobile_number,
-        time: String(time)
+      const debit = await debitWallet(supabase, auth.userId, price);
+      if (!debit.ok) return json(res, 402, {
+        success: false, message: debit.message || 'Insufficient combined wallet balance.',
+        required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
       });
-      if (!busOk(bus.data)) {
-        await supabase.from('profiles').update({ balance: bal }).eq('id', auth.userId);
-        return json(res, 400, { success: false, message: 'Renew failed. Try again later or contact support.' });
+      let bus;
+      try {
+        bus = await smsbusGet(RENT_BASE, '/v1/rent/renew/number', {
+          area_code,
+          mobile_number,
+          time: String(time)
+        });
+      } catch (e) {
+        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, 502, { success: false, message: 'Renewal could not be confirmed. Your wallet was restored.' });
       }
-      return json(res, 200, { success: true, data: bus.data.data, price });
+      if (!busOk(bus.data)) {
+        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, 400, { success: false, message: 'Renew failed. Your wallet was restored. Try again later or contact support.' });
+      }
+      return json(res, 200, {
+        success: true, data: bus.data.data, price,
+        new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd,
+        ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited
+      });
     }
 
     
@@ -4603,13 +4615,14 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
           if (!(renewPrice > 0)) {
             return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
           }
-          const { data: prof } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
           const bal = Number(prof && prof.balance) || 0;
-          if (bal + 0.0001 < renewPrice) {
+          const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
+          if (combined + 0.0001 < renewPrice) {
             return json(res, 400, {
               success: false,
               message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance: bal }
+              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: Number(prof && prof.balance_usd) || 0, combined_value_ngn: combined }
             });
           }
         }
