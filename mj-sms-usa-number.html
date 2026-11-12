@@ -103,6 +103,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .switch input:checked+.slider:before{transform:translateX(18px)}
 .switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
 .refund-locked{font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.4;padding:9px 12px;border-radius:12px;background:var(--card-2);border:1px solid var(--line)}
+.refund-window-open{display:flex;flex-direction:column;gap:6px;margin:12px 0 10px;padding:14px 15px;border:2px solid #f59e0b;border-left:6px solid #ea580c;border-radius:14px;background:#fff7ed;color:#7c2d12;font-size:14px;font-weight:700;line-height:1.5;box-shadow:0 3px 12px rgba(154,52,18,.12)}
+.refund-window-open .refund-alert-title{font-size:15px;font-weight:900;color:#9a3412;letter-spacing:.01em}
+.refund-window-open .refund-time-left{font-size:16px;font-weight:900;color:#c2410c;white-space:nowrap}
+.refund-window-open .refund-alert-detail{font-size:13px;font-weight:650;color:#7c2d12}
 .n3-tip{font-size:11.5px;line-height:1.45;color:var(--text-2);font-weight:500;padding:8px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-line)}
 .n3-tip b{color:var(--warn)}
 
@@ -528,7 +532,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
     if(age<=closeAt){
       var left=Math.ceil((closeAt-age)/1000);
-      slot.innerHTML='<p class="refund-locked">Cancellation is available now. You have '+Math.floor(left/60)+'m '+String(left%60).padStart(2,'0')+'s left to cancel and receive a full wallet refund. After 20 minutes, cancellation and refunds are no longer available.</p><button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>';
+      slot.innerHTML='<div class="refund-locked refund-window-open" role="alert"><span class="refund-alert-title">⚠️ CANCELLATION &amp; FULL REFUND AVAILABLE</span><span>You have <strong class="refund-time-left">'+Math.floor(left/60)+'m '+String(left%60).padStart(2,'0')+'s</strong> left to cancel and receive a full wallet refund.</span><span class="refund-alert-detail">Important: After 20 minutes from purchase, cancellation and refunds are no longer available.</span></div><button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button>';
       var btn=document.getElementById('btnCancel');
       if(btn)btn.onclick=openRefundModal;
       return;
