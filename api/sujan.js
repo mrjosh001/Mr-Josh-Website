@@ -421,7 +421,7 @@ async function handleOrder(req, res) {
     if (external_order_id) {
       const existing = await findExistingLogOrder(user_id, external_order_id);
       if (existing) {
-        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+        const { data: balRow } = await supabase.from('profiles').select('balance, balance_usd').eq('id', user_id).maybeSingle();
         return res.status(200).json({
           success: true,
           replayed: true,
