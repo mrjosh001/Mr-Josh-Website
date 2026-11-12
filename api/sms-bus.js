@@ -3999,7 +3999,7 @@ export default async function handler(req, res) {
           body: { service_id: secondId }
         });
         if (!g2.ok || !g2.data?.success) {
-          try { await refundWalletDebit(supabase, auth.userId, debitAdd.wallet_debit_id); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
           try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/refund`, { method: 'POST', body: {} }); } catch (_) {}
           return json(res, g2.status || 400, {
             success: false,
@@ -4460,7 +4460,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!debitAdd.ok) return json(res, 400, { success: false, message: debitAdd.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
         if (!g.ok || !g.data?.success) {
-          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debitAdd.wallet_debit_id); } catch (_) {}
           return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not add service') });
         }
         const newRentId = g.data?.data?.id || null;
@@ -4478,7 +4478,8 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             activeTill: parentOrder.code || null,
             planLabel: 'Add-on',
             carrierName: null,
-            areaCode: null
+            areaCode: null,
+            walletDebitId: debitAdd.wallet_debit_id
           });
         } catch (e) {
           console.warn('[gotsms add_service] save order', e.message || e);
@@ -4526,7 +4527,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch('/api/rents/' + encodeURIComponent(rent_id) + '/transition', { method: 'POST', body: { plan_id } });
         if (!g.ok || g.data?.success === false) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
           return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not switch plan. Your wallet has been refunded.') });
         }
         _gotsmsTransCache.delete(String(rent_id));
@@ -4544,7 +4545,8 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             activeTill: null,
             planLabel: plan.duration_translation || 'Plan switch',
             carrierName: null,
-            areaCode: null
+            areaCode: null,
+            walletDebitId: debit.wallet_debit_id
           });
         } catch (e) { console.warn('[gotsms transition] save', e.message || e); }
         try {
