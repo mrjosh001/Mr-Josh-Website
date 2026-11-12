@@ -281,7 +281,7 @@ function buildQuotedTotalNgn(){
 
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
 const CACHE_KEY='mj_usa_rent_services_v4';
-const CACHE_TTL_MS=2*24*60*60*1000;
+const CACHE_TTL_MS=7*24*60*60*1000;
 
 const SERVICE_DOMAIN={
   whatsapp:'whatsapp.com',telegram:'telegram.org',facebook:'facebook.com',instagram:'instagram.com',
@@ -538,15 +538,7 @@ async function loadServices(){
   var cached=readCache();
   if(cached&&cached.services.length){
     allServices=dedupeServices(cached.services);sortServices();renderServices();
-    refreshVirtualSmsCatalog();
-    if(note)note.textContent='Services loaded. Updating in background…';
-    fetchAllServices().then(async function(r){
-      if(r.ok&&r.services.length){
-        allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
-        await refreshVirtualSmsCatalog();
-        if(note)note.textContent=allServices.length+' services';
-      }
-    });
+    if(note)note.textContent=allServices.length+' services loaded from your 7-day cache.';
   }else{
     grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
     grid.innerHTML='';for(var i=0;i<8;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
@@ -606,9 +598,8 @@ async function loadPlans(){
   }
   var j={success:true,data:[]},gotPlansError='';
   try{
-    // Refresh the local VirtualSMS catalogue on every service selection so a
-    // recent admin sync is visible immediately, even when GotSMS has no plan.
-    await refreshVirtualSmsCatalog();
+    // The combined GotSMS + VirtualSMS catalogue is cached for seven days.
+    // Selecting a service must not refetch the full VirtualSMS catalogue.
     var results=await Promise.all([
       selectedService.gotsms_id
         ? api('plans',{query:'service_id='+encodeURIComponent(selectedService.gotsms_id)+'&per_page=100&include_unavailable=1'}).catch(function(e){return{success:false,message:e&&e.message||'GotSMS plans unavailable'};})
@@ -1054,7 +1045,7 @@ async function doRent(){
   try{
     if(selectedPlan.source==='virtualsms_rent'){
       var requestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjvr-'+Date.now()+'-'+Math.random().toString(36).slice(2));
-      j=await vsRentApi('order',{method:'POST',body:{service_id:selectedPlan.service_id,duration_hours:selectedPlan.duration_hours,quoted_price_ngn:Number(selectedPlan.price_ngn||0),request_id:requestId}});
+      j=await vsRentApi('order',{method:'POST',body:{service_id:selectedPlan.service_id,service_name:selectedService&&selectedService.name||selectedPlan.service_name,duration_hours:selectedPlan.duration_hours,quoted_price_ngn:Number(selectedPlan.price_ngn||0),request_id:requestId}});
     }else if(multiMode){
       if(!multiSelected||multiSelected.length!==2){
         unlockFail();
