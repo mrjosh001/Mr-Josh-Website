@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
+import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -1987,6 +1988,13 @@ export default async function handler(req, res) {
       (action === 'gotsms_webhook' || pathLower.includes('gotsms-webhook') || pathLower.includes('gotsms_webhook'))
     ) {
       return gotsmsHandleWebhook(req, res);
+    }
+
+    // VirtualSMS Platform Rental is isolated from Server 3 OTP and GotSMS rental handlers.
+    if (action.startsWith('vsrent_')) {
+      return handleVirtualSmsRental({
+        req, res, url, action, method, supabase, requireAuth, debitWalletStrict, json, readRawBody, notifyUserPush
+      });
     }
 
     if (!TOKEN) {
