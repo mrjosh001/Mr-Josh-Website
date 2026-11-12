@@ -380,7 +380,9 @@ export default async function handler(req, res) {
         title: productName,
         subtitle: 'Failed: not enough stock available',
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: debitResult.ngn_debited,
+        amount_usd: debitResult.usd_debited,
+        external_reference: String(walletDebitId),
         status: 'failed'
       });
       await supabase.from('transactions').insert({
@@ -391,7 +393,9 @@ export default async function handler(req, res) {
         title: 'Automatic Refund',
         subtitle: 'Not enough stock available – balance restored',
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: refund.ngn_restored,
+        amount_usd: refund.usd_restored,
+        external_reference: String(walletDebitId),
         status: 'refunded'
       });
       try {
@@ -561,7 +565,9 @@ export default async function handler(req, res) {
           title: 'Automatic Refund',
           subtitle: `System error – ${err.message}`,
           amount: `₦${total.toLocaleString()}`,
-          amount_ngn: total,
+          amount_ngn: refund.ngn_restored,
+          amount_usd: refund.usd_restored,
+          external_reference: String(walletDebitId),
           status: 'refunded',
           notes: err.message
         });
