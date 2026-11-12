@@ -230,7 +230,7 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,storage:window.sessionStorage}});
-let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[];
+let allServices=[],selectedService=null,plans=[],selectedPlan=null,qty=1,rentBusy=false,carriers=[],vsRentPlans=[];
 let multiMode=false,multiSelected=[];
 var RENT_LOCK_KEY='mj_usa_rent_lock';
 function rentLockActive(){
@@ -267,6 +267,7 @@ function multiDurationKind(p){var t=String((p&&p.duration_translation)||'').toLo
 
 const CARRIER_ADDON_NGN=800, AREA_ADDON_NGN=1000;
 function buildQuotedTotalNgn(){
+  if(selectedPlan&&selectedPlan.source==='virtualsms_rent')return Math.round(Number(selectedPlan.price_ngn||0));
   var b=Number(selectedPlan&&selectedPlan.price_ngn||0)*qty;
   var a=0;
   var c=document.getElementById('carrierSel');
@@ -352,6 +353,9 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){retur
 function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
 async function headers(){const{data:{session}}=await sb.auth.getSession();if(!session){location.href='auth.html';return null;}return{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',Accept:'application/json'};}
 async function api(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};const method=(opts&&opts.method)||'GET';let url='/api/sms-bus?action=gotsms_'+encodeURIComponent(action);if(opts&&opts.query)url+='&'+opts.query;const res=await fetch(url,{method:method,headers:h,body:opts&&opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
+async function vsRentApi(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};opts=opts||{};let url='/api/sms-bus?action=vsrent_'+encodeURIComponent(action);if(opts.query)url+='&'+opts.query;const res=await fetch(url,{method:opts.method||'GET',headers:h,body:opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
+function normSvcName(n){return String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+async function refreshVirtualSmsCatalog(){try{var j=await vsRentApi('catalog');if(!j||!j.success||!Array.isArray(j.data))return;vsRentPlans=j.data;var by={};allServices.forEach(function(s){by[normSvcName(s.name)]=s;});vsRentPlans.forEach(function(p){var k=normSvcName(p.service_name);if(!k||!p.service_id)return;var s=by[k];if(s){s.vs_service_id=String(p.service_id);}else{var id='vs:'+String(p.service_id);s=allServices.find(function(x){return x.id===id;});if(!s){s={id:id,name:p.service_name,logo:null,gotsms_id:null,vs_service_id:String(p.service_id)};allServices.push(s);}by[k]=s;}});sortServices();writeCache(allServices);renderServices();}catch(e){console.warn('VirtualSMS rental catalogue unavailable',e&&e.message||e);}}
 
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
 function writeCache(services){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services}));}catch(e){}}
@@ -362,7 +366,7 @@ function dedupeServices(list){
     var id=String(s&&s.id||'');
     if(!id||seen[id])return;
     seen[id]=1;
-    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null});
+    out.push({id:id,name:s.name||s.service_name||'Service',logo:s.logo||null,gotsms_id:s.gotsms_id||id,vs_service_id:s.vs_service_id||null});
   });
   return out;
 }
@@ -412,8 +416,8 @@ function paintServices(list){
   }).join('');
   grid.querySelectorAll('.svc-tile').forEach(function(tile){
     tile.onclick=function(){
-      var svc={id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
-      if(multiMode){ toggleMultiService(svc); return; }
+      var svc=allServices.find(function(x){return String(x.id)===String(tile.getAttribute('data-id'));})||{id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
+      if(multiMode){if(svc.vs_service_id&&!svc.gotsms_id){showRentToast('VirtualSMS Platform Rental is single-service only. Turn off multi-pack to use it.',false);return;}toggleMultiService(svc);return;}
       selectedService=svc;
       openDetail();
     };
@@ -496,6 +500,7 @@ async function loadServices(){
   var cached=readCache();
   if(cached&&cached.services.length){
     allServices=dedupeServices(cached.services);sortServices();renderServices();
+    refreshVirtualSmsCatalog();
     if(note)note.textContent='Cached · '+allServices.length+' services · refreshes in background';
     fetchAllServices().then(function(r){
       if(r.ok&&r.services.length){
@@ -509,6 +514,7 @@ async function loadServices(){
     var r=await fetchAllServices();
     if(!r.ok){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}
     allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
+    await refreshVirtualSmsCatalog();
     if(note)note.textContent=allServices.length+' services';
   }
   api('carriers').then(function(c){carriers=c.data||[];});
@@ -537,6 +543,7 @@ document.getElementById('changeServiceBtn').onclick=function(){
   selectedService=null;selectedPlan=null;
 };
 async function loadCarriers(){
+  if(selectedPlan&&selectedPlan.source==='virtualsms_rent')return;
   try{
     var c=await api('carriers');
     var list=(c&&c.data)||[];
@@ -558,11 +565,12 @@ async function loadPlans(){
     if(body) body.innerHTML='<div class="empty">Choose a service again to load its rental plans.</div>';
     return;
   }
-  var j=null;
+  var j={success:true,data:[]};
   try{
+    if(!vsRentPlans.length) await refreshVirtualSmsCatalog();
     var results=await Promise.all([
-      api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100&include_unavailable=1'}),
-      loadCarriers()
+      selectedService.gotsms_id ? api('plans',{query:'service_id='+encodeURIComponent(selectedService.gotsms_id)+'&per_page=100&include_unavailable=1'}) : Promise.resolve({success:true,data:[]}),
+      selectedService.gotsms_id ? loadCarriers() : Promise.resolve()
     ]);
     j=results[0];
   }catch(err){
@@ -579,7 +587,14 @@ async function loadPlans(){
     if(retry) retry.onclick=loadPlans;
     return;
   }
-  plans=Array.isArray(j.data)?j.data:[];
+  plans=(Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms'},p);});
+  if(!multiMode){
+    var vsCode=String(selectedService.vs_service_id||'');
+    var vsName=normSvcName(selectedService.name);
+    vsRentPlans.filter(function(p){return (vsCode&&String(p.service_id)===vsCode)||normSvcName(p.service_name)===vsName;}).forEach(function(p){
+      plans.push({id:'vsrent:'+p.id,db_id:p.id,source:'virtualsms_rent',service_id:p.service_id,duration_hours:Number(p.duration_hours),duration_type:'day',duration_in_type:Number(p.duration_hours)/24,duration_translation:p.duration_label||({24:'1 day',72:'3 days',168:'7 days'}[Number(p.duration_hours)]),price_ngn:Number(p.price_ngn||0),price_usd:Number(p.supplier_price_usd||0),supplier_price_usd:Number(p.supplier_price_usd||0),is_available:p.is_available===true,stock_count:Number(p.stock_count||0),service_name:p.service_name});
+    });
+  }
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
   renderDetailForm();
@@ -630,7 +645,7 @@ function renderDetailForm(){
     var isOneDay=String(p.duration_type||'').toLowerCase().replace(/s$/,'')==='day' && Number(p.duration_in_type)===1;
     if(!isOneDay) isOneDay=/\b1\s*day\b/i.test(String(p.duration_translation||p.name||''));
     var recommended=isWhatsAppOnly && isOneDay;
-    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(p.source==='virtualsms_rent'?'<span style="display:inline-block;font-size:10px;font-weight:800;color:#60a5fa;margin-bottom:5px">VirtualSMS</span>':'<span style="display:inline-block;font-size:10px;font-weight:800;color:var(--muted);margin-bottom:5px">GotSMS</span>')+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any carrier (supplier default)</option>';
   if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
@@ -643,10 +658,8 @@ function renderDetailForm(){
   );
   body.innerHTML=
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
-    '<label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select><div class="helper-text" style="margin-top:4px;font-size:11px">Carriers from supplier right now (AT&amp;T, T-Mobile, Verizon when listed).</div>'+
-    areaCodeFieldHtml()+
-    qtyBlock +
-    renewBlock +
+    '<div id="gotsmsOnlyControls"><label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select><div class="helper-text" style="margin-top:4px;font-size:11px">Carriers from GotSMS only.</div>'+
+    areaCodeFieldHtml()+qtyBlock+renewBlock+'</div>'
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
@@ -667,8 +680,10 @@ function renderDetailForm(){
       body.querySelectorAll('.plan').forEach(function(c){c.classList.remove('on');});
       card.classList.add('on');
       selectedPlan=plans[Number(card.getAttribute('data-i'))];
-      syncRentButton();
-      updateTotal();
+      var only=document.getElementById('gotsmsOnlyControls');
+      if(only)only.style.display=selectedPlan&&selectedPlan.source==='virtualsms_rent'?'none':'';
+      if(selectedPlan&&selectedPlan.source==='virtualsms_rent')qty=1;
+      syncRentButton();updateTotal();
     };
   });
   var first=body.querySelector('.plan:not(.sold-out)');
@@ -726,9 +741,11 @@ function renderDetailForm(){
 async function confirmRentAvailability(){
   var err=document.getElementById('rentErr');
   if(err) err.textContent='';
-  if(!selectedPlan||!selectedService){
-    if(err) err.textContent='Select a duration first.';
-    return false;
+  if(!selectedPlan||!selectedService){if(err)err.textContent='Select a duration first.';return false;}
+  if(selectedPlan.source==='virtualsms_rent'){
+    var live=vsRentPlans.find(function(p){return String(p.service_id)===String(selectedPlan.service_id)&&Number(p.duration_hours)===Number(selectedPlan.duration_hours);});
+    if(!live||!live.is_available||Number(live.stock_count||0)<=0){if(err)err.textContent='This VirtualSMS plan is no longer available. Refresh the catalogue.';return false;}
+    return true;
   }
   if(typeof planIsAvailable==='function' ? !planIsAvailable(selectedPlan) : (selectedPlan.is_available===false || selectedPlan.stock_status==='sold_out')){
     markPlanSoldOutInUi(selectedPlan.id);
@@ -787,6 +804,7 @@ function markPlanSoldOutInUi(planId){
   }
 }
 function getAddonState(){
+  if(selectedPlan&&selectedPlan.source==='virtualsms_rent')return{carrierAmt:0,areaAmt:0,carrierLabel:'',areaLabel:'',areaCode:''};
   var carrierAmt=0, areaAmt=0, carrierLabel='', areaLabel='';
   var car=document.getElementById('carrierSel');
   if(car&&car.value){
@@ -827,8 +845,9 @@ function updateTotal(){
     if(br0) br0.classList.remove('on');
     return;
   }
-  var base=Number(selectedPlan.price_ngn||0)*qty;
-  var ad=getAddonState();
+  var isVs=selectedPlan&&selectedPlan.source==='virtualsms_rent';
+  var base=Number(selectedPlan.price_ngn||0)*(isVs?1:qty);
+  var ad=isVs?{carrierAmt:0,areaAmt:0,carrierLabel:'',areaLabel:''}:getAddonState();
   var total=base+ad.carrierAmt+ad.areaAmt;
   el.textContent=fmtNgn(total);
   var br=document.getElementById('totalBreak');
@@ -987,7 +1006,7 @@ async function doRent(){
 
   var body={
     plan_id:selectedPlan.id,
-    service_id:selectedService&&selectedService.id,
+    service_id:selectedPlan.source==='virtualsms_rent'?selectedPlan.service_id:(selectedService&&(selectedService.gotsms_id||selectedService.id)),
     quoted_price_ngn:typeof buildQuotedTotalNgn==='function'?buildQuotedTotalNgn():Number(selectedPlan.price_ngn||0),
     quoted_usd:selectedPlan.price_usd||selectedPlan.price||null,
     auto_renew:(function(){ var c=document.getElementById('autoRenewChk'); return !!(c&&c.checked); })()
@@ -999,7 +1018,10 @@ async function doRent(){
 
   var j;
   try{
-    if(multiMode){
+    if(selectedPlan.source==='virtualsms_rent'){
+      var requestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjvr-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+      j=await vsRentApi('order',{method:'POST',body:{service_id:selectedPlan.service_id,duration_hours:selectedPlan.duration_hours,quoted_price_ngn:Number(selectedPlan.price_ngn||0),request_id:requestId}});
+    }else if(multiMode){
       if(!multiSelected||multiSelected.length!==2){
         unlockFail();
         var msg='Select exactly 2 services for a multi-service pack.';
@@ -1019,7 +1041,7 @@ async function doRent(){
     }
 
     // Auto-retry once on price lock
-    if(j && !j.success && /price updated/i.test(String(j.message||'')) && j.data && j.data.price_ngn!=null && !body._priceRetry){
+    if(selectedPlan.source!=='virtualsms_rent' && j && !j.success && /price updated/i.test(String(j.message||'')) && j.data && j.data.price_ngn!=null && !body._priceRetry){
       body.quoted_price_ngn=Number(j.data.price_ngn);
       body._priceRetry=true;
       var ad=0;
@@ -1059,12 +1081,12 @@ async function doRent(){
     rentBusy=false;
     if(typeof setRentLock==='function') setRentLock(selectedPlan&&selectedPlan.id);
     var rentObj=Array.isArray(j.data)?j.data[0]:j.data;
-    var rid=rentObj&&(rentObj.id||rentObj.rent_id||(j.data&&j.data.id));
+    var rid=rentObj&&(rentObj.id||rentObj.rent_id||rentObj.order_id||(j.data&&j.data.id));
     if(okEl) okEl.textContent=j.message||'Number rented successfully';
     showRentToast(j.message||(multiMode?'Both services ready on one number':'Number ready'+(rentObj&&rentObj.phone?': '+rentObj.phone:'')), true);
     if(rid){
       setTimeout(function(){
-        location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid));
+        location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid))+(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'&source=virtualsms_rent':'');
       }, 500);
       return;
     }
