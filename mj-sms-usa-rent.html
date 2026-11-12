@@ -904,7 +904,7 @@ function openPurchaseModal(){
   try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
   if(!area){var areaSel=document.getElementById('areaCode');if(areaSel){if(areaSel.tagName==='SELECT'&&areaSel.value){var ao=areaSel.options[areaSel.selectedIndex];area=ao?ao.textContent:areaSel.value;}else area=String(areaSel.value||'').trim();}}
   var _ad2=getAddonState(),_areaTxt=area||'Any';
-  document.getElementById('psArea').textContent=isVs?'Not supported for Platform Rental':(_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt);
+  document.getElementById('psArea').textContent=isVs?'Not included with this plan':(_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt);
   document.getElementById('psQty').textContent=isVs?'1':String(qty);
   var ar=document.getElementById('autoRenewChk'),arEl=document.getElementById('psAutoRenew');
   if(arEl)arEl.textContent=isVs?'Not included with this plan':((ar&&ar.checked)?'On — renews when period ends':'Off');
