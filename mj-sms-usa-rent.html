@@ -608,7 +608,7 @@ function buildAreaOptions(){
 function areaCodeFieldHtml(){
   return '<label class="f">Area code (optional)</label>'+
     '<input class="f" id="areaCode" type="tel" inputmode="numeric" maxlength="6" placeholder="e.g. 212" autocomplete="off">'+
-    '<div class="helper-text" style="margin-top:4px;font-size:11px">Supplier does not publish a full area-code list. Enter 3 digits only if you need a specific code; leave blank for any available number. If that code is out of stock, rental will fail and you are not charged.</div>';
+    '<div class="helper-text" style="margin-top:4px;font-size:11px">Enter 3 digits only if you need a specific area code. Leave blank for any available number.</div>';
 }
 function planIsAvailable(p){
   if(!p) return false;
@@ -631,7 +631,7 @@ function renderDetailForm(){
   var anyInStock=plans.some(planIsAvailable);
   if(!plans.length){
     body.innerHTML=
-      '<div class="empty">This service is sold out on our provider right now.<br><span style="opacity:.7;font-size:12px">Try another service or check back later.</span></div>'+
+      '<div class="empty">This service is currently unavailable.<br><span style="opacity:.7;font-size:12px">Try another service or check back later.</span></div>'+
       '<div class="total"><div class="lbl">Total</div><div class="amt">—</div></div>'+
       '<button type="button" class="btn-buy" id="rentBtn" disabled>Sold out</button>'+
       '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
@@ -646,9 +646,9 @@ function renderDetailForm(){
     var isOneDay=String(p.duration_type||'').toLowerCase().replace(/s$/,'')==='day' && Number(p.duration_in_type)===1;
     if(!isOneDay) isOneDay=/\b1\s*day\b/i.test(String(p.duration_translation||p.name||''));
     var recommended=isWhatsAppOnly && isOneDay;
-    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(p.source==='virtualsms_rent'?'<span style="display:inline-block;font-size:10px;font-weight:800;color:#60a5fa;margin-bottom:5px">VS</span>':'<span style="display:inline-block;font-size:10px;font-weight:800;color:var(--muted);margin-bottom:5px">GT</span>')+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
-  var carHtml='<option value="">Any carrier (supplier default)</option>';
+  var carHtml='<option value="">Any carrier</option>';
   if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
   else { carHtml+='<option value="" disabled>Carriers loading…</option>'; }
   var qtyBlock = multiMode ? '' : (
@@ -659,8 +659,8 @@ function renderDetailForm(){
   );
   body.innerHTML=
     '<label class="f">Duration</label><div class="plan-grid" id="planList">'+planHtml+'</div>'+
-    '<div id="gotsmsOnlyControls"><label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select><div class="helper-text" style="margin-top:4px;font-size:11px">Carriers from GotSMS only.</div>'+
-    areaCodeFieldHtml()+qtyBlock+renewBlock+'</div>'
+    '<div id="gotsmsOnlyControls"><label class="f">Carrier (optional)</label><select class="f" id="carrierSel">'+carHtml+'</select>'+
+    areaCodeFieldHtml()+qtyBlock+renewBlock+'</div>'+
     '<div class="total"><div class="lbl">Total</div><div class="amt" id="totalAmt">₦0</div><div class="total-break" id="totalBreak"><div class="tb-row base" id="tbBase" style="display:none"><span>Rental duration</span><span></span></div><div class="tb-row" id="tbCarrier" style="display:none"><span>Preferred carrier</span><span></span></div><div class="tb-row" id="tbArea" style="display:none"><span>Area code preference</span><span></span></div></div></div>'+
     '<button type="button" class="btn-buy" id="rentBtn" disabled>Rent number</button>'+
     '<div class="err" id="rentErr"></div><div class="ok" id="rentOk"></div>';
@@ -899,7 +899,7 @@ function openPurchaseModal(){
   var carTxt='Any carrier';
   if(carSel&&carSel.value){var opt=carSel.options[carSel.selectedIndex];carTxt=opt?opt.textContent:'Selected carrier';}
   var _ad=getAddonState();
-  document.getElementById('psCarrier').textContent=isVs?'Not supported for Platform Rental':(_ad.carrierAmt?(carTxt+' · +'+fmtNgn(_ad.carrierAmt)):carTxt);
+  document.getElementById('psCarrier').textContent=isVs?'Not included with this plan':(_ad.carrierAmt?(carTxt+' · +'+fmtNgn(_ad.carrierAmt)):carTxt);
   var area='';
   try{area=typeof resolveAreaCode==='function'?resolveAreaCode():'';}catch(e){}
   if(!area){var areaSel=document.getElementById('areaCode');if(areaSel){if(areaSel.tagName==='SELECT'&&areaSel.value){var ao=areaSel.options[areaSel.selectedIndex];area=ao?ao.textContent:areaSel.value;}else area=String(areaSel.value||'').trim();}}
@@ -907,7 +907,7 @@ function openPurchaseModal(){
   document.getElementById('psArea').textContent=isVs?'Not supported for Platform Rental':(_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt);
   document.getElementById('psQty').textContent=isVs?'1':String(qty);
   var ar=document.getElementById('autoRenewChk'),arEl=document.getElementById('psAutoRenew');
-  if(arEl)arEl.textContent=isVs?'Not available for Platform Rental':((ar&&ar.checked)?'On — renews when period ends':'Off');
+  if(arEl)arEl.textContent=isVs?'Not included with this plan':((ar&&ar.checked)?'On — renews when period ends':'Off');
   document.getElementById('psUnitPrice').textContent=fmtNgn(selectedPlan.price_ngn);
   updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);
   document.getElementById('psErr').textContent='';
