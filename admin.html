@@ -3236,7 +3236,7 @@ function filterVirtualSmsRentPlans() {
  const tbody=document.getElementById('vsRentTableBody'),cards=document.getElementById('vsRentMobileCards');
  if(!rows.length){if(tbody)tbody.innerHTML='<tr><td colspan="8" class="empty-state">No plans found. Run Sync VirtualSMS Rental.</td></tr>';if(cards)cards.innerHTML='<div class="empty-state">No VirtualSMS plans found.</div>';return;}
  if(tbody)tbody.innerHTML=rows.map(r=>{
-  const profit=Number(r.price_ngn||0)-Number(r.supplier_price_usd||0)*(Number(window.USD_TO_NGN_RATE)||1500);
+  const profit=smsProfitOf(r.supplier_price_usd,r.price_ngn);
   return '<tr><td>'+escapeHtml(r.service_name)+'</td><td>'+escapeHtml(r.duration_label)+'</td><td>
  const btn = document.getElementById('btnRefreshSupplierBalances');
  setBtnBusy(btn, true, 'Refreshing...');
@@ -3466,6 +3466,7 @@ function smsProfitHtml(p) {
 function smsSrcKey(s) {
   s = String(s || '').toLowerCase().trim();
   if (s.indexOf('grizzly') > -1) return 'grizzlysms';
+  if (s.indexOf('virtualsms_rent') > -1) return 'virtualsms_rent';
   if (s.indexOf('virtualsms') > -1 || s.indexOf('vsms') > -1) return 'virtualsms';
   if (s.indexOf('gotsms') > -1) return 'gotsms';
   if (s.indexOf('smsbus_rent') > -1 || s.indexOf('sms_bus_rent') > -1) return 'smsbus_rent';
@@ -3479,7 +3480,7 @@ function smsOrderSold(o) {
   const st = String(o.status || '').toLowerCase();
   if (o.refunded === true || ['cancelled', 'canceled', 'refunded', 'failed', 'expired'].indexOf(st) > -1) return false;
   const src = smsSrcKey(o.source);
-  if (src === 'gotsms' || src === 'smsbus_rent') {
+  if (src === 'gotsms' || src === 'smsbus_rent' || src === 'virtualsms_rent') {
     // Rentals only count as sold once an SMS landed (or explicitly completed)
     if (typeof adminRentReceivedSms === 'function') return adminRentReceivedSms(o);
     return /sms\s*received/i.test(String(o.service_name || '')) || st === 'completed' || st === 'complete' || st === 'success';
@@ -8045,7 +8046,7 @@ async function loadBoosterOrders() {
 <!-- Pull-to-refresh is provided by the shared /js/mj-pull-refresh.js implementation. -->
 +Number(r.supplier_price_usd||0).toFixed(4)+'</td>'+
    '<td>₦'+Number(r.price_ngn||0).toLocaleString()+(r.price_source==='admin'?' <small style="color:#fbbf24">admin</small>':'')+'</td>'+
-   '<td>₦'+Math.round(profit).toLocaleString()+'</td><td>'+Number(r.stock_count||0)+'</td>'+
+   '<td>'+smsProfitHtml(profit)+'</td><td>'+Number(r.stock_count||0)+'</td>'+
    '<td>'+(r.admin_hidden?'HIDDEN':(r.is_available?'<span style="color:#34d399">ACTIVE</span>':'OUT'))+'</td>'+
    '<td><button class="btn btn-ghost btn-sm" onclick="editVirtualSmsRentPrice('+JSON.stringify(r.id)+','+Number(r.price_ngn||0)+')">Edit</button> '+
    '<button class="btn btn-ghost btn-sm" onclick="toggleVirtualSmsRentPlan('+JSON.stringify(r.id)+','+(!r.admin_hidden)+')">'+(r.admin_hidden?'Show':'Hide')+'</button></td></tr>';
