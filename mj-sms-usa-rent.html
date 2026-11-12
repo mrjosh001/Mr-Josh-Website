@@ -421,19 +421,30 @@ function dedupeServices(list){
   return out;
 }
 async function fetchAllServices(search){
-  var all=[], q=String(search||'').trim();
-  for(var page=1;page<=30;page++){
+  var q=String(search||'').trim();
+  function pageQuery(page){
     var qs='per_page=100&page='+page;
-    if(q) qs+='&search='+encodeURIComponent(q);
-    var j=await api('services',{query:qs});
-    if(!j.success){if(page===1)return{ok:false,message:j.message||'Could not load services'};break;}
-    var chunk=Array.isArray(j.data)?j.data:[];
-    if(!chunk.length)break;
-    all=all.concat(chunk);
-    var last=Number((j.meta&&j.meta.last_page)||page);
-    if(page>=last)break;
+    if(q)qs+='&search='+encodeURIComponent(q);
+    return qs;
   }
-  return{ok:true,services:dedupeServices(all)};
+  // Fetch the first page immediately to discover the catalogue size.
+  var first=await api('services',{query:pageQuery(1)});
+  if(!first||!first.success)return{ok:false,message:first&&first.message||'Could not load services'};
+  var collected=Array.isArray(first.data)?first.data.slice():[];
+  var last=Math.max(1,Math.min(30,Number(first.meta&&first.meta.last_page)||1));
+  // Fetch remaining pages in small concurrent batches instead of waiting
+  // for every supplier page sequentially. Small batches avoid request bursts.
+  for(var base=2;base<=last;base+=4){
+    var tasks=[];
+    for(var page=base;page<Math.min(base+4,last+1);page++){
+      tasks.push(api('services',{query:pageQuery(page)}).catch(function(){return{success:false,data:[]};}));
+    }
+    var pages=await Promise.all(tasks);
+    pages.forEach(function(j){
+      if(j&&j.success&&Array.isArray(j.data))collected=collected.concat(j.data);
+    });
+  }
+  return{ok:true,services:dedupeServices(collected)};
 }
 function sortServices(){
   allServices.sort(function(a,b){
@@ -444,27 +455,26 @@ function sortServices(){
     if(ai===-1)return 1;if(bi===-1)return -1;return ai-bi;
   });
 }
-function paintServices(list){
+var svcRenderList=[],svcRenderedCount=0,svcObserver=null;
+var SVC_BATCH_SIZE=20;
+function paintServiceTile(s){
+  var isFallback=/service\\s+not\\s+listed/i.test(String(s.name||''));
+  var displayName=isFallback?'Service Not Listed':s.name;
+  return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
+    serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(displayName)+'</div></div>';
+}
+function appendServiceBatch(){
   var grid=document.getElementById('svcGrid');
-  grid.className='svc-grid';grid.removeAttribute('aria-busy');
-  if(!list.length){
-    var q=String(document.getElementById('svcSearch').value||'').trim();
-    // If the search has no exact catalogue match, show the actual supplier service
-    // named "Service Not Listed" as the fallback option.
-    var fallback=q?allServices.find(function(s){return /service\s+not\s+listed/i.test(String(s.name||''));}):null;
-    if(fallback) list=[fallback];
-  }
-  if(!list.length){
-    grid.innerHTML='<div class="empty" style="grid-column:1/-1">No matching service found. Try another search.</div>';
-    return;
-  }
-  grid.innerHTML=list.map(function(s){
-    var isFallback=/service\s+not\s+listed/i.test(String(s.name||''));
-    var displayName=isFallback?'Service Not Listed':s.name;
-    return '<div class="svc-tile" data-id="'+esc(s.id)+'" data-name="'+esc(s.name)+'">'+
-      serviceLogoHtml(s.name)+'<div class="svc-label">'+esc(displayName)+'</div></div>';
-  }).join('');
-  grid.querySelectorAll('.svc-tile').forEach(function(tile){
+  if(!grid||svcRenderedCount>=svcRenderList.length)return;
+  var end=Math.min(svcRenderedCount+SVC_BATCH_SIZE,svcRenderList.length);
+  var html='';
+  for(var i=svcRenderedCount;i<end;i++)html+=paintServiceTile(svcRenderList[i]);
+  var sentinel=document.getElementById('svcLoadMore');
+  if(sentinel)sentinel.insertAdjacentHTML('beforebegin',html);
+  else grid.insertAdjacentHTML('beforeend',html);
+  svcRenderedCount=end;
+  grid.querySelectorAll('.svc-tile:not([data-bound])').forEach(function(tile){
+    tile.setAttribute('data-bound','1');
     tile.onclick=function(){
       var svc=allServices.find(function(x){return String(x.id)===String(tile.getAttribute('data-id'));})||{id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
       if(multiMode){if(svc.vs_service_id&&!svc.gotsms_id){showRentToast('VS plans can only be purchased one at a time.',false);return;}toggleMultiService(svc);return;}
@@ -472,6 +482,47 @@ function paintServices(list){
       openDetail();
     };
   });
+  if(svcRenderedCount>=svcRenderList.length){
+    if(sentinel)sentinel.remove();
+    if(svcObserver){svcObserver.disconnect();svcObserver=null;}
+  }else{
+    var count=document.getElementById('svcLoadCount');
+    if(count)count.textContent='Showing '+svcRenderedCount+' of '+svcRenderList.length+' services';
+  }
+}
+function paintServices(list){
+  var grid=document.getElementById('svcGrid');
+  grid.className='svc-grid';grid.removeAttribute('aria-busy');
+  if(svcObserver){svcObserver.disconnect();svcObserver=null;}
+  svcRenderList=Array.isArray(list)?list.slice():[];
+  if(!svcRenderList.length){
+    var q=String(document.getElementById('svcSearch').value||'').trim();
+    var fallback=q?allServices.find(function(s){return /service\\s+not\\s+listed/i.test(String(s.name||''));}):null;
+    if(fallback)svcRenderList=[fallback];
+  }
+  grid.innerHTML='';
+  svcRenderedCount=0;
+  if(!svcRenderList.length){
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1">No matching service found. Try another search.</div>';
+    return;
+  }
+  var sentinel=document.createElement('div');
+  sentinel.id='svcLoadMore';
+  sentinel.style.cssText='grid-column:1/-1;min-height:36px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-weight:700;';
+  sentinel.innerHTML='<span id="svcLoadCount">Loading services…</span>';
+  grid.appendChild(sentinel);
+  appendServiceBatch();
+  if(svcRenderedCount<svcRenderList.length){
+    if('IntersectionObserver' in window){
+      svcObserver=new IntersectionObserver(function(entries){
+        if(entries.some(function(entry){return entry.isIntersecting;}))appendServiceBatch();
+      },{root:null,rootMargin:'600px 0px',threshold:0});
+      svcObserver.observe(sentinel);
+    }else{
+      sentinel.innerHTML='<button type="button" id="svcLoadMoreBtn" style="border:1px solid var(--border);background:var(--card);color:var(--primary);padding:9px 14px;border-radius:10px;font:700 12px inherit">Load more services</button>';
+      sentinel.querySelector('button').onclick=appendServiceBatch;
+    }
+  }
 }
 var _searchTimer=null;
 var _verifySearchSeq=0;
