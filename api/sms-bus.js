@@ -2348,6 +2348,8 @@ export default async function handler(req, res) {
             phone_number: phone,
             price,
             new_balance: newBalance,
+            new_balance_usd: debit.balance_usd,
+            wallet_debit_id: debit.wallet_debit_id,
             service_name: serviceName,
             country_name: countryName,
             source: 'smsbus',
@@ -2368,7 +2370,9 @@ export default async function handler(req, res) {
           title: serviceName,
           subtitle: `OTP · ${phone || requestId}`,
           amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price,
+          amount_ngn: debit.ngn_debited,
+          amount_usd: debit.usd_debited,
+          external_reference: String(debit.wallet_debit_id),
           status: 'pending', // pending until SMS code arrives
           notes: `order_id:${requestId}`
         });
@@ -2382,6 +2386,8 @@ export default async function handler(req, res) {
           phone_number: phone,
           price,
           new_balance: newBalance,
+          new_balance_usd: debit.balance_usd,
+          wallet_debit_id: debit.wallet_debit_id,
           service_name: serviceName,
           country_name: countryName,
           source: 'smsbus',
