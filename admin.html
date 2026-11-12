@@ -1133,7 +1133,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metrics supplier-balance-metrics" style="margin-bottom:14px;">
  <div class="metric-card"><div class="metric-label">GrizzlySMS (Server 1)</div><div class="metric-value" id="balGrizzly"> </div><div class="metric-sub" id="balGrizzlySub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">SMS-Bus (Server 2)</div><div class="metric-value" id="balSmsbus"> </div><div class="metric-sub" id="balSmsbusSub">Loading…</div></div>
- <div class="metric-card"><div class="metric-label">Server 3 (Real SIM)</div><div class="metric-value" id="balVirtualsms"> </div><div class="metric-sub" id="balVirtualsmsSub">Loading…</div></div>
+ <div class="metric-card"><div class="metric-label">VirtualSMS (Server 3 + USA Rental)</div><div class="metric-value" id="balVirtualsms"> </div><div class="metric-sub" id="balVirtualsmsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">Server 4 (OTP pool)</div><div class="metric-value" id="balHerosms"> </div><div class="metric-sub" id="balHerosmsSub">Loading…</div></div>
  <div class="metric-card"><div class="metric-label">GotSMS (USA rental)</div><div class="metric-value" id="balGotsms"> </div><div class="metric-sub" id="balGotsmsSub">Loading…</div></div>
  </div>
@@ -3300,7 +3300,7 @@ async function syncVirtualSmsRentals(){
  try{
   const h=await authHeaders(),res=await fetch('/api/sms-bus?action=vsrent_sync',{method:'POST',headers:h||{}});
   const d=await res.json();if(!res.ok||!d.success)throw new Error(d.message||'VirtualSMS sync failed');
-  if(p)p.textContent=d.message+' · New '+d.inserted+' · Updated '+d.updated+(d.errors?.length?' · '+d.errors.join(' | '):'');
+  if(p)p.textContent=d.message+' · New '+d.inserted+' · Updated '+d.updated+' · In stock '+Number(d.plans_with_stock||0)+' / '+Number(d.plans_seen||0)+(d.errors?.length?' · '+d.errors.join(' | '):'');
   showAdminToast(d.message||'VirtualSMS sync finished',d.errors?.length?'error':'success');await loadVirtualSmsRentPlans();
  }catch(e){if(p)p.textContent=e.message||'Sync failed';showAdminToast(e.message||'Sync failed','error');}
  finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS');}
