@@ -305,7 +305,7 @@ export default async function handler(req, res) {
     if (orderRefEarly) {
       const existing = await findExistingLogOrder(user_id, orderRefEarly);
       if (existing) {
-        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+        const { data: balRow } = await supabase.from('profiles').select('balance, balance_usd').eq('id', user_id).maybeSingle();
         return res.status(200).json({
           success: true,
           replayed: true,
