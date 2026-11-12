@@ -1174,38 +1174,38 @@ async function reclaimAndCompleteOnCode(order, userId, code) {
   const price = Number(order.price != null ? order.price : claimed.price) || 0;
   let newBalance = null;
 
+  let newBalance = null;
+  let newBalanceUsd = null;
+  let walletDebitId = null;
   if (price > 0) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('balance, customer_id')
-      .eq('id', userId)
-      .single();
-    if (profile) {
-      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-        p_user_id: userId,
-        p_amount: price
+    const debit = await debitWallet(supabase, userId, price);
+    if (!debit.ok) {
+      await supabase.from('number_orders').update({
+        status: 'refunded',
+        refunded: true,
+        code: null
+      }).eq('id', order.id);
+      return { ok: false, reason: 'insufficient_balance', balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd };
+    }
+    newBalance = debit.balance_ngn;
+    newBalanceUsd = debit.balance_usd;
+    walletDebitId = debit.wallet_debit_id;
+    await supabase.from('number_orders').update({ wallet_debit_id: walletDebitId }).eq('id', order.id);
+    try {
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        customer_id: claimed.customer_id || order.customer_id,
+        type: 'purchase',
+        category: 'MJ SMS',
+        title: claimed.service_name || order.service_name || 'SMS',
+        subtitle: 'Code received after refund — recharged',
+        amount: `₦${price.toLocaleString()}`,
+        amount_ngn: debit.ngn_debited,
+        external_reference: String(walletDebitId),
+        status: 'completed'
       });
-      if (debErr) {
-        newBalance = Number(profile.balance || 0) - price;
-        await supabase.from('profiles').update({ balance: newBalance }).eq('id', userId);
-      } else if (typeof debited === 'number') newBalance = debited;
-      else if (debited && debited.new_balance != null) newBalance = Number(debited.new_balance);
-      else newBalance = Number(profile.balance || 0) - price;
-      try {
-        await supabase.from('transactions').insert({
-          user_id: userId,
-          customer_id: profile.customer_id || claimed.customer_id || order.customer_id,
-          type: 'purchase',
-          category: 'MJ SMS',
-          title: claimed.service_name || order.service_name || 'SMS',
-          subtitle: `${claimed.country_name || order.country_name || ''} · code received after refund — recharged`.trim(),
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price,
-          status: 'completed'
-        });
-      } catch (e) {
-        console.warn('[reclaimAndCompleteOnCode] tx', e.message || e);
-      }
+    } catch (e) {
+      console.warn('[reclaimAndComplete] tx', e.message || e);
     }
   }
 
@@ -1214,6 +1214,8 @@ async function reclaimAndCompleteOnCode(order, userId, code) {
     recharged: true,
     amount: price,
     new_balance: newBalance,
+    new_balance_usd: newBalanceUsd,
+    wallet_debit_id: walletDebitId,
     code: String(code),
     order: { ...order, ...claimed, status: 'completed', code: String(code), refunded: false }
   };
