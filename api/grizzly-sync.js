@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyMarkup } from '../lib/pricing.js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { sendPushToUser } from '../lib/push.js';
 import { createHero } from '../lib/hero.js';
 import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.js';
@@ -810,27 +811,20 @@ async function handleOrder(req, res) {
       }
     }
 
-    // Atomic debit is authoritative and supports NGN, USD, or mixed balances.
-    // Fail closed on RPC errors. A direct profile update is not a safe substitute.
-    const { data: debited, error: deductErr } = await supabase.rpc('debit_balance_if_sufficient', {
-      p_user_id: user_id,
-      p_amount: price
-    });
-    if (deductErr) {
-      console.error('[grizzly order] debit_balance_if_sufficient', deductErr.message);
-      return res.status(500).json({ success: false, code: 'WALLET_DEBIT_UNVERIFIED', message: 'Could not verify your wallet debit safely. Please try again.' });
-    }
-    const debitRow = Array.isArray(debited) ? debited[0] : debited;
-    if (!debitRow || debitRow.success !== true) {
+    // Central atomic debit: NGN first, USD remainder.
+    const debit = await debitWallet(supabase, user_id, price);
+    if (!debit.ok) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient balance',
+        message: debit.message || 'Insufficient combined wallet balance.',
         required: price,
-        available: Number(debitRow?.new_balance ?? originalBalance),
-        available_usd: Number(debitRow?.new_balance_usd ?? originalBalanceUsd)
+        balance_ngn: debit.balance_ngn,
+        balance_usd: debit.balance_usd
       });
     }
-    const newBalance = Number(debitRow.new_balance ?? originalBalance);
+    walletDebitId = debit.wallet_debit_id;
+    const newBalance = debit.balance_ngn;
+    const newBalanceUsd = debit.balance_usd;
     deducted = true;
     const qs = new URLSearchParams({
       api_key: SUP_KEY,
@@ -875,8 +869,8 @@ async function handleOrder(req, res) {
 
     // Supplier failed → restore balance only (no refund transaction row)
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
-      const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: price });
-      if (restoreErr) throw restoreErr;
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
       deducted = false;
 
       // Optional single failed purchase marker (not a refund row)
@@ -916,6 +910,7 @@ async function handleOrder(req, res) {
       service_name: serviceName,
       phone_number: orderData.phoneNumber || null,
       price,
+      wallet_debit_id: walletDebitId,
       supplier_price: supplierPriceUsd,
       currency: 'NGN',
       status: 'waiting_for_code',
@@ -975,6 +970,9 @@ async function handleOrder(req, res) {
         country_name: countryName,
         price,
         new_balance: newBalance,
+        new_balance_usd: newBalanceUsd,
+        ngn_debited: debit.ngn_debited,
+        usd_debited: debit.usd_debited,
         created_at: new Date().toISOString()
       }
     });
@@ -983,7 +981,8 @@ async function handleOrder(req, res) {
 
     if (deducted) {
       try {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', user_id);
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
         // no refund transaction row
       } catch (refundErr) {
         console.error('CRITICAL: Auto-restore failed (grizzly order)', refundErr);
