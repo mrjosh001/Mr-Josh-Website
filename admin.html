@@ -3300,8 +3300,11 @@ async function syncVirtualSmsRentals(){
  try{
   const h=await authHeaders(),res=await fetch('/api/sms-bus?action=vsrent_sync',{method:'POST',headers:h||{}});
   const d=await res.json();if(!res.ok||!d.success)throw new Error(d.message||'VirtualSMS sync failed');
-  if(p)p.textContent=d.message+' · New '+d.inserted+' · Updated '+d.updated+' · In stock '+Number(d.plans_with_stock||0)+' / '+Number(d.plans_seen||0)+(d.errors?.length?' · '+d.errors.join(' | '):'');
-  showAdminToast(d.message||'VirtualSMS sync finished',d.errors?.length?'error':'success');await loadVirtualSmsRentPlans();
+  var stocked=Number(d.plans_with_stock||0),seen=Number(d.plans_seen||0);
+  if(p)p.textContent=d.message+' · New '+d.inserted+' · Updated '+d.updated+' · In stock '+stocked+' / '+seen+(d.errors?.length?' · '+d.errors.join(' | '):'');
+  var notice=d.message||'VirtualSMS sync finished';
+  if(seen>0&&stocked===0)notice+=' Supplier returned zero stock for every plan; customer catalogue will remain unavailable until stock is reported.';
+  showAdminToast(notice,(d.errors?.length|| (seen>0&&stocked===0))?'error':'success');await loadVirtualSmsRentPlans();
  }catch(e){if(p)p.textContent=e.message||'Sync failed';showAdminToast(e.message||'Sync failed','error');}
  finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS');}
 }
