@@ -455,7 +455,7 @@ function sortServices(){
     if(ai===-1)return 1;if(bi===-1)return -1;return ai-bi;
   });
 }
-var svcRenderList=[],svcRenderedCount=0,svcObserver=null;
+var svcRenderList=[],svcRenderedCount=0,svcObserver=null,svcLoadingMore=false;
 var SVC_BATCH_SIZE=20;
 function paintServiceTile(s){
   var isFallback=/service\\s+not\\s+listed/i.test(String(s.name||''));
@@ -465,7 +465,7 @@ function paintServiceTile(s){
 }
 function appendServiceBatch(){
   var grid=document.getElementById('svcGrid');
-  if(!grid||svcRenderedCount>=svcRenderList.length)return;
+  if(!grid||svcRenderedCount>=svcRenderList.length)return false;
   var end=Math.min(svcRenderedCount+SVC_BATCH_SIZE,svcRenderList.length);
   var html='';
   for(var i=svcRenderedCount;i<end;i++)html+=paintServiceTile(svcRenderList[i]);
@@ -489,7 +489,30 @@ function appendServiceBatch(){
     var count=document.getElementById('svcLoadCount');
     if(count)count.textContent='Showing '+svcRenderedCount+' of '+svcRenderList.length+' services';
   }
+  return true;
 }
+// IntersectionObserver can fire only once while its sentinel remains inside
+// rootMargin. Recheck the sentinel after each batch and on every scroll so
+// loading continues even when the user scrolls through a long list quickly.
+function loadServiceBatchesWhileNear(){
+  if(svcLoadingMore)return;
+  var sentinel=document.getElementById('svcLoadMore');
+  if(!sentinel||svcRenderedCount>=svcRenderList.length)return;
+  svcLoadingMore=true;
+  try{
+    var batches=0;
+    while(sentinel.isConnected&&svcRenderedCount<svcRenderList.length&&batches<5){
+      var rect=sentinel.getBoundingClientRect();
+      if(rect.top>window.innerHeight+500)break;
+      if(!appendServiceBatch())break;
+      batches++;
+      sentinel=document.getElementById('svcLoadMore');
+      if(!sentinel)break;
+    }
+  }finally{svcLoadingMore=false;}
+}
+window.addEventListener('scroll',loadServiceBatchesWhileNear,{passive:true});
+window.addEventListener('resize',loadServiceBatchesWhileNear);
 function paintServices(list){
   var grid=document.getElementById('svcGrid');
   grid.className='svc-grid';grid.removeAttribute('aria-busy');
@@ -515,13 +538,16 @@ function paintServices(list){
   if(svcRenderedCount<svcRenderList.length){
     if('IntersectionObserver' in window){
       svcObserver=new IntersectionObserver(function(entries){
-        if(entries.some(function(entry){return entry.isIntersecting;}))appendServiceBatch();
+        if(entries.some(function(entry){return entry.isIntersecting;}))loadServiceBatchesWhileNear();
       },{root:null,rootMargin:'600px 0px',threshold:0});
       svcObserver.observe(sentinel);
     }else{
       sentinel.innerHTML='<button type="button" id="svcLoadMoreBtn" style="border:1px solid var(--border);background:var(--card);color:var(--primary);padding:9px 14px;border-radius:10px;font:700 12px inherit">Load more services</button>';
-      sentinel.querySelector('button').onclick=appendServiceBatch;
+      sentinel.querySelector('button').onclick=function(){appendServiceBatch();loadServiceBatchesWhileNear();};
     }
+    // Fill enough batches to keep the sentinel ahead of the viewport on
+    // short screens, without rendering the complete catalogue immediately.
+    loadServiceBatchesWhileNear();
   }
 }
 var _searchTimer=null;
