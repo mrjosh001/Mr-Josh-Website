@@ -153,7 +153,7 @@ async function bmFetch(path, opts) {
 }
 
 function bmSellPriceNgn(usd) {
-  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const rate = 1450;
   const supplierNgn = Number(usd || 0) * rate;
   return Math.ceil(Math.max(supplierNgn * 1.7, supplierNgn + 500, 1000) / 50) * 50;
 }
@@ -212,7 +212,7 @@ async function handleBulkmailSync(req, res) {
 }
 
 function azSellPriceNgn(usd) {
-  const rate = Number(process.env.USD_TO_NGN_RATE) || Number(process.env.USD_TO_NGN) || 1500;
+  const rate = 1450;
   const supplierNgn = Number(usd || 0) * rate;
   return Math.ceil(Math.max(supplierNgn * 1.8, supplierNgn + 500, 1000) / 50) * 50;
 }
