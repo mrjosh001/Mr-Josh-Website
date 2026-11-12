@@ -599,6 +599,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(!box) return;
     var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
     if(isVsRent && j && j.rental){rent=Object.assign({},rent||{},j.rental,{source:'virtualsms_rent',id:rentId,service:{name:j.rental.service_name}});}
+    var refreshAction=document.getElementById('btnRefresh');
+    if(refreshAction&&!computeState().active)refreshAction.remove();
     var list = Array.isArray(j.data) ? j.data : [];
     var countEl = document.getElementById('messageCount');
     if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' message' : ' messages');
