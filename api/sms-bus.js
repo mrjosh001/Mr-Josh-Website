@@ -3982,7 +3982,7 @@ export default async function handler(req, res) {
 
         const g1 = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
         if (!g1.ok || !g1.data?.success || !g1.data?.data) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
           return json(res, g1.status || 400, {
             success: false,
             message: gotsmsSafeMsg(g1.data?.message, 'Could not rent number for multi-pack'),
@@ -3999,7 +3999,7 @@ export default async function handler(req, res) {
           body: { service_id: secondId }
         });
         if (!g2.ok || !g2.data?.success) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debitAdd.wallet_debit_id); } catch (_) {}
           try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/refund`, { method: 'POST', body: {} }); } catch (_) {}
           return json(res, g2.status || 400, {
             success: false,
@@ -4034,7 +4034,8 @@ export default async function handler(req, res) {
             activeTill: rent.active_till || rent.expires_at || null,
             planLabel,
             carrierName: body.carrier_name || null,
-            areaCode: areaCode || null
+            areaCode: areaCode || null,
+            walletDebitId: debit.wallet_debit_id
           });
           try {
             await supabase.from('number_orders').update({
@@ -4459,7 +4460,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         if (!debitAdd.ok) return json(res, 400, { success: false, message: debitAdd.message || 'Insufficient wallet balance' });
         const g = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`, { method: 'POST', body: { service_id } });
         if (!g.ok || !g.data?.success) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price }); } catch (_) {}
+          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
           return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not add service') });
         }
         const newRentId = g.data?.data?.id || null;
