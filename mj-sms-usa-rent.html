@@ -355,7 +355,45 @@ async function headers(){const{data:{session}}=await sb.auth.getSession();if(!se
 async function api(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};const method=(opts&&opts.method)||'GET';let url='/api/sms-bus?action=gotsms_'+encodeURIComponent(action);if(opts&&opts.query)url+='&'+opts.query;const res=await fetch(url,{method:method,headers:h,body:opts&&opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
 async function vsRentApi(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};opts=opts||{};let url='/api/sms-bus?action=vsrent_'+encodeURIComponent(action);if(opts.query)url+='&'+opts.query;const res=await fetch(url,{method:opts.method||'GET',headers:h,body:opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
 function normSvcName(n){return String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
-async function refreshVirtualSmsCatalog(){try{var j=await vsRentApi('catalog');if(!j||!j.success||!Array.isArray(j.data))return;vsRentPlans=j.data;var by={};allServices.forEach(function(s){by[normSvcName(s.name)]=s;});vsRentPlans.forEach(function(p){var k=normSvcName(p.service_name);if(!k||!p.service_id)return;var s=by[k];if(s){s.vs_service_id=String(p.service_id);}else{var id='vs:'+String(p.service_id);s=allServices.find(function(x){return x.id===id;});if(!s){s={id:id,name:p.service_name,logo:null,gotsms_id:null,vs_service_id:String(p.service_id)};allServices.push(s);}by[k]=s;}});sortServices();writeCache(allServices);renderServices();}catch(e){console.warn('VirtualSMS rental catalogue unavailable',e&&e.message||e);}}
+async function refreshVirtualSmsCatalog(){
+ try{
+  var j=await vsRentApi('catalog');
+  if(!j||!j.success||!Array.isArray(j.data)){
+   var note=document.getElementById('cacheNote');
+   if(note)note.textContent='VirtualSMS catalogue could not load'+(j&&j.message?': '+String(j.message).slice(0,90):'');
+   console.warn('[VirtualSMS catalogue]',j&&j.message||'Invalid catalogue response');
+   return false;
+  }
+  vsRentPlans=j.data;
+  var byName={};
+  allServices.forEach(function(s){var k=normSvcName(s.name);if(k&&!byName[k])byName[k]=s;});
+  var byId={};
+  vsRentPlans.forEach(function(p){
+   var sid=String(p.service_id||'').trim(),name=String(p.service_name||'').trim(),k=normSvcName(name);
+   if(!sid||!name)return;
+   var svc=byId[sid]||allServices.find(function(x){return String(x.vs_service_id||'')===sid;});
+   if(!svc&&k)svc=byName[k];
+   if(svc){
+    svc.vs_service_id=sid;
+    if(svc.gotsms_id===undefined)svc.gotsms_id=svc.id&&String(svc.id).indexOf('vs:')===0?null:svc.id;
+   }else{
+    svc={id:'vs:'+sid,name:name,logo:null,gotsms_id:null,vs_service_id:sid};
+    allServices.push(svc);
+   }
+   byId[sid]=svc;
+   if(k&&!byName[k])byName[k]=svc;
+  });
+  sortServices();writeCache(allServices);renderServices();
+  var note=document.getElementById('cacheNote');
+  if(note)note.textContent=allServices.length+' services · '+Object.keys(byId).length+' VirtualSMS services · '+vsRentPlans.length+' rental plans';
+  return true;
+ }catch(e){
+  console.warn('VirtualSMS rental catalogue unavailable',e&&e.message||e);
+  var note=document.getElementById('cacheNote');
+  if(note)note.textContent='VirtualSMS catalogue could not load. Please refresh.';
+  return false;
+ }
+}
 
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
 function writeCache(services){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),services:services}));}catch(e){}}
@@ -586,7 +624,11 @@ async function loadPlans(){
   if(!multiMode){
     var vsCode=String(selectedService.vs_service_id||'');
     var vsName=normSvcName(selectedService.name);
-    vsRentPlans.filter(function(p){return (vsCode&&String(p.service_id)===vsCode)||normSvcName(p.service_name)===vsName;}).forEach(function(p){
+    // Match by the supplier's stable service ID first. Fall back to normalized
+    // name for older cached GotSMS tiles that predate the VirtualSMS mapping.
+    var matchedVs=vsCode?vsRentPlans.filter(function(p){return String(p.service_id)===vsCode;}):[];
+    if(!matchedVs.length&&vsName)matchedVs=vsRentPlans.filter(function(p){return normSvcName(p.service_name)===vsName;});
+    matchedVs.forEach(function(p){
       plans.push({id:'vsrent:'+p.id,db_id:p.id,source:'virtualsms_rent',service_id:p.service_id,duration_hours:Number(p.duration_hours),duration_type:'day',duration_in_type:Number(p.duration_hours)/24,duration_translation:p.duration_label||({24:'1 day',72:'3 days',168:'7 days'}[Number(p.duration_hours)]),price_ngn:Number(p.price_ngn||0),price_usd:Number(p.supplier_price_usd||0),supplier_price_usd:Number(p.supplier_price_usd||0),is_available:p.is_available!==false,service_name:p.service_name});
     });
   }
