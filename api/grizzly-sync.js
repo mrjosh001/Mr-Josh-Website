@@ -884,7 +884,9 @@ async function handleOrder(req, res) {
           title: serviceName,
           subtitle: `Failed: ${humanizeGrizzlyError(failureReason) || 'Unavailable'}`,
           amount: `₦${price.toLocaleString()}`,
-          amount_ngn: price,
+          amount_ngn: debit.ngn_debited,
+          amount_usd: debit.usd_debited,
+          external_reference: String(walletDebitId),
           status: 'failed',
           notes: rawText.slice(0, 500)
         });
@@ -952,7 +954,9 @@ async function handleOrder(req, res) {
       title: countryName ? `${serviceName} · ${countryName}` : serviceName,
       subtitle: `${countryName || ''} · waiting for SMS`.trim(),
       amount: `₦${price.toLocaleString()}`,
-      amount_ngn: price,
+      amount_ngn: debit.ngn_debited,
+      amount_usd: debit.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'pending',
       notes: orderData && (orderData.activationId || orderData.id)
         ? ('sms_order:' + String(orderData.activationId || orderData.id))
@@ -2695,7 +2699,8 @@ async function vsHandleOrder(req, res) {
         user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS',
         title: countryName ? (serviceName + ' · ' + countryName) : serviceName,
         subtitle: (countryName || '') + ' · waiting for SMS',
-        amount: `₦${price.toLocaleString()}`, amount_ngn: price,
+        amount: `₦${price.toLocaleString()}`, amount_ngn: debit.ngn_debited,
+        amount_usd: debit.usd_debited, external_reference: String(walletDebitId),
         status: 'pending',
         notes: 'sms_order:' + String(orderId),
         supplier_order: j
