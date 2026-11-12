@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
@@ -36,17 +37,11 @@ import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.j
 const BASE = 'https://api.sujandepartment.com';
 const SUJAN_KEY = process.env.SUJAN_API_KEY;
 
-/** Refund a failed purchase: returns the exact NGN and USD that the debit took (atomic, once only). */
-async function refundWallet(userId, amount) {
-  const refundAmount = Number(amount);
-  if (!userId || !Number.isFinite(refundAmount) || refundAmount <= 0) {
-    throw new Error('Invalid wallet refund arguments');
-  }
-  const { error } = await supabase.rpc('credit_balance', {
-    p_user_id: userId,
-    p_amount: refundAmount
-  });
-  if (error) throw new Error(error.message || 'Wallet refund failed');
+/** Refund only the exact debit that funded this order. */
+async function refundWallet(userId, debitId) {
+  const refund = await refundWalletDebit(supabase, userId, debitId);
+  if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
+  return refund;
 }
 
 const supabase = createClient(
@@ -421,6 +416,8 @@ async function handleOrder(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+  let walletDebitId = null;
+  let debitResult = null;
     if (external_order_id) {
       const existing = await findExistingLogOrder(user_id, external_order_id);
       if (existing) {
@@ -542,7 +539,7 @@ async function handleOrder(req, res) {
     // 2. User balance
     let { data: profile, error: profErr } = await supabase
       .from('profiles')
-      .select('balance, customer_id')
+      .select('balance, balance_usd, customer_id')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -559,6 +556,7 @@ async function handleOrder(req, res) {
         full_name: name,
         customer_id,
         balance: 0,
+        balance_usd: 0,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
       if (upErr) {
@@ -567,7 +565,7 @@ async function handleOrder(req, res) {
       }
       const again = await supabase
         .from('profiles')
-        .select('balance, customer_id')
+        .select('balance, balance_usd, customer_id')
         .eq('id', user_id)
         .maybeSingle();
       profile = again.data;
@@ -582,23 +580,20 @@ async function handleOrder(req, res) {
       return res.status(400).json({ success: false, message: 'This product has no price set yet' });
     }
 
-    // 3. Debit: NGN wallet first, then USD wallet at 1450 (atomic)
-    const { data: debit, error: deductErr } = await supabase
-      .rpc('debit_balance_if_sufficient', { p_user_id: user_id, p_amount: total })
-      .single();
-    if (deductErr) {
-      return res.status(500).json({ success: false, message: 'Could not debit your balance. Please try again.' });
-    }
-    if (!debit || !debit.success) {
+    // 3. Central atomic debit: NGN first, USD for the remainder.
+    debitResult = await debitWallet(supabase, user_id, total);
+    if (!debitResult.ok) {
       return res.status(402).json({
         success: false,
-        message: 'Insufficient combined wallet balance',
+        message: debitResult.message || 'Insufficient combined wallet balance.',
         required: total,
-        available: Number(debit?.new_balance || 0)
+        balance_ngn: debitResult.balance_ngn,
+        balance_usd: debitResult.balance_usd
       });
     }
-    const newBalance = Number(debit.new_balance);
-    const newBalanceUsd = Number(debit.new_balance_usd || 0);
+    walletDebitId = debitResult.wallet_debit_id;
+    const newBalance = debitResult.balance_ngn;
+    const newBalanceUsd = debitResult.balance_usd;
     deducted = true;
 
     // 4. Call Sujan Department
@@ -617,7 +612,7 @@ async function handleOrder(req, res) {
 
     // 5. Supplier failed → refund
     if (!supplierRes.ok || orderData.success === false) {
-      await refundWallet(user_id, total);
+      await refundWallet(user_id, walletDebitId);
 
       await supabase.from('transactions').insert({
         user_id,
@@ -684,6 +679,7 @@ async function handleOrder(req, res) {
       description: (product.display_description || product.description || '').trim() || null,
       quantity: items.length || qty,
       amount: total,
+      wallet_debit_id: walletDebitId,
       status: 'completed',
       login_credentials: combinedCreds,
       login_credentials_raw: combinedRaw,
@@ -702,7 +698,9 @@ async function handleOrder(req, res) {
       title: productName,
       subtitle: `Qty: ${qty} · Sujan Department`,
       amount: `₦${total.toLocaleString()}`,
-      amount_ngn: total,
+      amount_ngn: debitResult.ngn_debited,
+      amount_usd: debitResult.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'completed',
       product_details: detailsText,
       supplier_order: orderData.data || orderData
@@ -756,6 +754,7 @@ async function handleOrder(req, res) {
         total_amount: total,
         new_balance: newBalance,
         new_balance_usd: newBalanceUsd,
+        wallet_debit_id: walletDebitId,
         order_id: orderRef,
         supplier_order_id: supplierOrderId,
         source: 'sujandepartment'
