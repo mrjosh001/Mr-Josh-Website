@@ -852,7 +852,7 @@ async function smsUpdatePoolPrice(body) {
  */
 async function smsBulkReprice(body) {
   const mode = body.mode === 'all' ? 'all' : 'unpriced_only';
-  const usdToNgn = Number(process.env.USD_TO_NGN_RATE) || 1500;
+  const usdToNgn = 1450;
 
   // Manual overrides are off-limits in every mode — this is what makes
   // bulk reprice behave like the daily sync, which already never touches
@@ -2033,9 +2033,7 @@ async function getOverviewStats(body) {
   let endAt = range.endAt;
   // Prefer USD_TO_NGN_RATE, fall back to USD_TO_NGN (same rate used when pricing numbers)
   const usdToNgn =
-    Number(process.env.USD_TO_NGN_RATE) ||
-    Number(process.env.USD_TO_NGN) ||
-    1500;
+    1450;
 
   let logsQuery = supabase.from('orders')
     .select('amount, quantity, product_key, product_code, product_name, product_id, status')
