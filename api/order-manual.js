@@ -551,7 +551,8 @@ export default async function handler(req, res) {
     try {
       if (claimedRows.length) await releaseClaims(claimedRows);
       if (deducted) {
-        await supabase.rpc('credit_balance', { p_user_id: user_id, p_amount: total });
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
         await supabase.from('transactions').insert({
           user_id,
           customer_id: customerId,
