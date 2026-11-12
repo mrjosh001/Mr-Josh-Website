@@ -612,7 +612,7 @@ async function handleOrder(req, res) {
 
     // 5. Supplier failed → refund
     if (!supplierRes.ok || orderData.success === false) {
-      await refundWallet(user_id, walletDebitId);
+      const refund = await refundWallet(user_id, walletDebitId);
 
       await supabase.from('transactions').insert({
         user_id,
@@ -622,7 +622,9 @@ async function handleOrder(req, res) {
         title: productName,
         subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: debitResult.ngn_debited,
+        amount_usd: debitResult.usd_debited,
+        external_reference: String(walletDebitId),
         status: 'failed',
         notes: JSON.stringify(orderData)
       });
@@ -635,7 +637,9 @@ async function handleOrder(req, res) {
         title: 'Automatic Refund',
         subtitle: 'Sujan Department order failed – balance restored',
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: refund.ngn_restored,
+        amount_usd: refund.usd_restored,
+        external_reference: String(walletDebitId),
         status: 'refunded'
       });
 
@@ -765,7 +769,7 @@ async function handleOrder(req, res) {
 
     if (deducted) {
       try {
-        await refundWallet(user_id, walletDebitId);
+        const refund = await refundWallet(user_id, walletDebitId);
 
         await supabase.from('transactions').insert({
           user_id,
@@ -775,7 +779,9 @@ async function handleOrder(req, res) {
           title: 'Automatic Refund',
           subtitle: `System error – ${err.message}`,
           amount: `₦${total.toLocaleString()}`,
-          amount_ngn: total,
+          amount_ngn: refund.ngn_restored,
+          amount_usd: refund.usd_restored,
+          external_reference: String(walletDebitId),
           status: 'refunded',
           notes: err.message
         });
