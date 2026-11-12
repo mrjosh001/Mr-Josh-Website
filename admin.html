@@ -1404,7 +1404,6 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   <div id="vsRentMobileCards" class="mobile-only mobile-cards"></div>
  </div>
  </div>
- </div>
 
  <div id="tab-users" class="tab-content">
  <div class="metrics">
@@ -3304,7 +3303,7 @@ async function syncVirtualSmsRentals(){
   if(p)p.textContent=d.message+' · New '+d.inserted+' · Updated '+d.updated+(d.errors?.length?' · '+d.errors.join(' | '):'');
   showAdminToast(d.message||'VirtualSMS sync finished',d.errors?.length?'error':'success');await loadVirtualSmsRentPlans();
  }catch(e){if(p)p.textContent=e.message||'Sync failed';showAdminToast(e.message||'Sync failed','error');}
- finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS Rental');}
+ finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS');}
 }
 async function editVirtualSmsRentPrice(id,current){
  const next=prompt('MJ HUB selling price in NGN for this exact service and duration',String(current||0));if(next===null)return;
