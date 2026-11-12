@@ -2884,7 +2884,7 @@ export default async function handler(req, res) {
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        await supabase.from('profiles').update({ balance: originalBalance }).eq('id', auth.userId);
+        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         if (code === 50109 || /expired/i.test(msg)) {
@@ -2939,6 +2939,7 @@ export default async function handler(req, res) {
           service_id: String(project_id),
           country_id: String(country_id),
           price,
+          wallet_debit_id: debit.wallet_debit_id,
           status: 'waiting_for_code'
         };
         ({ error: insertErr } = await supabase.from('number_orders').insert(slim));
@@ -3151,7 +3152,10 @@ export default async function handler(req, res) {
           expire_at: d.expire_at,
           keep_at: d.keep_at,
           price,
-          new_balance: bal - price,
+          new_balance: debit.balance_ngn,
+          new_balance_usd: debit.balance_usd,
+          ngn_debited: debit.ngn_debited,
+          usd_debited: debit.usd_debited,
           source: 'smsbus_rent'
         }
       });
@@ -3406,38 +3410,29 @@ export default async function handler(req, res) {
       }
 
       const refundAmount = Math.round(Number(row.price) || 0);
-      if (refundAmount > 0) {
-        const { error: credErr } = await supabase.rpc('credit_balance', {
-          p_user_id: auth.userId,
-          p_amount: refundAmount
+      const refund = refundAmount > 0
+        ? await refundWalletDebit(supabase, auth.userId, row.wallet_debit_id)
+        : { ok: true };
+      if (!refund.ok) {
+        console.error('[rent_cancel] exact wallet refund failed', refund.error || refund.message);
+        return json(res, 500, {
+          success: false,
+          message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
         });
-        if (credErr) {
-          console.error('[rent_cancel] credit_balance', credErr.message);
-          // Provider cancel succeeded — leave status refunded, support can fix wallet
-          return json(res, 500, {
-            success: false,
-            message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
-          });
-        }
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('customer_id')
-            .eq('id', auth.userId)
-            .maybeSingle();
-          await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile && profile.customer_id,
-            type: 'refund',
-            category: 'MJ SMS',
-            title: 'Rental cancelled — balance restored',
-            subtitle: String(row.phone_number || order_id),
-            amount: `₦${refundAmount.toLocaleString()}`,
-            amount_ngn: refundAmount,
-            status: 'completed'
-          });
-        } catch (_) {}
       }
+      try {
+        const { data: profile } = await supabase.from('profiles')
+          .select('customer_id').eq('id', auth.userId).maybeSingle();
+        await supabase.from('transactions').insert({
+          user_id: auth.userId, customer_id: profile?.customer_id,
+          type: 'refund', category: 'MJ SMS',
+          title: 'Rental cancelled — balance restored',
+          subtitle: String(row.phone_number || order_id),
+          amount: `₦${refundAmount.toLocaleString()}`,
+          amount_ngn: refund.ngn_restored || refundAmount,
+          status: 'completed'
+        });
+      } catch (_) {}
 
       await notifyUserPush(
         auth.userId,
