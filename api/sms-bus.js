@@ -2316,6 +2316,7 @@ export default async function handler(req, res) {
           service_name: serviceName || 'SMS',
           country_name: countryName || null,
           price,
+          wallet_debit_id: debit.wallet_debit_id,
           status: 'waiting_for_code',
           source: 'smsbus',
           is_reusable: !!wantReuse
@@ -2334,7 +2335,9 @@ export default async function handler(req, res) {
             title: serviceName,
             subtitle: `OTP · ${phone || requestId}`,
             amount: `₦${price.toLocaleString()}`,
-            amount_ngn: price,
+            amount_ngn: debit.ngn_debited,
+            amount_usd: debit.usd_debited,
+            external_reference: String(debit.wallet_debit_id),
             status: 'pending',
             notes: `order_id:${requestId}`
           });
