@@ -1534,7 +1534,9 @@ export default async function handler(req, res) {
         title: productName,
         subtitle: `Failed: ${orderData.message || orderData.code || 'Supplier error'}`,
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: debit.ngn_debited,
+        amount_usd: debit.usd_debited,
+        external_reference: String(walletDebitId),
         status: 'failed',
         notes: JSON.stringify(orderData)
       });
@@ -1548,7 +1550,9 @@ export default async function handler(req, res) {
         title: 'Automatic Refund',
         subtitle: 'Order failed at supplier – balance restored',
         amount: `₦${total.toLocaleString()}`,
-        amount_ngn: total,
+        amount_ngn: refund.ngn_restored,
+        amount_usd: refund.usd_restored,
+        external_reference: String(walletDebitId),
         status: 'refunded'
       });
 
@@ -1616,7 +1620,9 @@ export default async function handler(req, res) {
       title: productName,
       subtitle: `Qty: ${safeQty}`,
       amount: `₦${total.toLocaleString()}`,
-      amount_ngn: total,
+      amount_ngn: debit.ngn_debited,
+      amount_usd: debit.usd_debited,
+      external_reference: String(walletDebitId),
       status: 'completed',
       product_details: detailsText,
       supplier_order: orderData.data
@@ -1699,7 +1705,9 @@ export default async function handler(req, res) {
           title: 'Automatic Refund',
           subtitle: `System error – ${err.message}`,
           amount: `₦${total.toLocaleString()}`,
-          amount_ngn: total,
+          amount_ngn: refund.ngn_restored,
+          amount_usd: refund.usd_restored,
+          external_reference: String(walletDebitId),
           status: 'refunded',
           notes: err.message
         });
