@@ -1353,12 +1353,23 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
 
 <div id="tab-sms-gotsms" class="tab-content">
- <div class="panel">
+ <div class="panel" style="margin-bottom:14px;">
+  <div class="panel-title" style="margin-bottom:10px;">USA Rental Catalogue</div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+   <label for="usaRentalSupplierSelect" style="font-size:12px;font-weight:700;color:var(--muted);">View supplier</label>
+   <select id="usaRentalSupplierSelect" onchange="setUsaRentalSupplierView(this.value)" style="min-width:170px;max-width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font:inherit;">
+    <option value="gotsms">GotSMS</option>
+    <option value="virtualsms">VirtualSMS</option>
+   </select>
+   <button class="btn btn-primary btn-sm" id="btnSyncGotsms" onclick="syncGotsmsNow()"><i class="fas fa-sync"></i> Sync GotSMS</button>
+   <button class="btn btn-primary btn-sm" id="btnSyncVsRent" onclick="syncVirtualSmsRentals()"><i class="fas fa-sync"></i> Sync VirtualSMS</button>
+  </div>
+ </div>
+ <div class="panel" id="usaRentGotsmsPanel">
  <div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
  <span>USA Physical Rental (GotSMS)</span>
  </div>
  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
- <button class="btn btn-primary btn-sm" id="btnSyncGotsms" onclick="syncGotsmsNow()"><i class="fas fa-sync"></i> Sync GotSMS</button>
  <button class="btn btn-ghost btn-sm" onclick="loadGotsmsServices()"><i class="fas fa-list"></i> Refresh list</button>
  </div>
  <p id="gotsmsSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 14px;min-height:16px;"></p>
@@ -1373,12 +1384,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div id="gotsmsMobileCards" class="mobile-only mobile-cards"></div>
  </div>
- <div class="panel" style="margin-top:16px;">
+ <div class="panel" id="usaRentVirtualPanel" style="margin-top:16px;display:none;">
   <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-   <span>USA Platform Rental (VirtualSMS)</span><small style="color:var(--muted)">Separate from Server 3 OTP</small>
+   <span>USA Platform Rental (VirtualSMS)</span><small style="color:var(--muted)">Platform Rental · USA only</small>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;">
-   <button class="btn btn-primary btn-sm" id="btnSyncVsRent" onclick="syncVirtualSmsRentals()"><i class="fas fa-sync"></i> Sync VirtualSMS Rental</button>
    <button class="btn btn-ghost btn-sm" onclick="loadVirtualSmsRentPlans()"><i class="fas fa-list"></i> Refresh plans</button>
    <button class="btn btn-ghost btn-sm" id="btnSetupVsRentWebhook" onclick="setupVirtualSmsRentWebhook()"><i class="fas fa-bell"></i> Setup inbox webhook</button>
    <button class="btn btn-ghost btn-sm" id="btnTestVsRentWebhook" onclick="testVirtualSmsRentWebhook()"><i class="fas fa-vial"></i> Test inbox webhook</button>
@@ -1392,6 +1402,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
    <tbody id="vsRentTableBody"><tr><td colspan="8" class="empty-state">Click Sync VirtualSMS Rental to import USA Platform Rental plans.</td></tr></tbody></table>
   </div>
   <div id="vsRentMobileCards" class="mobile-only mobile-cards"></div>
+ </div>
  </div>
  </div>
 
@@ -2527,7 +2538,7 @@ function renderSupplierBalance(prefix, result) {
  if (!valueEl || !subEl) return;
 
  if (!result || result.ok === false) {
- valueEl.textContent = ' ';
+ valueEl.textContent = '—';
  valueEl.style.color = '#f87171';
  subEl.textContent = result?.error ? ('Error: ' + result.error) : 'Could not fetch';
  subEl.title = result?.raw || '';
@@ -2606,6 +2617,20 @@ async function bulkRepriceNumbers(mode) {
 
 
 // ---------- GotSMS USA rental (catalog in number_services source=gotsms) ----------
+function setUsaRentalSupplierView(value, shouldLoad) {
+ const selected = value === 'virtualsms' ? 'virtualsms' : 'gotsms';
+ const picker = document.getElementById('usaRentalSupplierSelect');
+ const gt = document.getElementById('usaRentGotsmsPanel');
+ const vs = document.getElementById('usaRentVirtualPanel');
+ if (picker && picker.value !== selected) picker.value = selected;
+ if (gt) gt.style.display = selected === 'gotsms' ? '' : 'none';
+ if (vs) vs.style.display = selected === 'virtualsms' ? '' : 'none';
+ if (shouldLoad !== false) {
+  if (selected === 'virtualsms') loadVirtualSmsRentPlans();
+  else loadGotsmsServices();
+ }
+}
+
 window._gotsmsRows = [];
 
 
@@ -7414,8 +7439,7 @@ function switchTab(name) {
  loadNumberServices();
  }
  if (name === 'sms-gotsms') {
- try { if (typeof loadGotsmsServices === 'function') loadGotsmsServices(); } catch (e) {}
-  try { if (typeof loadVirtualSmsRentPlans === 'function') loadVirtualSmsRentPlans(); } catch (e) {}
+  try { setUsaRentalSupplierView(document.getElementById('usaRentalSupplierSelect')?.value || 'gotsms'); } catch (e) {}
  }
  // initLdNumTab() removed from here — it called /api/logsdomain-numbers,
  // which no longer exists (replaced by api/sms-bus.js). The working
