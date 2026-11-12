@@ -566,35 +566,33 @@ async function loadPlans(){
     if(body) body.innerHTML='<div class="empty">Choose a service again to load its rental plans.</div>';
     return;
   }
-  var j={success:true,data:[]};
+  var j={success:true,data:[]},gotPlansError='';
   try{
-    if(!vsRentPlans.length) await refreshVirtualSmsCatalog();
+    // Refresh the local VirtualSMS catalogue on every service selection so a
+    // recent admin sync is visible immediately, even when GotSMS has no plan.
+    await refreshVirtualSmsCatalog();
     var results=await Promise.all([
-      selectedService.gotsms_id ? api('plans',{query:'service_id='+encodeURIComponent(selectedService.gotsms_id)+'&per_page=100&include_unavailable=1'}) : Promise.resolve({success:true,data:[]}),
+      selectedService.gotsms_id
+        ? api('plans',{query:'service_id='+encodeURIComponent(selectedService.gotsms_id)+'&per_page=100&include_unavailable=1'}).catch(function(e){return{success:false,message:e&&e.message||'GotSMS plans unavailable'};})
+        : Promise.resolve({success:true,data:[]}),
       selectedService.gotsms_id ? loadCarriers() : Promise.resolve()
     ]);
     j=results[0];
   }catch(err){
-    plans=[];
-    if(body) body.innerHTML='<div class="empty">Plans could not be reached just now. Check your connection and try again.<br><button type="button" class="btn-buy" id="retryPlansBtn" style="margin-top:12px">Try again</button></div>';
-    var retry=document.getElementById('retryPlansBtn');
-    if(retry) retry.onclick=loadPlans;
-    return;
+    gotPlansError=String(err&&err.message||err||'GotSMS plans unavailable');
   }
-  if(!j||j.success===false){
-    plans=[];
-    if(body) body.innerHTML='<div class="empty">'+(j&&j.message?String(j.message):'Could not load plans. Please try again.')+'<br><button type="button" class="btn-buy" id="retryPlansBtn" style="margin-top:12px">Try again</button></div>';
-    var retry=document.getElementById('retryPlansBtn');
-    if(retry) retry.onclick=loadPlans;
-    return;
-  }
-  plans=(Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms'},p);});
+  plans=(j&&j.success&&Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms'},p);});
+  if(j&&j.success===false)gotPlansError=String(j.message||'GotSMS plans unavailable');
   if(!multiMode){
     var vsCode=String(selectedService.vs_service_id||'');
     var vsName=normSvcName(selectedService.name);
     vsRentPlans.filter(function(p){return (vsCode&&String(p.service_id)===vsCode)||normSvcName(p.service_name)===vsName;}).forEach(function(p){
       plans.push({id:'vsrent:'+p.id,db_id:p.id,source:'virtualsms_rent',service_id:p.service_id,duration_hours:Number(p.duration_hours),duration_type:'day',duration_in_type:Number(p.duration_hours)/24,duration_translation:p.duration_label||({24:'1 day',72:'3 days',168:'7 days'}[Number(p.duration_hours)]),price_ngn:Number(p.price_ngn||0),price_usd:Number(p.supplier_price_usd||0),supplier_price_usd:Number(p.supplier_price_usd||0),is_available:p.is_available===true,stock_count:Number(p.stock_count||0),service_name:p.service_name});
     });
+  }
+  if(!plans.length&&gotPlansError){
+    if(body)body.innerHTML='<div class="empty">Plans could not be reached just now. Please try again.<br><button type="button" class="btn-buy" id="retryPlansBtn" style="margin-top:12px">Try again</button></div>';
+    var retry=document.getElementById('retryPlansBtn');if(retry)retry.onclick=loadPlans;return;
   }
   var order={min:0,hour:1,day:2,week:3,month:4,year:5};
   plans.sort(function(a,b){var da=order[a.duration_type]??9,db=order[b.duration_type]??9;if(da!==db)return da-db;return(a.duration_in_type||0)-(b.duration_in_type||0);});
