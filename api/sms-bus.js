@@ -4,7 +4,8 @@ import { applyMarkup } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
 import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
-import { debitWallet, refundWalletDebit, WALLET_USD_RATE } from '../lib/wallet.js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
+import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
@@ -746,8 +747,7 @@ function gotsmsAddonsNgn({ area_code, cellular_carrier_id } = {}) {
 }
 
 function gotsmsSellPriceNgn(supplierUsd) {
-  const rate =
-    1450;
+  const rate = WALLET_USD_RATE;
   const pct = Number(process.env.GOTSMS_MARKUP_PERCENT) || 80;
   const minProfit = Number(process.env.MIN_PROFIT_NGN) || 500;
   const minSale = Number(process.env.MIN_NUMBER_PRICE_NGN) || 1000;
