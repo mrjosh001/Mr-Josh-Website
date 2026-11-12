@@ -1381,6 +1381,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
    <button class="btn btn-primary btn-sm" id="btnSyncVsRent" onclick="syncVirtualSmsRentals()"><i class="fas fa-sync"></i> Sync VirtualSMS Rental</button>
    <button class="btn btn-ghost btn-sm" onclick="loadVirtualSmsRentPlans()"><i class="fas fa-list"></i> Refresh plans</button>
    <button class="btn btn-ghost btn-sm" id="btnSetupVsRentWebhook" onclick="setupVirtualSmsRentWebhook()"><i class="fas fa-bell"></i> Setup inbox webhook</button>
+   <button class="btn btn-ghost btn-sm" id="btnTestVsRentWebhook" onclick="testVirtualSmsRentWebhook()"><i class="fas fa-vial"></i> Test inbox webhook</button>
   </div>
   <p id="vsRentSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 12px;min-height:16px;"></p>
   <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
@@ -12889,6 +12890,14 @@ async function setupVirtualSmsRentWebhook(){
   const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Webhook setup failed');showAdminToast(d.message||'VirtualSMS inbox webhook ready','success');
  }catch(e){showAdminToast(e.message||'Webhook setup failed','error');}
  finally{setBtnBusy(btn,false,'<i class="fas fa-bell"></i> Setup inbox webhook');}
+}
+
+async function testVirtualSmsRentWebhook(){
+ const btn=document.getElementById('btnTestVsRentWebhook');setBtnBusy(btn,true,'Testing…');
+ try{const h=await authHeaders(),r=await fetch('/api/sms-bus?action=vsrent_test_webhook',{method:'POST',headers:Object.assign({},h||{}, {'Content-Type':'application/json'}),body:'{}'});
+  const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Webhook test failed');showAdminToast(d.message||'Test event sent','success');
+ }catch(e){showAdminToast(e.message||'Webhook test failed','error');}
+ finally{setBtnBusy(btn,false,'<i class="fas fa-vial"></i> Test inbox webhook');}
 }
 
 async function loadSupplierBalances() {
