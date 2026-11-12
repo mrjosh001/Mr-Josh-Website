@@ -178,6 +178,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   });
   const params = new URLSearchParams(location.search);
   const rentId = params.get('rent_id') || '';
+  const isVsRent = String(params.get('source')||'').toLowerCase()==='virtualsms_rent';
   let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false, syncBusy = false, pollCount = 0;
   const LOCKED = '<p class="refund-locked">Cancel unavailable — a message was already received on this number.</p>';
 
@@ -261,7 +262,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   async function api(action, opts){
     opts = opts || {};
     var h = await headers(); if(!h) return { success:false, message:'Not signed in' };
-    var url = '/api/sms-bus?action=gotsms_'+action + (opts.query ? '&'+opts.query : '');
+    var url = '/api/sms-bus?action='+(isVsRent?'vsrent_':'gotsms_')+action + (opts.query ? '&'+opts.query : '');
     var r = await fetch(url, { method: opts.method||'GET', headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
     try { return await r.json(); } catch(e){ return { success:false, message:'Bad response' }; }
   }
@@ -333,7 +334,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
     var st = computeState();
     var active = st.active;
-    var canCancel = active && !hasReceivedCode;
+    var withinRefundWindow = !!(rent && rent.created_at && Date.now()-new Date(rent.created_at).getTime()<=20*60*1000);
+    var canCancel = active && !hasReceivedCode && (!isVsRent || withinRefundWindow);
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
     var ph = splitPhone(rent.phone || rent.number);
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
@@ -369,7 +371,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '</div>'+
         /* 2. primary actions */
         '<div class="n3-two">'+
-          (active ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
+          (active && !isVsRent ? '<button type="button" class="n3-btn n3-primary" id="btnWake"><i class="fa-solid fa-bolt"></i> Wake up</button>' : '')+
           '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(active ? '' : 'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>'+
         '</div>'+
         '<div class="flash" id="flash"></div>'+
@@ -377,10 +379,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '<div class="more"><div class="n3-lab">More options</div><div class="more-body">'+
           (active && !st.terminal ?
             '<div class="n3-two">'+
-              (isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service</button>'))+
-              (isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>'))+
+              (isVsRent||isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnAddService"><i class="fa-solid fa-plus"></i> Add service</button>'))+
+              (isVsRent||isMultiPack?'':('<button type="button" class="n3-btn n3-ghost n3-sm" id="btnSwitchPlan"><i class="fa-solid fa-arrow-right-arrow-left"></i> Switch plan</button>'))+
             '</div>' : '')+
-          (active ?
+          (active && !isVsRent ?
             '<div class="toggle"><div><div class="t-title">Auto-renew</div><div class="t-hint" id="autoRenewHint">'+
               (renewPrice>0 ? 'Charges ₦'+renewPrice.toLocaleString()+' from your wallet when this period ends.' : 'Renews from your wallet when this period ends.')+
             '</div></div><label class="switch"><input type="checkbox" id="autoRenew" '+(autoOn?'checked':'')+'><span class="slider"></span></label></div>' : '')+
@@ -488,7 +490,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     btn.textContent = 'Cancelling…';
     var j;
     try {
-      j = await api('refund', { method:'POST', body:{ rent_id: rentId } });
+      j = await api(isVsRent?'cancel':'refund', { method:'POST', body:{ rent_id: rentId } });
     } catch (e) {
       j = { success:false, message: e && e.message ? e.message : 'Network error. Please try again.' };
     } finally {
@@ -567,12 +569,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var box = document.getElementById('inbox');
     if(!box) return;
     var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
+    if(isVsRent && j && j.rental){rent=Object.assign({},rent||{},j.rental,{source:'virtualsms_rent',id:rentId,service:{name:j.rental.service_name}});}
     var list = Array.isArray(j.data) ? j.data : [];
     var countEl = document.getElementById('messageCount');
     if (countEl) countEl.textContent = list.length + (list.length === 1 ? ' message' : ' messages');
     var hadCode = hasReceivedCode;
     // Any inbound SMS (code or body) counts as "used" for the cancel lock
-    hasReceivedCode = !!(rent && rent.sms_completed) || list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
+    hasReceivedCode = !!(rent && (rent.sms_completed || rent.sms_received)) || list.some(function(m){ return !!(m && (String(m.code||'').trim() || String(m.body||'').trim())); });
     if(hasReceivedCode && rent) rent.sms_completed = true;
     if(hasReceivedCode && rent && !computeState().active){
       var completedBadge = document.getElementById('statusBadge');
@@ -585,7 +588,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
     if(hasReceivedCode && !hadCode){
       // Tell history page / DB this rental got SMS (pending -> completed)
-      try{ api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){}); }catch(e){}
+      if(!isVsRent){try{ api('mark_sms', { method:'POST', body:{ rent_id: rentId } }).catch(function(){}); }catch(e){}}
       var slot = document.getElementById('refundSlot');
       if(slot && rent && !rent.refunded && computeState().active) slot.innerHTML = LOCKED;
     }
@@ -745,7 +748,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }
     pollCount++;
     loadMessages();
-    if(pollCount % 3 === 0) syncRentState();
+    if(!isVsRent && pollCount % 3 === 0) syncRentState();
   }
   document.addEventListener('visibilitychange', function(){
     if(!document.hidden && rent && computeState().active){ loadMessages(); syncRentState(); }
@@ -756,8 +759,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       document.getElementById('main').innerHTML = '<div class="empty">Missing rental. <a href="mj-sms-usa-rent.html">Rent a number</a></div>';
       return;
     }
-    // Try live supplier state first, but do not make the rental screen depend on that endpoint.
-    // The user's saved order record is a fallback so a temporary supplier outage cannot blank the page.
+    if(isVsRent){
+      try{var v=await api('messages',{query:'rent_id='+encodeURIComponent(rentId)});if(v&&v.success&&v.rental){rent=Object.assign({},v.rental,{source:'virtualsms_rent',id:rentId,service:{name:v.rental.service_name},sms_completed:!!v.rental.sms_received});hasReceivedCode=!!v.rental.sms_received;}}
+      catch(e){console.warn('[MJ VirtualSMS rental] inbox load failed',e);}
+    }else{
+    // GotSMS live supplier state with saved-order fallback.
     try {
       var j = await api('rents', { query: 'status=active&rent_id='+encodeURIComponent(rentId) });
       var activeRows = Array.isArray(j && j.data) ? j.data : [];
@@ -827,6 +833,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         }
       }
     } catch(_){}
+    }
     try {
       render();
     } catch(err){
