@@ -1,5 +1,4 @@
 /**
-import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
  * /api/classy — ClassyTee Logs supplier, ONE file (same pattern as /api/sujan).
  *
  *   GET  /api/classy            → sync categories + products into Supabase
@@ -17,6 +16,7 @@ import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
