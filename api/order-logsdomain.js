@@ -527,7 +527,8 @@ export default async function handler(req, res) {
     });
 
     if (items.length) {
-      for (const item of items) {
+      for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+        const item = items[itemIndex];
         const rawDetails = String(item.details || '').trim();
         const row = {
           order_id: supplierOrderId,
@@ -539,6 +540,7 @@ export default async function handler(req, res) {
           description: (product.display_description || product.description || '').trim() || null,
           quantity: 1,
           amount: product.price,
+          wallet_debit_id: itemIndex === 0 ? walletDebitId : null,
           status: 'completed',
           login_credentials: formatCredentials(rawDetails, productName) || rawDetails,
           login_credentials_raw: rawDetails || null,
