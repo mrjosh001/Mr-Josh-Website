@@ -45,12 +45,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 label.f{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 6px}
 input.f,select.f{width:100%;padding:13px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font:600 14px inherit;appearance:none;-webkit-appearance:none}
 select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
-.plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.plan-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .plan{border:1.5px solid var(--border);border-radius:12px;padding:10px 8px;cursor:pointer;background:var(--bg);text-align:center;min-width:0}
 .plan.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);background:var(--primary-glow)}
 .plan.sold-out{opacity:.55;cursor:not-allowed;border-style:dashed;background:var(--card);box-shadow:none}
 .plan .stock-status{display:block;margin-top:5px;font-size:10px;font-weight:900;letter-spacing:.04em;color:var(--danger);text-transform:uppercase}
-.plan .dur{font-weight:800;font-size:12px;line-height:1.2;word-break:break-word}
+.plan .supplier{display:block;font-size:10px;font-weight:800;letter-spacing:.02em;color:var(--muted);margin-bottom:5px}.plan .dur{font-weight:800;font-size:12px;line-height:1.2;word-break:break-word}
 .plan-recommendation{display:block;width:max-content;max-width:100%;margin:0 auto 6px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:9px;font-weight:900;letter-spacing:.05em;line-height:1.2}
 .plan .price{font-weight:800;font-size:13px;color:var(--primary);margin-top:4px}
 .qty{display:flex;align-items:center;gap:12px}
@@ -280,7 +280,7 @@ function buildQuotedTotalNgn(){
 }
 
 const POPULAR=['whatsapp','telegram','google','facebook','instagram','tiktok','twitter','x','discord','paypal','amazon','apple','microsoft'];
-const CACHE_KEY='mj_usa_rent_services_v3';
+const CACHE_KEY='mj_usa_rent_services_v4';
 const CACHE_TTL_MS=2*24*60*60*1000;
 
 const SERVICE_DOMAIN={
@@ -619,7 +619,7 @@ async function loadPlans(){
   }catch(err){
     gotPlansError=String(err&&err.message||err||'GotSMS plans unavailable');
   }
-  plans=(j&&j.success&&Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms'},p);});
+  plans=(j&&j.success&&Array.isArray(j.data)?j.data:[]).map(function(p){return Object.assign({source:'gotsms',supplier:'GotSMS'},p);});
   if(j&&j.success===false)gotPlansError=String(j.message||'GotSMS plans unavailable');
   if(!multiMode){
     var vsCode=String(selectedService.vs_service_id||'');
@@ -687,7 +687,7 @@ function renderDetailForm(){
     var isOneDay=String(p.duration_type||'').toLowerCase().replace(/s$/,'')==='day' && Number(p.duration_in_type)===1;
     if(!isOneDay) isOneDay=/\b1\s*day\b/i.test(String(p.duration_translation||p.name||''));
     var recommended=isWhatsAppOnly && isOneDay;
-    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><span class="supplier">'+esc(p.supplier||(p.source==='virtualsms_rent'?'VirtualSMS':'GotSMS'))+'</span>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any carrier</option>';
   if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
