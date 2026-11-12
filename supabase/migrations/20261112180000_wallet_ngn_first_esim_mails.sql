@@ -118,4 +118,39 @@ begin
   'wallet_debit_id',v_debit_id,'balance',v_balance,'balance_usd',v_balance_usd);
 end;
 $function$;
+create or replace function public.mj_mail_refund_purchase(
+ p_order_id uuid,p_user_id uuid,p_reason text default 'supplier_cancelled'
+) returns jsonb language plpgsql security definer set search_path=public as $function$
+declare
+ v_order public.mj_mail_orders%rowtype; v_debit public.wallet_debits%rowtype;
+ v_balance numeric; v_balance_usd numeric;
+begin
+ select * into v_order from public.mj_mail_orders where id=p_order_id and user_id=p_user_id for update;
+ if not found then raise exception 'MAIL_ORDER_NOT_FOUND'; end if;
+ if v_order.refunded then
+  select balance,balance_usd into v_balance,v_balance_usd from public.profiles where id=p_user_id;
+  return jsonb_build_object('refunded',false,'already_refunded',true,'balance',v_balance,'balance_usd',v_balance_usd);
+ end if;
+ if nullif(btrim(coalesce(v_order.message,'')),'') is not null
+  or nullif(btrim(coalesce(v_order.value,'')),'') is not null
+  or v_order.status in ('message_received','completed') then raise exception 'MAIL_ALREADY_DELIVERED'; end if;
+ if v_order.status not in ('creating','failed','reconciliation_required','cancel_pending_refund','cancelled','refunded') then raise exception 'MAIL_REFUND_NOT_CONFIRMED'; end if;
+ if v_order.wallet_debit_id is null then raise exception 'MAIL_WALLET_DEBIT_NOT_FOUND'; end if;
+ select * into v_debit from public.wallet_debits where id=v_order.wallet_debit_id and user_id=p_user_id for update;
+ if not found or v_debit.refunded then raise exception 'MAIL_DEBIT_ALREADY_REVERSED'; end if;
+ update public.wallet_debits set refunded=true where id=v_debit.id and not refunded;
+ if not found then raise exception 'MAIL_DEBIT_ALREADY_REVERSED'; end if;
+ update public.profiles set balance=coalesce(balance,0)+coalesce(v_debit.ngn_amt,0),
+  balance_usd=coalesce(balance_usd,0)+coalesce(v_debit.usd_amt,0),updated_at=now()
+ where id=p_user_id returning balance,balance_usd into v_balance,v_balance_usd;
+ if not found then raise exception 'PROFILE_NOT_FOUND'; end if;
+ update public.mj_mail_orders set refunded=true,status='refunded',updated_at=now() where id=p_order_id and user_id=p_user_id;
+ insert into public.transactions(user_id,type,category,title,subtitle,amount,status,amount_ngn,amount_usd,currency,external_reference,meta)
+ values(p_user_id,'deposit','deposit','MJ Mails Refund',left(coalesce(p_reason,'Supplier cancellation'),180),
+  '₦'||to_char(v_order.retail_price_ngn,'FM999,999,999,990.00'),'completed',
+  coalesce(v_debit.ngn_amt,0),coalesce(v_debit.usd_amt,0),'NGN','MJMAIL-REFUND-'||p_order_id::text,
+  jsonb_build_object('source','mj_mails','mail_order_id',p_order_id,'wallet_debit_id',v_debit.id));
+ return jsonb_build_object('refunded',true,'already_refunded',false,'balance',v_balance,'balance_usd',v_balance_usd,
+  'ngn_refunded',coalesce(v_debit.ngn_amt,0),'usd_refunded',coalesce(v_debit.usd_amt,0),'wallet_debit_id',v_debit.id);
+end;$function$;
 commit;
