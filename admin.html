@@ -3254,6 +3254,7 @@ function filterVirtualSmsRentPlans(){
    edit.onclick=()=>editVirtualSmsRentPrice(r.id,Number(r.price_ngn||0));actions.appendChild(edit);
    const hide=document.createElement('button');hide.className='btn btn-ghost btn-sm';hide.style.marginLeft='5px';
    hide.textContent=r.admin_hidden?'Show':'Hide';hide.onclick=()=>toggleVirtualSmsRentPlan(r.id,!r.admin_hidden);actions.appendChild(hide);
+   const auto=document.createElement('button');auto.className='btn btn-ghost btn-sm';auto.style.marginLeft='5px';auto.textContent='Auto';auto.title='Reset to automatic markup';auto.onclick=()=>resetVirtualSmsRentPrice(r.id);actions.appendChild(auto);
    tbody.appendChild(tr);
   }
   if(cards){
@@ -3264,6 +3265,7 @@ function filterVirtualSmsRentPlans(){
    const sell=document.createElement('div');sell.style.fontWeight='800';sell.textContent='Sell ₦'+Number(r.price_ngn||0).toLocaleString()+(r.price_source==='admin'?' · Admin':'');card.appendChild(sell);
    const edit=document.createElement('button');edit.className='btn btn-ghost btn-sm';edit.textContent='Edit price';edit.onclick=()=>editVirtualSmsRentPrice(r.id,Number(r.price_ngn||0));card.appendChild(edit);
    const hide=document.createElement('button');hide.className='btn btn-ghost btn-sm';hide.style.marginLeft='6px';hide.textContent=r.admin_hidden?'Show':'Hide';hide.onclick=()=>toggleVirtualSmsRentPlan(r.id,!r.admin_hidden);card.appendChild(hide);
+   const auto=document.createElement('button');auto.className='btn btn-ghost btn-sm';auto.style.marginLeft='6px';auto.textContent='Auto';auto.onclick=()=>resetVirtualSmsRentPrice(r.id);card.appendChild(auto);
    cards.appendChild(card);
   }
  });
@@ -3285,6 +3287,12 @@ async function editVirtualSmsRentPrice(id,current){
  try{const h=await authHeaders(),r=await fetch('/api/sms-bus?action=vsrent_admin_price',{method:'POST',headers:Object.assign({},h||{}, {'Content-Type':'application/json'}),body:JSON.stringify({id,price_ngn:price})});
   const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Price update failed');showAdminToast('VirtualSMS plan price saved','success');await loadVirtualSmsRentPlans();
  }catch(e){showAdminToast(e.message||'Price update failed','error');}
+}
+async function resetVirtualSmsRentPrice(id){
+ if(!confirm('Reset this exact service and duration to automatic VirtualSMS markup?'))return;
+ try{const h=await authHeaders(),r=await fetch('/api/sms-bus?action=vsrent_admin_price',{method:'POST',headers:Object.assign({},h||{}, {'Content-Type':'application/json'}),body:JSON.stringify({id,reset:true})});
+  const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Could not reset price');showAdminToast('Automatic markup restored','success');await loadVirtualSmsRentPlans();
+ }catch(e){showAdminToast(e.message||'Price reset failed','error');}
 }
 async function toggleVirtualSmsRentPlan(id,hidden){
  try{const h=await authHeaders(),r=await fetch('/api/sms-bus?action=vsrent_admin_hide',{method:'POST',headers:Object.assign({},h||{}, {'Content-Type':'application/json'}),body:JSON.stringify({id,hidden})});
