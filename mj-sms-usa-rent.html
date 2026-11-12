@@ -32,10 +32,17 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .svc-logo{width:48px;height:48px;border-radius:12px;object-fit:contain;background:#fff;padding:5px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .svc-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;background:linear-gradient(135deg,var(--primary),#1d4ed8)}
 .svc-label{font-size:10px;font-weight:700;text-align:center;line-height:1.2;max-width:100%;width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
-.sk-svc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px}
-.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px}
-.sk-svc-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
-.sk-svc-label{width:48px;height:9px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-svc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px;width:100%}
+@media(min-width:420px){.sk-svc-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.sk-svc-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px;min-width:0}
+.sk-svc-icon{width:48px;height:48px;flex-shrink:0;border-radius:12px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-svc-label{width:80%;max-width:64px;height:22px;border-radius:6px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.sk-plan{height:76px;border:1.5px solid var(--border);border-radius:12px;background:linear-gradient(90deg,rgba(148,163,184,.08),rgba(148,163,184,.18),rgba(148,163,184,.08));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
+.sk-form-label{height:10px;width:34%;border-radius:6px;margin:14px 0 7px;background:rgba(148,163,184,.18)}
+.sk-input{height:46px;border-radius:12px;border:1px solid var(--border);background:rgba(148,163,184,.08)}
+.sk-total{height:76px;border-radius:14px;margin-top:14px;background:rgba(148,163,184,.12)}
+.sk-button{height:48px;border-radius:14px;margin-top:14px;background:rgba(148,163,184,.2)}
 .sk-line{height:48px;border-radius:12px;margin-bottom:10px;background:linear-gradient(90deg,rgba(148,163,184,.12),rgba(148,163,184,.22),rgba(148,163,184,.12));background-size:200% 100%;animation:sk 1.2s ease-in-out infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .selected-service-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--primary-glow);border-radius:12px;padding:12px 14px;margin-bottom:14px}
@@ -155,6 +162,22 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
     </div>
   </div>
   <div id="svcGrid" class="sk-svc-grid" aria-busy="true">
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
+      <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
       <div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>
@@ -355,7 +378,8 @@ async function headers(){const{data:{session}}=await sb.auth.getSession();if(!se
 async function api(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};const method=(opts&&opts.method)||'GET';let url='/api/sms-bus?action=gotsms_'+encodeURIComponent(action);if(opts&&opts.query)url+='&'+opts.query;const res=await fetch(url,{method:method,headers:h,body:opts&&opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
 async function vsRentApi(action,opts){const h=await headers();if(!h)return{success:false,message:'Sign in required'};opts=opts||{};let url='/api/sms-bus?action=vsrent_'+encodeURIComponent(action);if(opts.query)url+='&'+opts.query;const res=await fetch(url,{method:opts.method||'GET',headers:h,body:opts.body?JSON.stringify(opts.body):undefined});const raw=await res.text();try{const clean=String(raw||'').replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/g,'');return clean?JSON.parse(clean):{};}catch(e){return{success:false,message:'Bad server response'};}}
 function normSvcName(n){return String(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
-async function refreshVirtualSmsCatalog(){
+async function refreshVirtualSmsCatalog(shouldRender){
+  shouldRender=shouldRender!==false;
  try{
   var j=await vsRentApi('catalog');
   if(!j||!j.success||!Array.isArray(j.data)){
@@ -383,7 +407,7 @@ async function refreshVirtualSmsCatalog(){
    byId[sid]=svc;
    if(k&&!byName[k])byName[k]=svc;
   });
-  sortServices();writeCache(allServices);renderServices();
+  sortServices();writeCache(allServices);if(shouldRender)renderServices();
   var note=document.getElementById('cacheNote');
   if(note)note.textContent='Services updated.';
   return true;
@@ -632,7 +656,7 @@ async function loadServices(){
     if(note)note.textContent=allServices.length+' services loaded from your 7-day cache.';
   }else{
     grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
-    grid.innerHTML='';for(var i=0;i<8;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
+    grid.innerHTML='';for(var i=0;i<SVC_BATCH_SIZE;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
     var r=await fetchAllServices();
     if(!r.ok){allServices=[];await refreshVirtualSmsCatalog();if(!allServices.length){grid.className='';grid.innerHTML='<div class="empty">'+esc(r.message)+'</div>';return;}renderServices();if(note)note.textContent=allServices.length+' services';return;}
     allServices=dedupeServices(r.services);writeCache(allServices);sortServices();renderServices();
@@ -682,13 +706,15 @@ async function loadCarriers(){
 }
 async function loadPlans(){
   var body=document.getElementById('detailBody');
-  if(body) body.innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
+  if(body) body.innerHTML='<div class="sk-plan-grid"><div class="sk-plan"></div><div class="sk-plan"></div><div class="sk-plan"></div></div><div class="sk-form-label"></div><div class="sk-input"></div><div class="sk-form-label"></div><div class="sk-input"></div><div class="sk-total"></div><div class="sk-button"></div>';
   // Load live carriers from supplier in parallel with plans
   if(!selectedService || !selectedService.id){
     plans=[];
     if(body) body.innerHTML='<div class="empty">Choose a service again to load its rental plans.</div>';
     return;
   }
+  // Recheck live stock whenever a service is opened, not only when the page first loads.
+  if(!multiMode && selectedService.vs_service_id) await refreshVirtualSmsCatalog(false);
   var j={success:true,data:[]},gotPlansError='';
   try{
     // The combined GotSMS + VirtualSMS catalogue is cached for seven days.
