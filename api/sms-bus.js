@@ -2166,7 +2166,7 @@ export default async function handler(req, res) {
           .eq('idempotency_key', clientIdem)
           .maybeSingle();
         if (existing && existing.order_id) {
-          const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', auth.userId).maybeSingle();
+          const { data: balRow } = await supabase.from('profiles').select('balance, balance_usd').eq('id', auth.userId).maybeSingle();
           return json(res, 200, {
             success: true,
             replayed: true,
@@ -2176,6 +2176,7 @@ export default async function handler(req, res) {
               phone_number: existing.phone_number,
               price: existing.price != null ? Number(existing.price) : price,
               new_balance: Number(balRow?.balance || 0),
+            new_balance_usd: Number(balRow?.balance_usd || 0),
               service_name: existing.service_name || serviceName,
               country_name: existing.country_name || countryName,
               source: 'smsbus',
