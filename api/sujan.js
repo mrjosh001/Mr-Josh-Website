@@ -765,7 +765,7 @@ async function handleOrder(req, res) {
 
     if (deducted) {
       try {
-        await refundWallet(user_id, total);
+        await refundWallet(user_id, walletDebitId);
 
         await supabase.from('transactions').insert({
           user_id,
