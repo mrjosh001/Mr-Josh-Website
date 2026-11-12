@@ -407,7 +407,7 @@ async function refreshVirtualSmsCatalog(shouldRender){
    byId[sid]=svc;
    if(k&&!byName[k])byName[k]=svc;
   });
-  sortServices();writeCache(allServices);if(shouldRender)renderServices();
+  sortServices();writeCache(allServices,false);if(shouldRender)renderServices();
   var note=document.getElementById('cacheNote');
   if(note)note.textContent='Services updated.';
   return true;
@@ -419,18 +419,15 @@ async function refreshVirtualSmsCatalog(shouldRender){
  }
 }
 
+var serviceListFromCache=false;
 function readCache(){try{var raw=localStorage.getItem(CACHE_KEY);if(!raw)return null;var o=JSON.parse(raw);if(!o||!Array.isArray(o.services)||!Array.isArray(o.vsPlans)||!o.ts)return null;if(Date.now()-o.ts>CACHE_TTL_MS)return null;return o;}catch(e){return null;}}
-function writeCache(services){
+function writeCache(services,refreshTtl){
  try{
-  // Persist the service list immediately, even if the VirtualSMS rental
-  // catalogue has not loaded yet. The catalogue is merged into this cache
-  // when its request completes.
+  var previous=null;
+  try{previous=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');}catch(_){}
   var plans=Array.isArray(vsRentPlans)?vsRentPlans:[];
-  localStorage.setItem(CACHE_KEY,JSON.stringify({
-   ts:Date.now(),
-   services:dedupeServices(services||[]),
-   vsPlans:plans
-  }));
+  var ts=refreshTtl===false&&previous&&Number(previous.ts)>0?Number(previous.ts):Date.now();
+  localStorage.setItem(CACHE_KEY,JSON.stringify({ts:ts,services:dedupeServices(services||[]),vsPlans:plans}));
  }catch(e){console.warn('[MJ services cache] Could not save local cache',e&&e.message||e);}
 }
 
@@ -454,21 +451,27 @@ async function fetchAllServices(search){
   // Fetch the first page immediately to discover the catalogue size.
   var first=await api('services',{query:pageQuery(1)});
   if(!first||!first.success)return{ok:false,message:first&&first.message||'Could not load services'};
-  var collected=Array.isArray(first.data)?first.data.slice():[];
-  var last=Math.max(1,Math.min(30,Number(first.meta&&first.meta.last_page)||1));
-  // Fetch remaining pages in small concurrent batches instead of waiting
-  // for every supplier page sequentially. Small batches avoid request bursts.
+  if(!Array.isArray(first.data))return{ok:false,message:'The service catalogue returned an invalid page.'};
+  var collected=first.data.slice();
+  var last=Math.max(1,Number(first.meta&&first.meta.last_page)||1);
+  if(last>100)return{ok:false,message:'The service catalogue is larger than the supported page limit. No partial list was cached.'};
+  // Fetch every supplier page. A failed page invalidates the entire refresh,
+  // so an incomplete catalogue is never saved as a complete seven-day cache.
   for(var base=2;base<=last;base+=4){
     var tasks=[];
     for(var page=base;page<Math.min(base+4,last+1);page++){
-      tasks.push(api('services',{query:pageQuery(page)}).catch(function(){return{success:false,data:[]};}));
+      tasks.push(api('services',{query:pageQuery(page)}).catch(function(e){return{success:false,message:e&&e.message||'Page request failed'};}));
     }
     var pages=await Promise.all(tasks);
-    pages.forEach(function(j){
-      if(j&&j.success&&Array.isArray(j.data))collected=collected.concat(j.data);
-    });
+    for(var i=0;i<pages.length;i++){
+      var result=pages[i];
+      if(!result||!result.success||!Array.isArray(result.data))return{ok:false,message:'Could not load every service page. Your existing cached catalogue was kept.'};
+      collected=collected.concat(result.data);
+    }
   }
-  return{ok:true,services:dedupeServices(collected)};
+  var unique=dedupeServices(collected);
+  if(!unique.length)return{ok:false,message:'The supplier returned an empty service catalogue.'};
+  return{ok:true,services:unique};
 }
 function sortServices(){
   allServices.sort(function(a,b){
@@ -650,11 +653,13 @@ async function loadServices(){
   var note=document.getElementById('cacheNote');
   var cached=readCache();
   if(cached&&cached.services.length){
+    serviceListFromCache=true;
     allServices=dedupeServices(cached.services);
     vsRentPlans=Array.isArray(cached.vsPlans)?cached.vsPlans:[];
     sortServices();renderServices();
     if(note)note.textContent=allServices.length+' services loaded from your 7-day cache.';
   }else{
+    serviceListFromCache=false;
     grid.className='sk-svc-grid';grid.setAttribute('aria-busy','true');
     grid.innerHTML='';for(var i=0;i<SVC_BATCH_SIZE;i++)grid.innerHTML+='<div class="sk-svc-tile"><div class="sk-svc-icon"></div><div class="sk-svc-label"></div></div>';
     var r=await fetchAllServices();
@@ -682,7 +687,7 @@ function openDetail(){
     if(logo) nameEl.innerHTML='<img class="mini-logo" src="'+esc(logo)+'" alt="" onerror="this.style.display=\'none\'">'+esc(nm);
     else nameEl.textContent=nm;
   }
-  document.getElementById('detailBody').innerHTML='<div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>';
+  document.getElementById('detailBody').innerHTML='<div class="sk-plan-grid"><div class="sk-plan"></div><div class="sk-plan"></div><div class="sk-plan"></div></div><div class="sk-form-label"></div><div class="sk-input"></div><div class="sk-form-label"></div><div class="sk-input"></div><div class="sk-total"></div><div class="sk-button"></div>';
   selectedPlan=null;qty=1;loadPlans();
 }
 document.getElementById('changeServiceBtn').onclick=function(){
@@ -713,8 +718,7 @@ async function loadPlans(){
     if(body) body.innerHTML='<div class="empty">Choose a service again to load its rental plans.</div>';
     return;
   }
-  // Recheck live stock whenever a service is opened, not only when the page first loads.
-  if(!multiMode && selectedService.vs_service_id) await refreshVirtualSmsCatalog(false);
+  // Live stock is refreshed once during page load; do not refetch the full catalogue on each service selection.
   var j={success:true,data:[]},gotPlansError='';
   try{
     // The combined GotSMS + VirtualSMS catalogue is cached for seven days.
