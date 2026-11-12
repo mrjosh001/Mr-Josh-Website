@@ -532,7 +532,8 @@ return res.status(200).json({
         total_amount: total,
         new_balance: newBalance,
         new_balance_usd: newBalanceUsd,
-        ngn_debited: Number(profile.balance || 0) - newBalance,
+        ngn_debited: debit.ngn_debited,
+        usd_debited: debit.usd_debited,
         wallet_debit_id: walletDebitId,
         order_id: orderRef,
         supplier_order_id: supplierOrderId,
@@ -554,7 +555,9 @@ return res.status(200).json({
           title: 'Automatic Refund',
           subtitle: 'System error – ' + (err.message || 'classy'),
           amount: '₦' + total.toLocaleString(),
-          amount_ngn: total,
+          amount_ngn: refund.ngn_restored,
+          amount_usd: refund.usd_restored,
+          external_reference: String(walletDebitId),
           status: 'refunded',
           notes: String(err.message || err)
         });
