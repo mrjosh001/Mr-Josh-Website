@@ -1795,25 +1795,21 @@ async function getSmmkingsBalance() {
 
 
 async function getVirtualsmsBalance() {
-  const apiKey = process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY;
+  // VirtualSMS Platform Rental and OTP share the same prepaid wallet.
+  // Use the documented modern REST balance route, not the legacy handler.
+  const apiKey = String(process.env.VIRTUALSMS_API_KEY || process.env.VIRTUAL_SMS_API_KEY || '').trim();
   if (!apiKey) return { ok: false, error: 'Missing VIRTUALSMS_API_KEY' };
-  const base = String(process.env.VIRTUALSMS_BASE_URL || 'https://virtualsms.io/stubs/handler_api.php').trim();
   try {
-    const qs = new URLSearchParams({ api_key: apiKey, action: 'getBalance' });
-    const r = await fetch(base + (base.includes('?') ? '&' : '?') + qs.toString(), {
-      signal: AbortSignal.timeout(15000)
+    const r = await fetch('https://virtualsms.io/api/v1/customer/balance', {
+      method: 'GET',
+      headers: { 'X-API-Key': apiKey, Accept: 'application/json' },
+      signal: AbortSignal.timeout(6000)
     });
-    const text = (await r.text()).trim();
-    if (text.startsWith('ACCESS_BALANCE:')) {
-      const balance = Number(text.split(':')[1]);
-      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'getBalance' };
-    }
-    if (text === 'BAD_KEY') return { ok: false, error: 'VIRTUALSMS_API_KEY was rejected' };
-    if (/^-?\d+(\.\d+)?$/.test(text)) {
-      const balance = Number(text);
-      if (Number.isFinite(balance)) return { ok: true, balance, currency: 'USD', source_url: 'plain' };
-    }
-    return { ok: false, error: ('Unexpected reply: ' + text).slice(0, 120) };
+    const data = await r.json().catch(() => ({}));
+    const balance = data?.balance ?? data?.data?.balance ?? data?.balance_usd;
+    if (!r.ok || data?.success === false) return { ok: false, error: data?.message || data?.error || ('HTTP ' + r.status) };
+    if (balance == null || !Number.isFinite(Number(balance))) return { ok: false, error: 'Balance field missing from VirtualSMS response' };
+    return { ok: true, balance: Number(balance), currency: 'USD', source_url: '/api/v1/customer/balance' };
   } catch (err) {
     return { ok: false, error: String(err.message || err).slice(0, 160) };
   }
@@ -1893,23 +1889,38 @@ async function getBulkmailBalance() {
 }
 
 async function supplierBalancesFetch() {
+  // Balance cards must never wait on the slowest provider indefinitely.
+  // All suppliers are requested concurrently; each result is isolated and
+  // capped so one stalled upstream cannot block every other balance card.
+  const safeBalance = async (name, task, timeoutMs = 6500) => {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(task).catch((e) => ({ ok: false, error: String(e?.message || e).slice(0, 180) })),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve({ ok: false, error: 'Timed out after ' + Math.round(timeoutMs / 1000) + 's' }), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
   const [fadded, logsdomain, grizzly, sujan, owlet, classy, smsbus, gotsms, bulkmail, jap, smmkings, casper, virtualsms, herosms, accszone] = await Promise.all([
-
-    getFaddedBalance(),
-    getLogsDomainBalance(),
-    getGrizzlyBalance(),
-    getSujanBalance(),
-    fetchOwletBalance(),
-    getClassyBalance(),
-    getSmsBusBalance(),
-    getGotsmsBalance(),
-    getBulkmailBalance(),
-    getJapBalance(),
-    getSmmkingsBalance(),
-    getCasperBalance(),
-    getVirtualsmsBalance(),
-    getHerosmsBalance(),
-    getAccszoneBalance()
+    safeBalance('Fadded', getFaddedBalance),
+    safeBalance('LogsDomain', getLogsDomainBalance),
+    safeBalance('Grizzly', getGrizzlyBalance),
+    safeBalance('Sujan', getSujanBalance),
+    safeBalance('Owlet', fetchOwletBalance),
+    safeBalance('Classy', getClassyBalance),
+    safeBalance('SMS-Bus', getSmsBusBalance),
+    safeBalance('GotSMS', getGotsmsBalance),
+    safeBalance('BulkMail', getBulkmailBalance),
+    safeBalance('JAP', getJapBalance),
+    safeBalance('SMMKings', getSmmkingsBalance),
+    safeBalance('Casper', getCasperBalance),
+    safeBalance('VirtualSMS', getVirtualsmsBalance),
+    safeBalance('HeroSMS', getHerosmsBalance),
+    safeBalance('AccsZone', getAccszoneBalance)
   ]);
   return {
     status: 200,
