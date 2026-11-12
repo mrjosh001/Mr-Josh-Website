@@ -360,7 +360,7 @@ async function refreshVirtualSmsCatalog(){
   var j=await vsRentApi('catalog');
   if(!j||!j.success||!Array.isArray(j.data)){
    var note=document.getElementById('cacheNote');
-   if(note)note.textContent='VirtualSMS catalogue could not load'+(j&&j.message?': '+String(j.message).slice(0,90):'');
+   if(note)note.textContent='Some plans are temporarily unavailable. Please refresh.';
    console.warn('[VirtualSMS catalogue]',j&&j.message||'Invalid catalogue response');
    return false;
   }
@@ -385,12 +385,12 @@ async function refreshVirtualSmsCatalog(){
   });
   sortServices();writeCache(allServices);renderServices();
   var note=document.getElementById('cacheNote');
-  if(note)note.textContent=allServices.length+' services · '+Object.keys(byId).length+' VirtualSMS services · '+vsRentPlans.length+' rental plans';
+  if(note)note.textContent='Services updated.';
   return true;
  }catch(e){
   console.warn('VirtualSMS rental catalogue unavailable',e&&e.message||e);
   var note=document.getElementById('cacheNote');
-  if(note)note.textContent='VirtualSMS catalogue could not load. Please refresh.';
+  if(note)note.textContent='Some plans are temporarily unavailable. Please refresh.';
   return false;
  }
 }
@@ -455,7 +455,7 @@ function paintServices(list){
   grid.querySelectorAll('.svc-tile').forEach(function(tile){
     tile.onclick=function(){
       var svc=allServices.find(function(x){return String(x.id)===String(tile.getAttribute('data-id'));})||{id:tile.getAttribute('data-id'),name:tile.getAttribute('data-name')};
-      if(multiMode){if(svc.vs_service_id&&!svc.gotsms_id){showRentToast('VirtualSMS Platform Rental is single-service only. Turn off multi-pack to use it.',false);return;}toggleMultiService(svc);return;}
+      if(multiMode){if(svc.vs_service_id&&!svc.gotsms_id){showRentToast('VS plans can only be purchased one at a time.',false);return;}toggleMultiService(svc);return;}
       selectedService=svc;
       openDetail();
     };
@@ -528,7 +528,7 @@ function renderServices(){
       var still=allServices.filter(function(s){return String(s.name||'').toLowerCase().indexOf(ql)>=0;});
       paintServices(still);
       var note=document.getElementById('cacheNote');
-      if(note) note.textContent=allServices.length+' services';
+      if(note) note.textContent='Services updated.';
     },350);
   }
 }
@@ -687,7 +687,7 @@ function renderDetailForm(){
     var isOneDay=String(p.duration_type||'').toLowerCase().replace(/s$/,'')==='day' && Number(p.duration_in_type)===1;
     if(!isOneDay) isOneDay=/\b1\s*day\b/i.test(String(p.duration_translation||p.name||''));
     var recommended=isWhatsAppOnly && isOneDay;
-    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><span class="supplier">'+esc(p.supplier||(p.source==='virtualsms_rent'?'VirtualSMS':'GotSMS'))+'</span>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><span class="supplier">'+(p.source==='virtualsms_rent'?'VS':'GS')+'</span>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any carrier</option>';
   if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
@@ -786,7 +786,7 @@ async function confirmRentAvailability(){
   if(!selectedPlan||!selectedService){if(err)err.textContent='Select a duration first.';return false;}
   if(selectedPlan.source==='virtualsms_rent'){
     var live=vsRentPlans.find(function(p){return String(p.service_id)===String(selectedPlan.service_id)&&Number(p.duration_hours)===Number(selectedPlan.duration_hours);});
-    if(!live||live.is_available===false||live.admin_hidden===true){if(err)err.textContent='This VirtualSMS plan is no longer listed. Refresh the catalogue.';return false;}
+    if(!live||live.is_available===false||live.admin_hidden===true){if(err)err.textContent='This VS plan is no longer available. Refresh and try again.';return false;}
     // Stock is confirmed by the supplier's create-rental API at checkout.
     return true;
   }
@@ -1103,7 +1103,7 @@ async function doRent(){
         renderDetailForm();updateTotal();
       }
       unlockFail();
-      showRentToast('VirtualSMS price changed. Review the updated price and confirm again.',false);
+      showRentToast('VS price changed. Review the updated price and confirm again.',false);
       return;
     }
     if(!j || !j.success){
