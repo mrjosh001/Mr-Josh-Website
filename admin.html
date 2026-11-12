@@ -3543,6 +3543,7 @@ function smsProfitHtml(p) {
 function smsSrcKey(s) {
   s = String(s || '').toLowerCase().trim();
   if (s.indexOf('grizzly') > -1) return 'grizzlysms';
+  if (s.indexOf('virtualsms_rent') > -1) return 'virtualsms_rent';
   if (s.indexOf('virtualsms') > -1 || s.indexOf('vsms') > -1) return 'virtualsms';
   if (s.indexOf('gotsms') > -1) return 'gotsms';
   if (s.indexOf('smsbus_rent') > -1 || s.indexOf('sms_bus_rent') > -1) return 'smsbus_rent';
@@ -3556,7 +3557,7 @@ function smsOrderSold(o) {
   const st = String(o.status || '').toLowerCase();
   if (o.refunded === true || ['cancelled', 'canceled', 'refunded', 'failed', 'expired'].indexOf(st) > -1) return false;
   const src = smsSrcKey(o.source);
-  if (src === 'gotsms' || src === 'smsbus_rent') {
+  if (src === 'gotsms' || src === 'smsbus_rent' || src === 'virtualsms_rent') {
     // Rentals only count as sold once an SMS landed (or explicitly completed)
     if (typeof adminRentReceivedSms === 'function') return adminRentReceivedSms(o);
     return /sms\s*received/i.test(String(o.service_name || '')) || st === 'completed' || st === 'complete' || st === 'success';
