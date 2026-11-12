@@ -4177,13 +4177,24 @@ export default async function handler(req, res) {
           return json(res, 400, { success: false, message: 'Invalid rental price. Refresh and try again.' });
         }
 
-        const debit = await debitWalletStrict(auth.userId, totalNgn, 'gotsms_rent_bulk');
-        if (!debit.ok) {
-          return json(res, 400, {
-            success: false,
-            message: debit.message || ('Need ₦' + totalNgn.toLocaleString() + ' for ' + quantity + ' number(s).')
-          });
+        const walletDebits = [];
+        for (let index = 0; index < quantity; index += 1) {
+          const unitDebit = await debitWalletStrict(auth.userId, unitNgn, 'gotsms_rent_bulk_unit_' + (index + 1));
+          if (!unitDebit.ok) {
+            for (const previous of walletDebits) {
+              await refundWalletDebit(supabase, auth.userId, previous.wallet_debit_id);
+            }
+            return json(res, 402, {
+              success: false,
+              message: unitDebit.message || 'Insufficient combined wallet balance.',
+              required: totalNgn,
+              balance_ngn: unitDebit.balance_ngn,
+              balance_usd: unitDebit.balance_usd
+            });
+          }
+          walletDebits.push(unitDebit);
         }
+        const debit = walletDebits[0];
         const profile = { id: auth.userId, balance: debit.balance_before, customer_id: debit.customer_id };
 
         const payload = { plan_id, quantity };
@@ -4194,15 +4205,17 @@ export default async function handler(req, res) {
         const rentedList = Array.isArray(g.data?.data) ? g.data.data : [];
         const rented = Number(g.data?.meta?.rented || rentedList.length || 0);
         if (!g.ok || rented < 1) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: totalNgn }); } catch (_) {}
+          for (const unitDebit of walletDebits) await refundWalletDebit(supabase, auth.userId, unitDebit.wallet_debit_id);
           return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'No numbers available') });
         }
         if (rented < quantity) {
-          try { await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: unitNgn * (quantity - rented) }); } catch (_) {}
+          for (const unitDebit of walletDebits.slice(rented)) await refundWalletDebit(supabase, auth.userId, unitDebit.wallet_debit_id);
         }
         const charged = unitNgn * rented;
         const out = [];
-        for (const rent of rentedList) {
+        for (let rentIndex = 0; rentIndex < rentedList.length; rentIndex += 1) {
+          const rent = rentedList[rentIndex];
+          const unitDebit = walletDebits[rentIndex];
           const oid = await gotsmsSaveOrder({
             userId: auth.userId,
             customerId: profile.customer_id,
@@ -4216,7 +4229,8 @@ export default async function handler(req, res) {
             activeTill: rent.active_till,
             planLabel: plan?.duration_translation,
             carrierName: body.carrier_name || null,
-            areaCode: body.area_code || null
+            areaCode: body.area_code || null,
+            walletDebitId: unitDebit?.wallet_debit_id
           });
           out.push({ ...gotsmsPublicRent(rent), order_id: oid, price_ngn: unitNgn });
           await gotsmsRecordPurchaseTx({
