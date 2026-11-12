@@ -792,7 +792,7 @@ async function handleOrder(req, res) {
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
       if (existing && existing.order_id) {
-        const { data: balRow } = await supabase.from('profiles').select('balance').eq('id', user_id).maybeSingle();
+        const { data: balRow } = await supabase.from('profiles').select('balance, balance_usd').eq('id', user_id).maybeSingle();
         return res.status(200).json({
           success: true,
           replayed: true,
@@ -805,6 +805,7 @@ async function handleOrder(req, res) {
             country_name: existing.country_name || countryName,
             price: existing.price != null ? Number(existing.price) : price,
             new_balance: Number(balRow?.balance || 0),
+            new_balance_usd: Number(balRow?.balance_usd || 0),
             created_at: existing.created_at || new Date().toISOString()
           }
         });
