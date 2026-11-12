@@ -2196,33 +2196,17 @@ export default async function handler(req, res) {
         }
       } catch (_) {}
 
-      const originalBalance = bal;
-      let newBalance = bal;
-      // Fail closed on RPC errors. Never call the supplier if the wallet debit
-      // could not be positively confirmed.
-      const { data: debited, error: debErr } = await supabase.rpc('debit_balance_if_sufficient', {
-        p_user_id: auth.userId,
-        p_amount: price
-      });
-      if (debErr) {
-        console.error('[sms-bus order] debit_balance_if_sufficient', debErr.message);
-        return json(res, 500, {
-          success: false,
-          message: 'Could not verify your wallet debit safely. Please try again.'
-        });
-      }
-      const debitRow = Array.isArray(debited) ? debited[0] : debited;
-      if (!isDebitOk(debited, null)) {
+      const debit = await debitWallet(supabase, auth.userId, price);
+      if (!debit.ok) {
         return json(res, 402, {
           success: false,
-          message: 'Insufficient balance',
+          message: debit.message || 'Insufficient combined wallet balance.',
           required: price,
-          available: Number(debitRow?.new_balance ?? bal),
-          available_usd: Number(debitRow?.new_balance_usd ?? balUsd)
+          balance_ngn: debit.balance_ngn,
+          balance_usd: debit.balance_usd
         });
       }
-      newBalance = Number(debitRow?.new_balance ?? bal - Number(debitRow?.ngn_debited || 0));
-
+      const newBalance = debit.balance_ngn;
       const params = {
         country_id: String(country_id),
         project_id: String(project_id)
@@ -2235,8 +2219,8 @@ export default async function handler(req, res) {
       } catch (e) {
         // The supplier request outcome is ambiguous after a network failure.
         // Attempt only the idempotent refund RPC; never overwrite a wallet snapshot.
-        const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
-        if (restoreErr) console.error('[sms-bus order] ambiguous supplier result; refund reconciliation needed:', restoreErr.message);
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        if (!refund.ok) console.error('[sms-bus order] ambiguous supplier result; exact refund requires review:', refund.error || refund.message);
         return json(res, 502, { success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', message: 'The supplier did not confirm the result. Check your order history before trying again, or contact support.' });
       }
 
@@ -2265,8 +2249,8 @@ export default async function handler(req, res) {
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
         // Restore only through the idempotent wallet RPC. Never reset a profile
         // snapshot: that could overwrite concurrent deposits or purchases.
-        const { error: restoreErr } = await supabase.rpc('credit_balance', { p_user_id: auth.userId, p_amount: price });
-        if (restoreErr) console.error('[sms-bus order] wallet restore requires reconciliation:', restoreErr.message);
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        if (!refund.ok) console.error('[sms-bus order] exact wallet refund requires reconciliation:', refund.error || refund.message);
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         if (code === 50201 || /balance not enough/i.test(msg)) {
@@ -2297,6 +2281,7 @@ export default async function handler(req, res) {
         service_name: serviceName,
         phone_number: phone,
         price,
+        wallet_debit_id: debit.wallet_debit_id,
         // Supplier cost in USD — admin overview converts with USD_TO_NGN_RATE
         supplier_price: costUsd > 0 ? costUsd : null,
         currency: 'NGN',
