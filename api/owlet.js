@@ -84,8 +84,8 @@ function normalizePanelSource(src) {
 function isCustomerSource(src) {
   return CUSTOMER_SOURCES.includes(normalizePanelSource(src));
 }
-/** JAP rates are USD. $1 → ₦1500 (override with USD_TO_NGN_RATE). */
-const USD_TO_NGN = Number(process.env.USD_TO_NGN_RATE) || 1500;
+/** JAP rates are USD. $1 → ₦1450, matching the wallet conversion rate. */
+const USD_TO_NGN = 1450;
 /** Flat ₦ buffer added on top of converted cost before markup. */
 const COST_BUFFER_NGN = Math.max(0, Number(process.env.BOOSTER_COST_BUFFER_NGN) || 1000);
 
