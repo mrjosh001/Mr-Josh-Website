@@ -5482,7 +5482,7 @@ async function saveProduct() {
  errEl.textContent = 'Shared products need the content every buyer will receive.';
  return;
  }
- if (body.is_shared) {
+ if (body.is_shared && !isBulkMailProduct) {
  // Shared listings: no fake 99999 stock. Null/omitted = unlimited when available.
  if (body.is_available) body.stock_quantity = null;
  else body.stock_quantity = 0;
@@ -5505,7 +5505,7 @@ async function saveProduct() {
  const data = await res.json();
 
  if (!res.ok || !data.success) {
- errEl.textContent = (data.message || 'Save failed') + ': check Vercel env (SUPABASE_SERVICE_ROLE_KEY)';
+ errEl.textContent = data.message || 'Product save failed. Check the server logs for details.';
  showAdminToast(data.message || 'Product save failed', 'error');
  return;
  }
