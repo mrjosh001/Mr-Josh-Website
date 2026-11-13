@@ -618,7 +618,7 @@ async function handleDeliver(body, adminUser, res) {
 
   // Only the existing status column is touched, so no database migration is needed.
   const { error: updateError } = await supabase.from('esim_orders')
-    .update({ status: 'completed', email_error: null })
+    .update({ status: 'completed', email_error: null, phone_number: phone || order.phone_number || null })
     .eq('id', order.id);
   if (updateError) {
     return res.status(200).json({
@@ -679,7 +679,7 @@ export default async function handler(req, res) {
     if (String(body.action || '') === 'my_orders') {
       const { data, error } = await supabase
         .from('esim_orders')
-        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,wallet_debit_id,status,created_at,customer_email')
+        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,wallet_debit_id,status,created_at,customer_email,phone_number,renewed_from_order_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -688,6 +688,38 @@ export default async function handler(req, res) {
         return res.status(500).json({ success: false, message: 'Could not load your eSIM orders.' });
       }
       return res.status(200).json({ success: true, orders: data || [] });
+    }
+
+
+    // Customer refill: source price and plan are locked to the original order.
+    if (String(body.action || '') === 'renew') {
+      const orderId=String(body.order_id||'').trim(), phone=String(body.phone_number||'').trim(), requestId=String(body.request_id||'').trim();
+      if (!/^[0-9a-f-]{36}$/i.test(orderId) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId) || !/^\+?[0-9]{7,20}$/.test(phone.replace(/[\s().-]/g,''))) {
+        return res.status(400).json({success:false,message:'Enter a valid dedicated number and retry.'});
+      }
+      const {data:rpcData,error:rpcError}=await supabase.rpc('create_esim_renewal_wallet_order',{
+        p_user_id:user.id,p_order_id:orderId,p_phone_number:phone,p_request_id:requestId,p_usd_rate:WALLET_USD_RATE
+      });
+      if(rpcError){
+        const m=String(rpcError.message||'');
+        if(/INSUFFICIENT_WALLET/i.test(m))return res.status(402).json({success:false,message:'Your combined NGN and USD wallet balance is insufficient for this refill.'});
+        if(/ESIM_ORDER_NOT_FOUND/i.test(m))return res.status(404).json({success:false,message:'Original eSIM order not found.'});
+        if(/ESIM_ORDER_NOT_RENEWABLE/i.test(m))return res.status(409).json({success:false,message:'This eSIM order is not eligible for refill yet.'});
+        if(/INVALID_RENEWAL/i.test(m))return res.status(400).json({success:false,message:'The refill details are invalid.'});
+        console.error('[esim renewal] RPC failed:',m);
+        return res.status(500).json({success:false,message:'We could not confirm the wallet debit. Contact support before retrying.'});
+      }
+      const data=Array.isArray(rpcData)?rpcData[0]:rpcData;
+      if(!data?.success||!data?.order_id)return res.status(500).json({success:false,message:'The wallet did not confirm the refill. Contact support before retrying.'});
+      const [{data:profile},{data:source}]=await Promise.all([
+        supabase.from('profiles').select('balance,balance_usd').eq('id',user.id).maybeSingle(),
+        supabase.from('esim_orders').select('order_ref,plan_name,imei').eq('id',orderId).eq('user_id',user.id).maybeSingle()
+      ]);
+      await notifyUserPush(user.id,'eSIM refill confirmed',(source?.plan_name||'Your eSIM plan')+' refill is ready for processing.','/esim-orders.html','esim');
+      return res.status(200).json({success:true,order_id:data.order_id,order_ref:data.order_ref,amount_ngn:Number(data.amount_ngn),
+        phone_number:data.phone_number,plan_name:data.plan_name||source?.plan_name||'eSIM',
+        renewed_from_order_ref:data.renewed_from_order_ref||source?.order_ref,
+        wallet:{balance_ngn:Number(profile?.balance||0),balance_usd:Number(profile?.balance_usd||0),ngn_debited:Number(data.wallet_ngn_debited||0),usd_debited:Number(data.wallet_usd_debited||0)}});
     }
 
     if (String(body.action || '') === 'plans') {
