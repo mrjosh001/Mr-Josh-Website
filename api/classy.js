@@ -190,23 +190,52 @@ async function handleSync(req, res) {
   let updatedCount = 0;
   const keys = products.map((p) => 'ct_' + (p.product_id ?? p.id)).filter(Boolean);
 
-  const { data: existingRows } = await supabase
-    .from('products')
-    .select('product_key, price, is_available, category, name, admin_hidden')
-    .in('product_key', keys.length ? keys : ['__none__']);
+  // Query in small batches. Large PostgREST IN filters can exceed request limits and
+  // return HTTP 400, which previously stopped every ClassyTee sync.
+  const uniqueKeys = [...new Set(keys.map(String))];
+  const existingRows = [];
+  const suppressedRows = [];
+  const lookupBatchSize = 100;
 
-  // Permanently exclude product keys removed by an admin. Fail closed if the suppression list cannot be read.
-  const { data: suppressedRows, error: suppressionError } = await supabase
-    .from('classy_product_suppressions')
-    .select('product_key')
-    .in('product_key', keys.length ? keys : ['__none__']);
-  if (suppressionError) {
-    console.error('[classy sync] suppression lookup failed', suppressionError.message);
-    return res.status(500).json({ success: false, message: 'Could not verify ClassyTee product exclusions. Sync stopped safely.' });
+  for (let i = 0; i < uniqueKeys.length; i += lookupBatchSize) {
+    const batchKeys = uniqueKeys.slice(i, i + lookupBatchSize);
+
+    const { data: existingBatch, error: existingError } = await supabase
+      .from('products')
+      .select('product_key, price, is_available, category, name, admin_hidden')
+      .in('product_key', batchKeys);
+    if (existingError) {
+      console.error('[classy sync] existing product lookup failed', {
+        code: existingError.code,
+        message: existingError.message,
+        details: existingError.details,
+        hint: existingError.hint,
+        batch: Math.floor(i / lookupBatchSize) + 1
+      });
+      return res.status(500).json({ success: false, message: 'Could not verify existing ClassyTee products. Sync stopped safely.' });
+    }
+    existingRows.push(...(existingBatch || []));
+
+    // Permanently exclude product keys removed by an admin. Fail closed if this lookup fails.
+    const { data: suppressedBatch, error: suppressionError } = await supabase
+      .from('classy_product_suppressions')
+      .select('product_key')
+      .in('product_key', batchKeys);
+    if (suppressionError) {
+      console.error('[classy sync] suppression lookup failed', {
+        code: suppressionError.code,
+        message: suppressionError.message,
+        details: suppressionError.details,
+        hint: suppressionError.hint,
+        batch: Math.floor(i / lookupBatchSize) + 1
+      });
+      return res.status(500).json({ success: false, message: 'Could not verify ClassyTee product exclusions. Sync stopped safely.' });
+    }
+    suppressedRows.push(...(suppressedBatch || []));
   }
-  const suppressedSet = new Set((suppressedRows || []).map((r) => String(r.product_key)));
 
-  const existing = new Map((existingRows || []).map((r) => [r.product_key, r]));
+  const suppressedSet = new Set(suppressedRows.map((r) => String(r.product_key)));
+  const existing = new Map(existingRows.map((r) => [r.product_key, r]));
   (existingRows || []).forEach((r) => { if (r.admin_hidden && r.product_key) adminHiddenSet.add(String(r.product_key)); });
 
   // Log first raw product once so we can see real description field names in Vercel logs
