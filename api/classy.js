@@ -195,6 +195,17 @@ async function handleSync(req, res) {
     .select('product_key, price, is_available, category, name, admin_hidden')
     .in('product_key', keys.length ? keys : ['__none__']);
 
+  // Permanently exclude product keys removed by an admin. Fail closed if the suppression list cannot be read.
+  const { data: suppressedRows, error: suppressionError } = await supabase
+    .from('classy_product_suppressions')
+    .select('product_key')
+    .in('product_key', keys.length ? keys : ['__none__']);
+  if (suppressionError) {
+    console.error('[classy sync] suppression lookup failed', suppressionError.message);
+    return res.status(500).json({ success: false, message: 'Could not verify ClassyTee product exclusions. Sync stopped safely.' });
+  }
+  const suppressedSet = new Set((suppressedRows || []).map((r) => String(r.product_key)));
+
   const existing = new Map((existingRows || []).map((r) => [r.product_key, r]));
   (existingRows || []).forEach((r) => { if (r.admin_hidden && r.product_key) adminHiddenSet.add(String(r.product_key)); });
 
@@ -210,6 +221,7 @@ async function handleSync(req, res) {
     const pid = p.product_id ?? p.id;
     if (pid == null) continue;
     const product_key = 'ct_' + pid;
+    if (suppressedSet.has(product_key)) continue;
     const name = String(p.name || p.product_name || 'Product ' + pid).trim();
     const supplierPrice = Number(p.price || 0);
     const stock = readSupplierStock(p);
