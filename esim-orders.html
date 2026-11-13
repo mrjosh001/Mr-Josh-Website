@@ -71,6 +71,18 @@ a{color:inherit;text-decoration:none}button,input{font:inherit}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .footnote{font-size:12px;color:var(--muted);line-height:1.45;margin:6px 2px 0}
 @media (prefers-reduced-motion:reduce){.skeleton{animation:none}.toast{transition:none}}
+
+#renewModal{display:none;position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.72);padding:16px;align-items:center;justify-content:center}
+#renewModal.open{display:flex}.renew-dialog{width:min(100%,480px);max-height:90dvh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);padding:20px}
+.renew-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.renew-head h2{font-size:19px;margin:0}
+.renew-close{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text)}
+.renew-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px}
+.renew-row span{color:var(--muted)}.renew-row strong{text-align:right;overflow-wrap:anywhere}
+.renew-field{display:block;margin:16px 0 8px;font-size:12px;color:var(--muted);font-weight:700}
+.renew-input{width:100%;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);color:var(--text);font-size:16px}
+.renew-hint{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0 14px}
+.renew-actions{display:flex;gap:9px;margin-top:16px}.renew-actions .btn{flex:1;justify-content:center;padding:12px}
+.renew-price{font-size:23px;font-weight:850;color:var(--accent)}.renew-error{font-size:12px;color:#ef4444;min-height:18px;margin-top:8px}
 </style>
   <script src="/js/mj-pull-refresh.js" defer></script>
 </head>
@@ -97,7 +109,16 @@ a{color:inherit;text-decoration:none}button,input{font:inherit}
   <div id="list" aria-live="polite"><div class="skeleton"></div></div>
   <p class="footnote">Expiry is estimated from plan length after order date (or delivery when available). Your QR email is the activation source of truth.</p>
 </main>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="renewModal" aria-hidden="true"><section class="renew-dialog" role="dialog" aria-modal="true" aria-labelledby="renewTitle">
+<div class="renew-head"><h2 id="renewTitle">Renew eSIM plan</h2><button class="renew-close" type="button" id="renewClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+<div id="renewDetails"></div><label class="renew-field" for="renewPhone">Dedicated phone number</label>
+<input class="renew-input" id="renewPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Enter your eSIM number">
+<p class="renew-hint">Enter the dedicated number assigned to this eSIM. Check it carefully before continuing.</p>
+<div id="renewPreview" hidden></div><div class="renew-error" id="renewError" role="alert"></div>
+<div class="renew-actions"><button class="btn" type="button" id="renewCancel">Cancel</button><button class="btn primary" type="button" id="renewNext">Preview refill</button></div>
+</section></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -239,7 +260,7 @@ function planCard(o) {
     '<article class="esim" data-key="' + esc(keyOf(o)) + '" data-ref="' + esc(o.order_ref || '') + '">' +
       '<div class="plan-hero"><div class="hero-top">' +
         '<div class="hero-row"><span>My Plan</span>' +
-          (renew ? '<button class="renew" type="button" onclick="location.href=\'esim.html\'">Renew plan</button>' : '') + '</div>' +
+          (renew ? '<button class="renew" type="button" data-renew="' + esc(keyOf(o)) + '">Renew plan</button>' : '') + '</div>' +
         '<h2><small>' + label + ' | ' + esc(p.period) + '</small>' + esc(name) + '</h2></div>' +
         '<div class="strip">' + esc(strip) + '</div></div>' +
       '<div class="usage">' +
@@ -249,7 +270,7 @@ function planCard(o) {
         '<div class="details">' +
           '<div>Reference<b>' + esc(o.order_ref || '—') +
             '<button class="copy-ref" type="button" data-copy="' + esc(o.order_ref || '') + '" aria-label="Copy reference"><i class="fa-regular fa-copy"></i></button></b></div>' +
-          '<div>IMEI<b>' + esc(o.imei || '—') + '</b></div>' +
+          '<div>IMEI<b>' + esc(o.imei || '—') + '</b></div><div>Dedicated number<b>' + esc(o.phone_number || 'Not saved') + '</b></div>' +
           '<div>Ordered<b>' + esc(fmtDate(o.created_at)) + '</b></div>' +
           '<div>Amount<b>' + esc(ngn(o.wallet_ngn_debited || o.amount_ngn)) + '</b></div>' +
         '</div>' +
@@ -394,6 +415,51 @@ document.addEventListener('click', async (e) => {
     showToast('Could not copy');
   }
 });
+
+let renewalOrder=null, renewalPreview=false, renewalBusy=false;
+const WA_SUPPORT_NUMBER='2347026502927';
+function closeRenewModal(){ $('renewModal').classList.remove('open');$('renewModal').setAttribute('aria-hidden','true');renewalOrder=null;renewalPreview=false;renewalBusy=false;$('renewError').textContent='';$('renewPreview').hidden=true;$('renewPhone').disabled=false;$('renewNext').disabled=false;$('renewNext').textContent='Preview refill'; }
+function openRenewModal(order){
+ renewalOrder=order;renewalPreview=false;
+ $('renewDetails').innerHTML='<div class="renew-row"><span>Original order</span><strong>'+esc(order.order_ref||'—')+'</strong></div><div class="renew-row"><span>Plan and network</span><strong>'+esc(order.plan_name||order.plan_id||'eSIM')+'</strong></div><div class="renew-row"><span>IMEI</span><strong>'+esc(order.imei||'—')+'</strong></div><div class="renew-row"><span>Original purchase price</span><strong class="renew-price">'+esc(ngn(order.amount_ngn))+'</strong></div>';
+ $('renewPhone').value=order.phone_number||'';$('renewPhone').disabled=false;$('renewPreview').hidden=true;$('renewError').textContent='';$('renewNext').textContent='Preview refill';$('renewNext').disabled=false;
+ $('renewModal').classList.add('open');$('renewModal').setAttribute('aria-hidden','false');
+}
+function validRenewPhone(v){return /^\+?[0-9]{7,20}$/.test(String(v||'').replace(/[\s().-]/g,''));}
+function showRenewPreview(){
+ const phone=$('renewPhone').value.trim();
+ if(!validRenewPhone(phone)){ $('renewError').textContent='Enter a valid dedicated phone number, including country code.';return; }
+ renewalPreview=true;$('renewPreview').hidden=false;
+ $('renewPreview').innerHTML='<div class="renew-row"><span>Number to refill</span><strong>'+esc(phone)+'</strong></div><div class="renew-row"><span>Plan</span><strong>'+esc(renewalOrder.plan_name||renewalOrder.plan_id)+'</strong></div><div class="renew-row"><span>Refill charge</span><strong class="renew-price">'+esc(ngn(renewalOrder.amount_ngn))+'</strong></div><p class="renew-hint">Confirming debits your MJ HUB wallet and creates a refill request. WhatsApp opens after the payment is confirmed.</p>';
+ $('renewPhone').disabled=true;$('renewNext').textContent='Confirm refill';$('renewError').textContent='';
+}
+async function confirmRenewal(){
+ if(renewalBusy||!renewalOrder)return;
+ renewalBusy=true;$('renewNext').disabled=true;$('renewNext').textContent='Processing…';$('renewError').textContent='';
+ let waWindow=null;
+ try{
+  waWindow=window.open('about:blank','_blank');
+  const {data:{session},error:sessionError}=await sb.auth.getSession();
+  if(sessionError||!session)throw new Error('Your session expired. Sign in again.');
+  const response=await fetch('/api/esim',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'renew',order_id:renewalOrder.id,phone_number:$('renewPhone').value.trim(),request_id:crypto.randomUUID()})});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.success)throw new Error(result.message||'The refill could not be completed.');
+  const phone=result.phone_number||$('renewPhone').value.trim(), amount=Number(result.amount_ngn||renewalOrder.amount_ngn);
+  const message='Hello MJ HUB, I have confirmed an eSIM plan refill.\n\nRenewal order: '+(result.order_ref||'')+'\nOriginal order: '+(result.renewed_from_order_ref||renewalOrder.order_ref||'')+'\nPlan: '+(result.plan_name||renewalOrder.plan_name||'')+'\nDedicated number: '+phone+'\nIMEI: '+(renewalOrder.imei||'')+'\nAmount debited: '+ngn(amount)+'\n\nPlease process this refill. I will wait for the OTP code.';
+  const url='https://wa.me/'+WA_SUPPORT_NUMBER+'?text='+encodeURIComponent(message);
+  if(waWindow)waWindow.location.href=url;else location.href=url;
+  showToast('Refill confirmed. Opening WhatsApp…');closeRenewModal();await loadOrders();
+ }catch(err){
+  if(waWindow)waWindow.close();
+  $('renewError').textContent=err.message||'Unable to complete refill.';
+  $('renewNext').textContent='Confirm refill';$('renewNext').disabled=false;renewalBusy=false;
+ }
+}
+$('list').addEventListener('click',function(e){const b=e.target.closest('[data-renew]');if(!b)return;const o=allOrders.find(x=>keyOf(x)===b.dataset.renew);if(o)openRenewModal(o);});
+$('renewClose').addEventListener('click',closeRenewModal);$('renewCancel').addEventListener('click',closeRenewModal);
+$('renewModal').addEventListener('click',e=>{if(e.target===$('renewModal'))closeRenewModal();});
+$('renewNext').addEventListener('click',()=>{if(!renewalPreview)showRenewPreview();else confirmRenewal();});
+
 loadOrders();
 setInterval(function () {
   if (!allOrders.length || document.activeElement === $('searchInput')) return;
