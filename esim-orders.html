@@ -65,7 +65,33 @@ a{color:inherit;text-decoration:none}button,input{font:inherit}
 .state{text-align:center;padding:30px 12px;color:var(--muted);background:var(--surface);border:1px dashed var(--border);border-radius:16px}
 .state-icon{width:44px;height:44px;margin:0 auto 8px;border-radius:14px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--border);color:var(--accent)}
 .state h3{margin:0 0 4px;color:var(--text);font-size:15px}.state p{margin:0;font-size:13px;line-height:1.45}
-.skeleton{height:200px;border-radius:16px;border:1px solid var(--border);margin-bottom:18px;background:linear-gradient(100deg,var(--surface) 30%,var(--surface-2) 50%,var(--surface) 70%);background-size:200% 100%;animation:shine 1.3s infinite}
+.skeleton{height:auto;min-height:0;border-radius:16px;border:1px solid var(--border);margin-bottom:18px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow);animation:none}
+.skel-shine{display:block;height:13px;border-radius:6px;background:linear-gradient(100deg,var(--surface-2) 25%,color-mix(in srgb,var(--muted) 22%,var(--surface-2)) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shine 1.3s infinite}
+.skel-hero{padding:18px 20px 20px;background:var(--brand);color:#fff}
+.skel-hero .skel-shine{background:linear-gradient(100deg,rgba(255,255,255,.18) 25%,rgba(255,255,255,.38) 50%,rgba(255,255,255,.18) 75%);background-size:200% 100%}
+.skel-strip{padding:13px 20px;background:rgba(0,0,0,.22)}
+.skel-strip .skel-shine{height:14px;width:62%}
+.skel-usage{padding:18px 20px 20px}
+.skel-heading{height:19px;width:72%;margin-bottom:12px}
+.skel-tabs{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.skel-tab{padding:14px 8px;border-right:1px solid var(--border)}
+.skel-tab:last-child{border-right:0}
+.skel-tab .skel-shine{height:14px;width:58%;margin:auto}
+.skel-panel{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding-bottom:14px}
+.skel-panel-head{padding:13px 16px;border-bottom:1px solid var(--border)}
+.skel-panel-head .skel-shine{height:13px;width:38%}
+.skel-panel-main{padding:20px 16px 4px;display:grid;justify-items:center;gap:8px}
+.skel-panel-main .skel-shine:first-child{height:30px;width:32%}
+.skel-panel-main .skel-shine:last-child{height:12px;width:54%}
+.skel-bar{height:8px;margin:16px 16px 8px;width:calc(100% - 32px)}
+.skel-meta{display:flex;justify-content:space-between;margin:0 16px}
+.skel-meta .skel-shine{height:11px;width:27%}
+.skel-details{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+.skel-field{display:grid;gap:7px}
+.skel-field .skel-shine:first-child{height:11px;width:54%}
+.skel-field .skel-shine:last-child{height:14px}
+@media(max-width:380px){.skel-usage{padding:16px}.skel-hero{padding:16px}.skel-strip{padding:12px 16px}}
+@media (prefers-reduced-motion:reduce){.skeleton .skel-shine{animation:none}}
 @keyframes shine{to{background-position:-200% 0}}
 .toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,12px);opacity:0;pointer-events:none;background:var(--text);color:var(--bg);padding:10px 14px;border-radius:999px;font-size:12px;font-weight:700;transition:.2s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -303,7 +329,7 @@ function skeletonCard() {
   return '<article class="skeleton" aria-hidden="true"><div class="skel-hero"><div style="display:flex;justify-content:space-between;align-items:center"><div class="skel-shine" style="height:17px;width:72px"></div><div class="skel-shine" style="height:38px;width:112px;border-radius:9px"></div></div><div class="skel-shine" style="height:18px;width:46%;margin-top:23px"></div><div class="skel-shine" style="height:18px;width:70%;margin-top:9px"></div></div><div class="skel-strip"><div class="skel-shine"></div></div><div class="skel-usage"><div class="skel-shine skel-heading"></div><div class="skel-tabs"><div class="skel-tab"><div class="skel-shine"></div></div><div class="skel-tab"><div class="skel-shine"></div></div><div class="skel-tab"><div class="skel-shine"></div></div></div><div class="skel-panel"><div class="skel-panel-head"><div class="skel-shine"></div></div><div class="skel-panel-main"><div class="skel-shine"></div><div class="skel-shine"></div></div><div class="skel-shine skel-bar"></div><div class="skel-meta"><div class="skel-shine"></div><div class="skel-shine"></div></div></div><div class="skel-details">'+field("58px","84%")+field("48px","72%")+field("34px","66%")+field("92px","80%")+field("44px","70%")+field("50px","76%")+'</div></div></article>';
 }
 
-function render()
+function render() {
   const act = allOrders.filter(isActiveOrder).sort((a, b) => expiryDate(a) - expiryDate(b));
   const exp = allOrders.filter((o) => !isActiveOrder(o)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   $('nA').textContent = act.length ? '(' + act.length + ')' : '';
