@@ -828,14 +828,30 @@ export default async function handler(req, res) {
       // Attach each customer's saved name so the admin sees who to deliver to.
       const rows = data || [];
       const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+      const originalIds = [...new Set(rows.map((row) => row.renewed_from_order_id).filter(Boolean))];
+      const adminIds = [...new Set(rows.map((row) => row.refill_completed_by).filter(Boolean))];
+      const profileIds = [...new Set([...userIds, ...adminIds])];
       let names = {};
-      if (userIds.length) {
+      let originalRefs = {};
+      if (profileIds.length) {
         const { data: profiles } = await supabase.from('profiles')
-          .select('id, full_name')
-          .in('id', userIds);
-        names = Object.fromEntries((profiles || []).map((p) => [p.id, p.full_name || '']));
+          .select('id, full_name, email')
+          .in('id', profileIds);
+        names = Object.fromEntries((profiles || []).map((p) => [p.id, { full_name: p.full_name || '', email: p.email || '' }]));
       }
-      const out = rows.map((row) => ({ ...row, full_name: names[row.user_id] || '' }));
+      if (originalIds.length) {
+        const { data: originals, error: originalError } = await supabase.from('esim_orders')
+          .select('id, order_ref')
+          .in('id', originalIds);
+        if (originalError) console.error('[esim admin] original renewal references failed:', originalError.message);
+        else originalRefs = Object.fromEntries((originals || []).map((o) => [o.id, o.order_ref || '']));
+      }
+      const out = rows.map((row) => ({
+        ...row,
+        full_name: names[row.user_id]?.full_name || '',
+        renewed_from_order_ref: row.renewed_from_order_id ? (originalRefs[row.renewed_from_order_id] || '') : '',
+        refill_completed_by_name: row.refill_completed_by ? (names[row.refill_completed_by]?.full_name || names[row.refill_completed_by]?.email || '') : ''
+      }));
 
       return res.status(200).json({
         success: true,
@@ -846,10 +862,57 @@ export default async function handler(req, res) {
       });
     }
 
-    // ---- Admin: deliver (or re-send) the eSIM QR email ----
+    // ---- Admin: confirm a manually fulfilled renewal ----
+    if (String(body.action || '') === 'admin_confirm_refill') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const orderId = String(body.order_id || '').trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
+        return res.status(400).json({ success: false, message: 'A valid renewal order is required.' });
+      }
+      const { data: renewal, error: renewalError } = await supabase.from('esim_orders')
+        .select('id,user_id,order_ref,renewed_from_order_id,status,refill_completed_at')
+        .eq('id', orderId).maybeSingle();
+      if (renewalError || !renewal) return res.status(404).json({ success: false, message: 'Renewal order not found.' });
+      if (!renewal.renewed_from_order_id) return res.status(409).json({ success: false, message: 'This is a normal eSIM purchase, not a renewal order.' });
+      if (/^completed$/i.test(String(renewal.status || ''))) {
+        return res.status(200).json({ success: true, already_completed: true, message: 'This refill was already marked as completed.', refill_completed_at: renewal.refill_completed_at || null });
+      }
+      if (/^(failed|cancelled|canceled|expired|refunded)$/i.test(String(renewal.status || ''))) {
+        return res.status(409).json({ success: false, message: 'This renewal is ' + renewal.status + ' and cannot be completed.' });
+      }
+      const completedAt = new Date().toISOString();
+      const { data: updated, error: updateError } = await supabase.from('esim_orders')
+        .update({ status: 'completed', refill_completed_at: completedAt, refill_completed_by: user.id, email_error: null })
+        .eq('id', orderId).not('renewed_from_order_id', 'is', null).neq('status', 'completed')
+        .select('id,status,refill_completed_at,refill_completed_by').maybeSingle();
+      if (updateError) {
+        console.error('[esim admin] renewal completion failed:', updateError.message);
+        return res.status(500).json({ success: false, message: 'Could not record refill completion. No status was changed.' });
+      }
+      if (!updated) {
+        const { data: latest } = await supabase.from('esim_orders').select('status,refill_completed_at').eq('id', orderId).maybeSingle();
+        if (/^completed$/i.test(String(latest?.status || ''))) {
+          return res.status(200).json({ success: true, already_completed: true, message: 'This refill was already marked as completed.', refill_completed_at: latest.refill_completed_at || null });
+        }
+        return res.status(409).json({ success: false, message: 'The renewal changed before confirmation. Refresh the order list and try again.' });
+      }
+      if (renewal.user_id) await notifyUserPush(renewal.user_id, 'Your eSIM refill is completed', 'Your existing eSIM plan refill has been confirmed.', '/esim-orders.html', 'esim');
+      return res.status(200).json({ success: true, message: 'Refill marked as completed.', refill_completed_at: updated.refill_completed_at, refill_completed_by: updated.refill_completed_by });
+    }
+
+    // ---- Admin: deliver (or re-send) normal eSIM QR emails only ----
     if (String(body.action || '') === 'deliver') {
       if (!(await isAdminUser(user))) {
         return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const orderId = String(body.order_id || '').trim();
+      if (orderId) {
+        const { data: target, error: targetError } = await supabase.from('esim_orders')
+          .select('renewed_from_order_id').eq('id', orderId).maybeSingle();
+        if (targetError) return res.status(500).json({ success: false, message: 'Could not verify this eSIM order.' });
+        if (target?.renewed_from_order_id) return res.status(409).json({ success: false, message: 'Renewal orders use Confirm Refill Completed, not QR delivery.' });
       }
       return handleDeliver(body, user, res);
     }
