@@ -298,7 +298,12 @@ function matches(o) {
   return [o.plan_name, o.plan_id, o.order_ref, o.imei, o.status].join(' ').toLowerCase().includes(q);
 }
 
-function render() {
+function skeletonCard() {
+  const field = (labelWidth, valueWidth) => '<div class="skel-field"><div class="skel-shine" style="width:'+labelWidth+'"></div><div class="skel-shine" style="width:'+valueWidth+'"></div></div>';
+  return '<article class="skeleton" aria-hidden="true"><div class="skel-hero"><div style="display:flex;justify-content:space-between;align-items:center"><div class="skel-shine" style="height:17px;width:72px"></div><div class="skel-shine" style="height:38px;width:112px;border-radius:9px"></div></div><div class="skel-shine" style="height:18px;width:46%;margin-top:23px"></div><div class="skel-shine" style="height:18px;width:70%;margin-top:9px"></div></div><div class="skel-strip"><div class="skel-shine"></div></div><div class="skel-usage"><div class="skel-shine skel-heading"></div><div class="skel-tabs"><div class="skel-tab"><div class="skel-shine"></div></div><div class="skel-tab"><div class="skel-shine"></div></div><div class="skel-tab"><div class="skel-shine"></div></div></div><div class="skel-panel"><div class="skel-panel-head"><div class="skel-shine"></div></div><div class="skel-panel-main"><div class="skel-shine"></div><div class="skel-shine"></div></div><div class="skel-shine skel-bar"></div><div class="skel-meta"><div class="skel-shine"></div><div class="skel-shine"></div></div></div><div class="skel-details">'+field("58px","84%")+field("48px","72%")+field("34px","66%")+field("92px","80%")+field("44px","70%")+field("50px","76%")+'</div></div></article>';
+}
+
+function render()
   const act = allOrders.filter(isActiveOrder).sort((a, b) => expiryDate(a) - expiryDate(b));
   const exp = allOrders.filter((o) => !isActiveOrder(o)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   $('nA').textContent = act.length ? '(' + act.length + ')' : '';
@@ -320,7 +325,7 @@ function render() {
 async function loadOrders() {
   if (loading) return;
   loading = true;
-  if (!allOrders.length) $('list').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  if (!allOrders.length) $('list').innerHTML = skeletonCard() + skeletonCard();
   try {
     const { data: { session }, error: sessionError } = await sb.auth.getSession();
     if (sessionError) throw sessionError;
