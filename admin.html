@@ -5271,17 +5271,14 @@ function filterProducts() {
  (p.description || '').toLowerCase().includes(q)
  );
  }
- // Available products first within each category, so admins see what's
- // actually live before scrolling past hidden ones. Sorting by category
- // first keeps same-category products grouped together even though the
- // table itself has no visual section headers.
+ // Admin Logs product catalogue: lowest selling price first.
+ // Numeric comparison avoids the incorrect lexicographic order (e.g. 1000 before 900).
  filtered = [...filtered].sort((a, b) => {
- const catA = (a.category || 'OTHER').trim();
- const catB = (b.category || 'OTHER').trim();
- if (catA !== catB) return catA.localeCompare(catB);
- const availA = a.is_available !== false;
- const availB = b.is_available !== false;
- if (availA !== availB) return availA ? -1 : 1;
+ const priceA = Number(a.price);
+ const priceB = Number(b.price);
+ const validA = Number.isFinite(priceA) ? priceA : Number.POSITIVE_INFINITY;
+ const validB = Number.isFinite(priceB) ? priceB : Number.POSITIVE_INFINITY;
+ if (validA !== validB) return validA - validB;
  return (a.name || '').localeCompare(b.name || '');
  });
  renderProducts(filtered);
@@ -5327,7 +5324,16 @@ function openProductModal(product) {
  document.getElementById('pDesc').value = stripHtmlKeepLines(product.display_description || product.description || '');
  document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
  document.getElementById('pPrice').value = product.price ?? '';
- document.getElementById('pStock').value = product.stock_quantity ?? '';
+ const stockInput = document.getElementById('pStock');
+ stockInput.value = product.stock_quantity ?? '';
+ const isBulkMailProduct = String(product.source || '').toLowerCase() === 'bulkmail';
+ stockInput.disabled = isBulkMailProduct;
+ stockInput.title = isBulkMailProduct ? 'BulkMail stock is updated only by supplier sync.' : '';
+ const stockField = stockInput.closest('.field');
+ const stockNote = stockField?.querySelector('.price-note');
+ if (stockNote) stockNote.textContent = isBulkMailProduct
+   ? 'Supplier-managed. Stock changes only when BulkMail sync runs.'
+   : 'Update stock quantity for this product.';
  document.getElementById('pAvailable').value = product.is_available === false ? 'false' : 'true';
  const shared = !!(product.is_shared);
  const pShared = document.getElementById('pIsShared');
@@ -5346,6 +5352,11 @@ function openProductModal(product) {
  document.getElementById('pSupplierPrice').value = 0;
  document.getElementById('pPrice').value = '';
  document.getElementById('pStock').value = '';
+ document.getElementById('pStock').disabled = false;
+ document.getElementById('pStock').title = '';
+ const stockField = document.getElementById('pStock').closest('.field');
+ const stockNote = stockField?.querySelector('.price-note');
+ if (stockNote) stockNote.textContent = 'Update stock quantity for this product.';
  document.getElementById('pAvailable').value = 'true';
  const pShared = document.getElementById('pIsShared');
  const pSharedCred = document.getElementById('pSharedCredential');
@@ -5450,6 +5461,7 @@ async function saveProduct() {
  ? allProducts.find(x => String(x.id) === String(id) || String(x.product_key) === String(id))
  : null;
 
+ const isBulkMailProduct = !!existing && String(existing.source || '').toLowerCase() === 'bulkmail';
  const body = {
  resource: 'product',
  action: id ? 'update' : 'insert',
@@ -5460,7 +5472,7 @@ async function saveProduct() {
  description: description || null,
  display_description: description || null,
  price,
- stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
+ ...(isBulkMailProduct ? {} : { stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity }),
  is_available,
  is_shared: document.getElementById('pIsShared')?.checked === true,
  shared_credential: (document.getElementById('pSharedCredential')?.value || '').trim() || null,
