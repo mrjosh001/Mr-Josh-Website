@@ -1748,16 +1748,18 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="metrics" style="margin:0 0 14px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));">
  <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="esimMetTotal">—</div><div class="metric-sub">All eSIM orders</div></div>
- <div class="metric-card"><div class="metric-label">Awaiting delivery</div><div class="metric-value" id="esimMetWait" style="color:#fbbf24;">—</div><div class="metric-sub">Paid, QR not sent (this page)</div></div>
- <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value" id="esimMetDone" style="color:#34d399;">—</div><div class="metric-sub">QR emailed (this page)</div></div>
+ <div class="metric-card"><div class="metric-label">Awaiting delivery</div><div class="metric-value" id="esimMetWait" style="color:#fbbf24;">—</div><div class="metric-sub">Normal orders awaiting QR email</div></div>
+ <div class="metric-card"><div class="metric-label">Renewal pending</div><div class="metric-value" id="esimMetRenewalWait" style="color:#fbbf24;">—</div><div class="metric-sub">Paid refill requests awaiting manual supplier work</div></div>
+ <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value" id="esimMetDone" style="color:#34d399;">—</div><div class="metric-sub">QR delivered or refill confirmed</div></div>
  <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="esimMetRev">—</div><div class="metric-sub">Paid on this page</div></div>
  </div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
  <input type="search" id="esimOrderSearch" placeholder="Search order ref, email, IMEI or plan…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){esimOrderPage=1;loadEsimOrders()}">
  <select id="esimOrderFilter" onchange="renderEsimOrders()" style="width:auto;">
- <option value="all">All</option>
- <option value="waiting" selected>Awaiting delivery</option>
- <option value="done">Delivered</option>
+ <option value="all">All orders</option>
+ <option value="waiting" selected>Awaiting QR delivery</option>
+ <option value="renewal_pending">Renewal Pending</option>
+ <option value="done">Completed</option>
  </select>
  <button class="btn btn-primary btn-sm" style="width:auto;" onclick="esimOrderPage=1;loadEsimOrders()"><i class="fas fa-search"></i> Search</button>
  </div>
@@ -7041,17 +7043,43 @@ async function esimAdminCall(body) {
  const data = await res.json().catch(() => ({}));
  return { res, data };
 }
+function esimIsRenewal(o) { return Boolean(o && o.renewed_from_order_id); }
 function esimIsDelivered(o) { return /^completed$/i.test(String(o.status || '')); }
 function esimIsClosed(o) { return /^(failed|cancelled|canceled|expired|refunded)$/i.test(String(o.status || '')); }
 function esimStatusBadge(o) {
  if (esimIsClosed(o)) return `<span class="badge badge-off">${escapeHtml(String(o.status))}</span>`;
+ if (esimIsRenewal(o)) {
+  if (esimIsDelivered(o)) {
+   const when=o.refill_completed_at ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;">Confirmed ${escapeHtml(ngWhen(o.refill_completed_at))}${o.refill_completed_by_name ? ' by '+escapeHtml(o.refill_completed_by_name) : ''}</div>` : '';
+   return '<span class="badge badge-on">Refill Completed</span>'+when;
+  }
+  return '<span class="badge badge-pending">Renewal Pending</span>';
+ }
  if (esimIsDelivered(o)) return '<span class="badge badge-on">Delivered</span>';
  return '<span class="badge badge-pending">Awaiting delivery</span>';
 }
 function esimActionBtn(o) {
  if (esimIsClosed(o)) return '';
+ if (esimIsRenewal(o)) {
+  if (esimIsDelivered(o)) return '<span style="font-size:12px;color:var(--success);font-weight:700;">Refill Completed</span>';
+  return `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="confirmEsimRefill('${escapeHtml(o.id)}')"><i class="fas fa-check-circle"></i> Confirm Refill Completed</button>`;
+ }
  if (esimIsDelivered(o)) return `<button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-rotate-right"></i> Resend</button>`;
  return `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-paper-plane"></i> Deliver</button>`;
+}
+async function confirmEsimRefill(id) {
+ const o=(esimOrdersCache||[]).find(x=>String(x.id)===String(id));
+ if(!o||!esimIsRenewal(o)||esimIsDelivered(o)||esimIsClosed(o)) return;
+ const ok=window.confirm('Confirm that you have manually refilled the customer\'s existing eSIM with the supplier? Only confirm after the supplier has completed the refill.');
+ if(!ok) return;
+ try {
+  const {data}=await esimAdminCall({action:'admin_confirm_refill',order_id:o.id});
+  if(!data.success) throw new Error(data.message||'Could not confirm refill completion.');
+  showAdminToast(data.message||'Refill marked as completed.','success');
+  await loadEsimOrders();
+ } catch(e) {
+  showAdminToast(e.message||'Could not confirm refill completion.','error');
+ }
 }
 async function loadEsimOrders() {
  const tbody = document.getElementById('esimOrdersBody');
@@ -7082,54 +7110,61 @@ function renderEsimOrders() {
  const pager = document.getElementById('esimOrdersPager');
  const all = esimOrdersCache || [];
  const total = all._total || all.length;
- const waiting = all.filter(o => !esimIsClosed(o) && !esimIsDelivered(o));
+ const renewalPending = all.filter(o => esimIsRenewal(o) && !esimIsClosed(o) && !esimIsDelivered(o));
+ const waiting = all.filter(o => !esimIsRenewal(o) && !esimIsClosed(o) && !esimIsDelivered(o));
  const done = all.filter(o => esimIsDelivered(o));
  const rev = all.filter(o => !esimIsClosed(o)).reduce((n, o) => n + (Number(o.amount_ngn) || 0), 0);
  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
  set('esimMetTotal', Number(total).toLocaleString());
  set('esimMetWait', String(waiting.length));
+ set('esimMetRenewalWait', String(renewalPending.length));
  set('esimMetDone', String(done.length));
  set('esimMetRev', '₦' + rev.toLocaleString());
  const badge = document.getElementById('esimNavBadge');
- if (badge) { badge.textContent = String(waiting.length); badge.style.display = waiting.length ? 'inline-block' : 'none'; }
-
+ const outstanding=waiting.length+renewalPending.length;
+ if (badge) { badge.textContent = String(outstanding); badge.style.display = outstanding ? 'inline-block' : 'none'; }
  const f = document.getElementById('esimOrderFilter')?.value || 'all';
- const rows = f === 'waiting' ? waiting : f === 'done' ? done : all;
+ const rows = f === 'waiting' ? waiting : f === 'renewal_pending' ? renewalPending : f === 'done' ? done : all;
  if (!rows.length) {
- const msg = f === 'waiting' ? 'No eSIM orders waiting for delivery.' : 'No eSIM orders found.';
- if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
- if (cards) cards.innerHTML = `<div class="empty-state">${msg}</div>`;
+  const msg = f === 'waiting' ? 'No eSIM orders awaiting QR delivery.' : f === 'renewal_pending' ? 'No renewal requests are waiting for supplier refill.' : 'No eSIM orders found.';
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
+  if (cards) cards.innerHTML = `<div class="empty-state">${msg}</div>`;
  } else {
- const who = (o) => `<div style="font-weight:600;">${escapeHtml(o.full_name || 'No name on file')}</div><div style="font-size:11px;color:var(--muted);">${escapeHtml(o.customer_email || '')}</div>`;
- if (tbody) tbody.innerHTML = rows.map(o => `
- <tr>
- <td>${o.created_at ? ngWhen(o.created_at) : ''}</td>
- <td>${who(o)}</td>
- <td>${escapeHtml(o.plan_name || o.plan_id || '')}</td>
- <td style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '')}</td>
- <td class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</td>
- <td style="font-size:12px;">${escapeHtml(o.order_ref || '')}</td>
- <td>${esimStatusBadge(o)}</td>
- <td>${esimActionBtn(o)}</td>
- </tr>`).join('');
- if (cards) cards.innerHTML = rows.map(o => `
- <div class="mobile-card">
- <div style="font-weight:700;">${escapeHtml(o.full_name || 'No name on file')}</div>
- <div class="meta">${escapeHtml(o.customer_email || '')}</div>
- <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
- <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '')}</span></div>
- <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</span></div>
- <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
- <div class="row-line"><span>Ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>
- <div class="row-line"><span>Status</span>${esimStatusBadge(o)}</div>
- <div style="margin-top:10px;">${esimActionBtn(o)}</div>
- </div>`).join('');
+  const who = (o) => `<div style="font-weight:600;">${escapeHtml(o.full_name || 'No name on file')}</div><div style="font-size:11px;color:var(--muted);">${escapeHtml(o.customer_email || '')}</div>`;
+  const refs = (o) => esimIsRenewal(o)
+   ? `<div style="font-size:11px;color:var(--muted);">Renewal</div><div style="font-size:12px;font-weight:700;">${escapeHtml(o.order_ref || '')}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">Original</div><div style="font-size:12px;">${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</div>`
+   : `<div style="font-size:12px;">${escapeHtml(o.order_ref || '')}</div>`;
+  const planCell = (o) => `${esimIsRenewal(o) ? '<div style="font-size:10px;color:var(--info);font-weight:800;letter-spacing:.04em;margin-bottom:3px;">RENEWAL</div>' : ''}<div>${escapeHtml(o.plan_name || o.plan_id || '')}</div>`;
+  const deviceCell = (o) => esimIsRenewal(o)
+   ? `<div style="font-size:11px;color:var(--muted);">Dedicated number</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.phone_number || 'Not provided')}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">IMEI</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '—')}</div>`
+   : `<div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '')}</div>`;
+  if (tbody) tbody.innerHTML = rows.map(o => `
+   <tr><td>${o.created_at ? ngWhen(o.created_at) : ''}</td><td>${who(o)}</td><td>${planCell(o)}</td><td>${deviceCell(o)}</td><td class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</td><td>${refs(o)}</td><td>${esimStatusBadge(o)}</td><td>${esimActionBtn(o)}</td></tr>`).join('');
+  if (cards) cards.innerHTML = rows.map(o => `
+   <div class="mobile-card">
+    ${esimIsRenewal(o) ? '<div style="font-size:11px;color:var(--info);font-weight:800;letter-spacing:.05em;margin-bottom:6px;">ESIM RENEWAL REQUEST</div>' : ''}
+    <div style="font-weight:700;">${escapeHtml(o.full_name || 'No name on file')}</div><div class="meta">${escapeHtml(o.customer_email || '')}</div>
+    <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
+    ${esimIsRenewal(o) ? `
+     <div class="row-line"><span>Dedicated number</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.phone_number || 'Not provided')}</span></div>
+     <div class="row-line"><span>Original order</span><span>${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</span></div>
+     <div class="row-line"><span>Renewal order</span><span>${escapeHtml(o.order_ref || '')}</span></div>
+     <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '—')}</span></div>
+    ` : `
+     <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '')}</span></div>
+     <div class="row-line"><span>Ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>
+    `}
+    <div class="row-line"><span>Amount paid</span><span class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</span></div>
+    <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
+    <div class="row-line"><span>Status</span><span>${esimStatusBadge(o)}</span></div>
+    <div style="margin-top:10px;">${esimActionBtn(o)}</div>
+   </div>`).join('');
  }
  const maxPage = Math.max(1, Math.ceil(total / 20));
  if (pager) pager.innerHTML = `
- <button class="btn btn-ghost btn-sm" ${esimOrderPage<=1?'disabled':''} onclick="esimOrderPage=Math.max(1,esimOrderPage-1);loadEsimOrders()">Prev</button>
- <span>Page ${esimOrderPage}/${maxPage} · ${total} orders</span>
- <button class="btn btn-ghost btn-sm" ${esimOrderPage>=maxPage?'disabled':''} onclick="esimOrderPage++;loadEsimOrders()">Next</button>`;
+  <button class="btn btn-ghost btn-sm" ${esimOrderPage<=1?'disabled':''} onclick="esimOrderPage=Math.max(1,esimOrderPage-1);loadEsimOrders()">Prev</button>
+  <span>Page ${esimOrderPage}/${maxPage} · ${total} orders</span>
+  <button class="btn btn-ghost btn-sm" ${esimOrderPage>=maxPage?'disabled':''} onclick="esimOrderPage++;loadEsimOrders()">Next</button>`;
 }
 function openEsimDeliver(id) {
  const o = (esimOrdersCache || []).find(x => String(x.id) === String(id));
