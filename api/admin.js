@@ -915,9 +915,9 @@ async function productUpdate(body) {
   if (fields.is_available !== undefined) payload.is_available = !!fields.is_available;
   if (fields.is_shared !== undefined) payload.is_shared = !!fields.is_shared;
   if (fields.shared_credential !== undefined) payload.shared_credential = fields.shared_credential || null;
-  // Shared products stay listed as in stock
-  if (payload.is_shared) {
-    // Do not force is_available — admin may hide a shared product from the storefront.
+  // Preserve BulkMail supplier stock even when other product fields are edited.
+  // Non-BulkMail shared products retain their existing unlimited-stock behavior.
+  if (payload.is_shared && String(currentProduct?.source || '').toLowerCase() !== 'bulkmail') {
     if (payload.is_available !== false) payload.stock_quantity = 99999;
   }
   payload.updated_at = new Date().toISOString();
