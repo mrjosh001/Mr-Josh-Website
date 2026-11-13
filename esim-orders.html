@@ -91,7 +91,6 @@ a{color:inherit;text-decoration:none}button,input{font:inherit}
 <header class="topbar">
   <button class="icon-btn" type="button" onclick="location.href='dashboard.html'" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
   <div class="brand"><div class="brand-mark">MJ</div><div><strong>My eSIM</strong><span>Plans · usage · expiry</span></div></div>
-  <button class="icon-btn" type="button" id="refreshBtn" aria-label="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
 </header>
 <main class="wrap">
   <div class="titlebar">
@@ -194,6 +193,18 @@ function expiryDate(order) {
 }
 const msLeft = (o) => expiryDate(o).getTime() - Date.now();
 const keyOf = (o) => String(o.id || o.order_ref || '');
+function carrierLabel(order) {
+  const raw = String(order?.carrier_label || order?.carrier || '').trim();
+  const normalized = raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (normalized === 'tmobile' || normalized === 'tmo') return 'T-Mobile';
+  if (normalized === 'att' || normalized === 'atandt') return 'AT&T';
+  if (normalized === 'lyca' || normalized === 'lycamobile') return 'Lyca Mobile';
+  const fromPlan = String(order?.plan_name || '').split(/[·|]/)[0].trim();
+  if (/^t\s?-?\s?mobile$/i.test(fromPlan)) return 'T-Mobile';
+  if (/^at\s?&\s?t$/i.test(fromPlan)) return 'AT&T';
+  if (/^lyca(\s+mobile)?$/i.test(fromPlan)) return 'Lyca Mobile';
+  return fromPlan && !/^(1|3|6|12)\s?(month|months|year)/i.test(fromPlan) ? fromPlan : 'Not recorded';
+}
 
 function isActiveOrder(order) {
   const k = statusKey(order.status);
@@ -271,6 +282,7 @@ function planCard(o) {
         '<div class="details">' +
           '<div>Reference<b>' + esc(o.order_ref || '—') +
             '<button class="copy-ref" type="button" data-copy="' + esc(o.order_ref || '') + '" aria-label="Copy reference"><i class="fa-regular fa-copy"></i></button></b></div>' +
+          '<div>Carrier<b>' + esc(carrierLabel(o)) + '</b></div>' +
           '<div>IMEI<b>' + esc(o.imei || '—') + '</b></div><div>Dedicated number<b>' + esc(o.phone_number || 'Not saved') + '</b></div>' +
           '<div>Ordered<b>' + esc(fmtDate(o.created_at)) + '</b></div>' +
           '<div>Amount<b>' + esc(ngn(o.wallet_ngn_debited || o.amount_ngn)) + '</b></div>' +
@@ -308,8 +320,6 @@ function render() {
 async function loadOrders() {
   if (loading) return;
   loading = true;
-  $('refreshBtn').innerHTML = '<i class="fa-solid fa-rotate-right fa-spin"></i>';
-  $('refreshBtn').disabled = true;
   if (!allOrders.length) $('list').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
   try {
     const { data: { session }, error: sessionError } = await sb.auth.getSession();
@@ -343,7 +353,7 @@ async function loadOrders() {
     if (!rows) {
       const { data, error } = await sb
         .from('esim_orders')
-        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,status,created_at')
+        .select('id,order_ref,plan_id,plan_name,carrier,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,status,created_at,phone_number')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -377,8 +387,6 @@ async function loadOrders() {
     if (retry) retry.onclick = loadOrders;
   } finally {
     loading = false;
-    $('refreshBtn').innerHTML = '<i class="fa-solid fa-rotate-right"></i>';
-    $('refreshBtn').disabled = false;
   }
 }
 
@@ -403,7 +411,6 @@ $('list').addEventListener('click', (e) => {
   art.querySelector('.panel').innerHTML = panelHtml(o, t.dataset.tab);
 });
 $('searchInput').addEventListener('input', render);
-$('refreshBtn').addEventListener('click', loadOrders);
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-copy]');
   if (!b) return;
@@ -422,7 +429,7 @@ const WA_SUPPORT_NUMBER='2347026502927';
 function closeRenewModal(){ $('renewModal').classList.remove('open');$('renewModal').setAttribute('aria-hidden','true');renewalOrder=null;renewalPreview=false;renewalBusy=false;$('renewError').textContent='';$('renewPreview').hidden=true;$('renewPhone').disabled=false;$('renewNext').disabled=false;$('renewNext').textContent='Preview refill'; }
 function openRenewModal(order){
  renewalOrder=order;renewalPreview=false;
- $('renewDetails').innerHTML='<div class="renew-row"><span>Original order</span><strong>'+esc(order.order_ref||'—')+'</strong></div><div class="renew-row"><span>Plan and network</span><strong>'+esc(order.plan_name||order.plan_id||'eSIM')+'</strong></div><div class="renew-row"><span>IMEI</span><strong>'+esc(order.imei||'—')+'</strong></div><div class="renew-row"><span>Original purchase price</span><strong class="renew-price">'+esc(ngn(order.amount_ngn))+'</strong></div>';
+ $('renewDetails').innerHTML='<div class="renew-row"><span>Original order</span><strong>'+esc(order.order_ref||'—')+'</strong></div><div class="renew-row"><span>Carrier</span><strong>'+esc(carrierLabel(order))+'</strong></div><div class="renew-row"><span>Plan</span><strong>'+esc(order.plan_name||order.plan_id||'eSIM')+'</strong></div><div class="renew-row"><span>IMEI</span><strong>'+esc(order.imei||'—')+'</strong></div><div class="renew-row"><span>Dedicated number</span><strong>'+esc(order.phone_number||'Not saved')+'</strong></div><div class="renew-row"><span>Original purchase price</span><strong class="renew-price">'+esc(ngn(order.amount_ngn))+'</strong></div>';
  $('renewPhone').value=order.phone_number||'';$('renewPhone').disabled=false;$('renewPreview').hidden=true;$('renewError').textContent='';$('renewNext').textContent='Preview refill';$('renewNext').disabled=false;
  $('renewModal').classList.add('open');$('renewModal').setAttribute('aria-hidden','false');
 }
@@ -431,7 +438,7 @@ function showRenewPreview(){
  const phone=$('renewPhone').value.trim();
  if(!validRenewPhone(phone)){ $('renewError').textContent='Enter a valid dedicated phone number, including country code.';return; }
  renewalPreview=true;$('renewPreview').hidden=false;
- $('renewPreview').innerHTML='<div class="renew-row"><span>Number to refill</span><strong>'+esc(phone)+'</strong></div><div class="renew-row"><span>Plan</span><strong>'+esc(renewalOrder.plan_name||renewalOrder.plan_id)+'</strong></div><div class="renew-row"><span>Refill charge</span><strong class="renew-price">'+esc(ngn(renewalOrder.amount_ngn))+'</strong></div><p class="renew-hint">Confirming debits your MJ HUB wallet and creates a refill request. WhatsApp opens after the payment is confirmed.</p>';
+ $('renewPreview').innerHTML='<div class="renew-row"><span>Carrier</span><strong>'+esc(carrierLabel(renewalOrder))+'</strong></div><div class="renew-row"><span>Number to refill</span><strong>'+esc(phone)+'</strong></div><div class="renew-row"><span>Plan</span><strong>'+esc(renewalOrder.plan_name||renewalOrder.plan_id)+'</strong></div><div class="renew-row"><span>IMEI</span><strong>'+esc(renewalOrder.imei||'—')+'</strong></div><div class="renew-row"><span>Refill charge</span><strong class="renew-price">'+esc(ngn(renewalOrder.amount_ngn))+'</strong></div><p class="renew-hint">Confirming debits your MJ HUB wallet and creates a refill request. WhatsApp opens after the payment is confirmed.</p>';
  $('renewPhone').disabled=true;$('renewNext').textContent='Confirm refill';$('renewError').textContent='';
 }
 async function confirmRenewal(){
@@ -446,7 +453,7 @@ async function confirmRenewal(){
   const result=await response.json().catch(()=>({}));
   if(!response.ok||!result.success)throw new Error(result.message||'The refill could not be completed.');
   const phone=result.phone_number||$('renewPhone').value.trim(), amount=Number(result.amount_ngn||renewalOrder.amount_ngn);
-  const message='Hello MJ HUB, I have confirmed an eSIM plan refill.\n\nRenewal order: '+(result.order_ref||'')+'\nOriginal order: '+(result.renewed_from_order_ref||renewalOrder.order_ref||'')+'\nPlan: '+(result.plan_name||renewalOrder.plan_name||'')+'\nDedicated number: '+phone+'\nIMEI: '+(renewalOrder.imei||'')+'\nAmount debited: '+ngn(amount)+'\n\nPlease process this refill. I will wait for the OTP code.';
+  const message='Hello MJ HUB, I have confirmed an eSIM plan refill.\n\nRenewal order: '+(result.order_ref||'')+'\nOriginal order: '+(result.renewed_from_order_ref||renewalOrder.order_ref||'')+'\nCarrier: '+(result.carrier_label||carrierLabel(renewalOrder))+'\nPlan: '+(result.plan_name||renewalOrder.plan_name||'')+'\nDedicated number: '+phone+'\nIMEI: '+(renewalOrder.imei||'')+'\nAmount debited: '+ngn(amount)+'\n\nPlease process this refill. I will wait for the OTP code.';
   const url='https://wa.me/'+WA_SUPPORT_NUMBER+'?text='+encodeURIComponent(message);
   if(waWindow)waWindow.location.href=url;else location.href=url;
   showToast('Refill confirmed. Opening WhatsApp…');closeRenewModal();await loadOrders();
