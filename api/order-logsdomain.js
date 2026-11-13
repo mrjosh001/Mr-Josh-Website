@@ -159,6 +159,22 @@ function bmSellPriceNgn(usd) {
   return Math.ceil(Math.max(supplierNgn * 1.7, supplierNgn + 500, 1000) / 50) * 50;
 }
 
+// These specific BulkMail products are approved for automatic stock-based visibility.
+// A positive supplier stock count makes them visible; zero stock hides them.
+// All other BulkMail products retain the existing admin-controlled visibility rules.
+const BM_STOCK_VISIBILITY_KEYS = new Set([
+  'bm_477', 'bm_956', 'bm_957',
+  'bm_1018', 'bm_954', 'bm_149', 'bm_148', 'bm_1028', 'bm_162',
+  'bm_953', 'bm_147', 'bm_159', 'bm_156', 'bm_173', 'bm_165',
+  'bm_749', 'bm_142', 'bm_1023', 'bm_1022', 'bm_166', 'bm_150',
+  'bm_145', 'bm_952', 'bm_172', 'bm_153', 'bm_176', 'bm_168',
+  'bm_955', 'bm_144', 'bm_1020', 'bm_163', 'bm_160', 'bm_170',
+  'bm_146', 'bm_155', 'bm_161', 'bm_152', 'bm_164', 'bm_167',
+  'bm_154', 'bm_1025', 'bm_1026', 'bm_171', 'bm_143', 'bm_175',
+  'bm_1024', 'bm_1019', 'bm_1029', 'bm_1027', 'bm_169', 'bm_1021',
+  'bm_157', 'bm_174', 'bm_151', 'bm_158'
+]);
+
 async function handleBulkmailSync(req, res) {
   try {
     if (!BM_KEY) return res.status(503).json({ success: false, message: 'BULKMAIL_API_KEY not configured' });
@@ -189,17 +205,22 @@ async function handleBulkmailSync(req, res) {
 
       const { data: existing } = await supabase.from('products').select('product_key, admin_hidden').eq('product_key', productKey).maybeSingle();
       if (existing) {
-        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
+        // Existing products keep their catalogue metadata. The approved subset follows live stock.
         const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', updated_at: now };
-        if (stockQty <= 0) patch.is_available = false;
-        else if (existing.admin_hidden) { /* stay hidden */ }
+        if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
+          patch.admin_hidden = false;
+          patch.is_available = stockQty > 0;
+        } else if (stockQty <= 0) patch.is_available = false;
+        else if (existing.admin_hidden) { /* preserve admin-hidden state for all other products */ }
         else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalUpdated++;
       } else {
         const { error } = await supabase.from('products').insert({
           product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
-          is_available: false, category: 'BulkMail', source: 'bulkmail',
+          is_available: BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0,
+          admin_hidden: !BM_STOCK_VISIBILITY_KEYS.has(productKey),
+          category: 'BulkMail', source: 'bulkmail',
           description: String(p.description || '').trim() || null, updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalNew++;
