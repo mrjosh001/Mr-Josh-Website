@@ -679,7 +679,7 @@ export default async function handler(req, res) {
     if (String(body.action || '') === 'my_orders') {
       const { data, error } = await supabase
         .from('esim_orders')
-        .select('id,order_ref,plan_id,plan_name,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,wallet_debit_id,status,created_at,customer_email,phone_number,renewed_from_order_id')
+        .select('id,order_ref,plan_id,plan_name,carrier,amount_ngn,imei,wallet_ngn_debited,wallet_usd_debited,wallet_debit_id,status,created_at,customer_email,phone_number,renewed_from_order_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -713,11 +713,19 @@ export default async function handler(req, res) {
       if(!data?.success||!data?.order_id)return res.status(500).json({success:false,message:'The wallet did not confirm the refill. Contact support before retrying.'});
       const [{data:profile},{data:source}]=await Promise.all([
         supabase.from('profiles').select('balance,balance_usd').eq('id',user.id).maybeSingle(),
-        supabase.from('esim_orders').select('order_ref,plan_name,imei').eq('id',orderId).eq('user_id',user.id).maybeSingle()
+        supabase.from('esim_orders').select('order_ref,plan_name,carrier,imei,phone_number').eq('id',orderId).eq('user_id',user.id).maybeSingle()
       ]);
+      const carrierLabels = { tmobile: 'T-Mobile', att: 'AT&T', lyca: 'Lyca Mobile' };
+      const carrierId = String(source?.carrier || '').toLowerCase();
+      const carrierLabel = carrierLabels[carrierId] || String(source?.plan_name || '').split(/[·|]/)[0].trim() || 'Not recorded';
+      if (data?.order_id && carrierId) {
+        const { error: carrierSaveError } = await supabase.from('esim_orders').update({ carrier: carrierId }).eq('id', data.order_id).eq('user_id', user.id);
+        if (carrierSaveError) console.warn('[esim renewal] carrier persistence:', carrierSaveError.message);
+      }
       await notifyUserPush(user.id,'eSIM refill confirmed',(source?.plan_name||'Your eSIM plan')+' refill is ready for processing.','/esim-orders.html','esim');
       return res.status(200).json({success:true,order_id:data.order_id,order_ref:data.order_ref,amount_ngn:Number(data.amount_ngn),
         phone_number:data.phone_number,plan_name:data.plan_name||source?.plan_name||'eSIM',
+        carrier:carrierId||null,carrier_label:carrierLabel,
         renewed_from_order_ref:data.renewed_from_order_ref||source?.order_ref,
         wallet:{balance_ngn:Number(profile?.balance||0),balance_usd:Number(profile?.balance_usd||0),ngn_debited:Number(data.wallet_ngn_debited||0),usd_debited:Number(data.wallet_usd_debited||0)}});
     }
