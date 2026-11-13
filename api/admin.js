@@ -454,6 +454,9 @@ async function vendorProductUpsert(body, staff) {
   if (existing && !staff.isAdmin && existing.owner_id !== staff.userId) {
     return { status: 403, body: { success: false, message: 'You can only edit your own products' } };
   }
+  if (existing && String(existing.source || '').toLowerCase() === 'bulkmail' && fields.stock_quantity != null) {
+    return { status: 403, body: { success: false, message: 'BulkMail stock is supplier-managed and can only be changed by catalogue sync.' } };
+  }
 
   const payload = {};
   if (fields.name != null) payload.name = String(fields.name).trim();
@@ -890,6 +893,17 @@ async function smsBulkReprice(body) {
 async function productUpdate(body) {
   const { id, product_key, ...fields } = body;
   if (!id && !product_key) return { status: 400, body: { success: false, message: 'id or product_key required' } };
+
+  // BulkMail stock is supplier-owned. Admin product edits may change price,
+  // description and visibility, but only the BulkMail sync may change stock.
+  let currentProductQuery = supabase.from('products').select('id, product_key, source, stock_quantity');
+  if (id) currentProductQuery = currentProductQuery.eq('id', id);
+  else currentProductQuery = currentProductQuery.eq('product_key', product_key);
+  const { data: currentProduct, error: currentProductError } = await currentProductQuery.maybeSingle();
+  if (currentProductError) return { status: 400, body: { success: false, message: currentProductError.message } };
+  if (currentProduct && String(currentProduct.source || '').toLowerCase() === 'bulkmail' && fields.stock_quantity !== undefined) {
+    return { status: 403, body: { success: false, message: 'BulkMail stock is supplier-managed and can only be changed by catalogue sync.' } };
+  }
 
   const payload = {};
   if (fields.name !== undefined) payload.name = fields.name;
