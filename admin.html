@@ -2819,13 +2819,15 @@ async function syncServer3Now() {
     // force=1 walks every service (not just stale ones) so no country is skipped; progress is saved server-side.
     for (let round = 1; round <= 24; round++) {
       if (prog) prog.textContent = 'VirtualSMS full catalog sync · batch ' + round + ' / 24';
-      const ctl = new AbortController();
-      const tm = setTimeout(function () { try { ctl.abort(); } catch (_) {} }, 55000);
       const headers = await authHeaders();
-      let res;
-      try {
-        res = await fetch('/api/grizzly-sync?action=vsms_sync', { method: 'GET', headers: headers || {}, signal: ctl.signal, cache: 'no-store' });
-      } finally { clearTimeout(tm); }
+      // Do not abort a Server 3 batch in the browser. The server owns the resumable
+      // sync deadline and persists its cursor; a client-side timer can cancel a valid
+      // batch while the supplier or Supabase is still responding.
+      const res = await fetch('/api/grizzly-sync?action=vsms_sync', {
+        method: 'GET',
+        headers: headers || {},
+        cache: 'no-store'
+      });
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { success: false, message: 'Invalid sync response (HTTP ' + res.status + ')' }; }
