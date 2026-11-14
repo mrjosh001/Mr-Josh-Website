@@ -2020,19 +2020,24 @@ function vsIsLocked(job) {
 
 async function vsLoadExisting() {
   const map = new Map();
-  let from = 0;
+  // Keyset pagination avoids increasingly expensive OFFSET scans on the full Server 3 catalog.
+  const pageSize = 500;
+  let lastId = null;
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('number_services')
       .select('id, country_id, service_id, price, price_source, supplier_price, available_quantity, service_name, country_name, is_available, updated_at')
       .eq('source', VS_SOURCE)
       .gte('country_id', VS_ID_BASE)
       .order('id', { ascending: true })
-      .range(from, from + 999);
+      .limit(pageSize);
+    if (lastId != null) query = query.gt('id', lastId);
+    const { data, error } = await query;
     if (error) throw new Error('load existing: ' + error.message);
-    for (const r of data || []) map.set(`${r.country_id}|${r.service_id}`, r);
-    if (!data || data.length < 1000) break;
-    from += 1000;
+    const rows = data || [];
+    for (const r of rows) map.set(`${r.country_id}|${r.service_id}`, r);
+    if (rows.length < pageSize) break;
+    lastId = rows[rows.length - 1].id;
   }
   return map;
 }
