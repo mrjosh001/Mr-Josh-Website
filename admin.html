@@ -2669,11 +2669,17 @@ async function syncServer4Now() {
     while (!done && rounds < 40) {
       rounds += 1;
       if (prog) prog.textContent = 'Server 4 sync · pass ' + rounds + '…';
-      const res = await fetch('/api/grizzly-sync?action=hero_sync&force=1', {
-        method: 'GET',
-        headers: headers,
-        cache: 'no-store'
-      });
+      const ctl = new AbortController();
+      const timer = setTimeout(() => { try { ctl.abort(); } catch (_) {} }, 55000);
+      let res;
+      try {
+        res = await fetch('/api/grizzly-sync?action=hero_sync', {
+          method: 'GET',
+          headers: headers,
+          signal: ctl.signal,
+          cache: 'no-store'
+        });
+      } finally { clearTimeout(timer); }
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch (e) {
@@ -2822,7 +2828,7 @@ async function syncServer3Now() {
       const headers = await authHeaders();
       let res;
       try {
-        res = await fetch('/api/grizzly-sync?action=vsms_sync&force=1', { method: 'GET', headers: headers || {}, signal: ctl.signal, cache: 'no-store' });
+        res = await fetch('/api/grizzly-sync?action=vsms_sync', { method: 'GET', headers: headers || {}, signal: ctl.signal, cache: 'no-store' });
       } finally { clearTimeout(tm); }
       const text = await res.text();
       let data = {};
