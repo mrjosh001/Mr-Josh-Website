@@ -9,6 +9,7 @@
   load('/js/mj-notifications.js');
   load('/js/mj-pull-refresh.js');
   if(/\/(admin|sub-admin)(\.html)?\/?$/i.test(p)) load('/js/admin-sms-patch.js');
+  if(/\/admin(\.html)?\/?$/i.test(p)) load('/js/admin-vsrent-ui.js');
   if(/\/mj-sms(-s3|-history)?(\.html)?$/i.test(p)||/\/dashboard(\.html)?$/i.test(p)) load('/js/s3-fix.js');
 }catch(e){}})();
 /**
