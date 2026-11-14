@@ -2669,17 +2669,13 @@ async function syncServer4Now() {
     while (!done && rounds < 40) {
       rounds += 1;
       if (prog) prog.textContent = 'Server 4 sync · pass ' + rounds + '…';
-      const ctl = new AbortController();
-      const timer = setTimeout(() => { try { ctl.abort(); } catch (_) {} }, 55000);
-      let res;
-      try {
-        res = await fetch('/api/grizzly-sync?action=hero_sync', {
-          method: 'GET',
-          headers: headers,
-          signal: ctl.signal,
-          cache: 'no-store'
-        });
-      } finally { clearTimeout(timer); }
+      // The server bounds each manual pass and persists the cursor. Do not abort
+      // the request from the browser: an abort can discard a successful server response.
+      const res = await fetch('/api/grizzly-sync?action=hero_sync', {
+        method: 'GET',
+        headers: headers,
+        cache: 'no-store'
+      });
       const text = await res.text();
       let data = {};
       try { data = text ? JSON.parse(text) : {}; } catch (e) {
