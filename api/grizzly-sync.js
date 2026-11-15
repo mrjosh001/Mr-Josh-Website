@@ -695,6 +695,7 @@ async function handleOrder(req, res) {
   let countryName = '';
   let customerId = null;
   let deducted = false;
+  let walletDebitId = null;
 
   try {
     const { data: svc, error: svcErr } = await supabase
