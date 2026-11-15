@@ -3646,13 +3646,25 @@ export default async function handler(req, res) {
       const auth = await requireAuth(req);
       if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const body = await readBody(req);
+      const order_id = String(body.order_id || '').trim();
       const area_code = String(body.area_code || '').toUpperCase();
       const mobile_number = String(body.mobile_number || '').replace(/\D/g, '');
       const time = Number(body.time || 1);
-      if (!area_code || !mobile_number) {
-        return json(res, 400, { success: false, message: 'area_code and mobile_number required' });
+      if (!order_id || !area_code || !mobile_number) {
+        return json(res, 400, { success: false, message: 'order_id, area_code and mobile_number required' });
       }
-
+      const { data: rentalRow } = await supabase.from('number_orders').select('id')
+        .eq('user_id', auth.userId).eq('source', 'smsbus_rent').eq('order_id', order_id).maybeSingle();
+      if (!rentalRow) return json(res, 404, { success: false, message: 'Rental not found or no longer belongs to you.' });
+      const renewLockToken = crypto.randomUUID();
+      const { data: renewLockResult, error: renewLockError } = await supabase.rpc('smsbus_rent_begin_operation', {
+        p_rental_order_id: rentalRow.id, p_user_id: auth.userId, p_operation: 'renew', p_lock_token: renewLockToken
+      });
+      const renewLock = Array.isArray(renewLockResult) ? renewLockResult[0] : renewLockResult;
+      if (renewLockError || !renewLock || renewLock.success !== true) {
+        return json(res, 409, { success: false, message: renewLock?.message || 'Another rental operation is processing. Try again shortly.' });
+      }
+      try {
       const { data: profile } = await supabase
         .from('profiles')
         .select('balance, customer_id')
@@ -3708,6 +3720,11 @@ export default async function handler(req, res) {
         new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd,
         ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited
       });
+      } finally {
+        await supabase.rpc('smsbus_rent_release_operation', {
+          p_rental_order_id: rentalRow.id, p_user_id: auth.userId, p_lock_token: renewLockToken
+        }).catch(() => {});
+      }
     }
 
     
