@@ -3168,20 +3168,17 @@ async function vsHandleCancel(req, res) {
         return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
       }
     }
-    const r = await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' });
-    if (r.status === 425) {
-      return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: 30, message: 'Cancel is not available yet. Try again in a moment.' });
-    }
-    // Docs: errors look like { error: "Cannot cancel order with status: sms_received" }.
-    // Only treat the order as "already cancelled/expired" when the supplier says exactly that —
-    // an SMS that already arrived must NEVER be refunded.
-    const errTxt = String((r.json && (r.json.error || r.json.message)) || r.text || '');
-    if (!r.ok && /sms_received|completed|received/i.test(errTxt)) {
-      return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
-    }
-    const already = r.status === 404 || /status:\s*(cancelled|canceled|expired|refunded)/i.test(errTxt);
-    if (!r.ok && !already) {
-      return res.status(400).json({ success: false, code: 'CANCEL_FAILED', message: 'Could not cancel this order right now. Try again shortly.' });
+    const cancellation = await vsCancelAndConfirm(order.order_id);
+    if (!cancellation.confirmed) {
+      const reason = String(cancellation.reason || '');
+      if (/sms_already_received/i.test(reason)) {
+        return res.status(409).json({ success: false, code: 'NUMBER_CODE_ALREADY_RECEIVED', message: 'A code was already received — this order cannot be cancelled.' });
+      }
+      if (/cancel_window_not_open/i.test(reason)) {
+        return res.status(400).json({ success: false, code: 'EARLY_CANCEL_DENIED', wait_seconds: 30, message: 'Cancel is not available yet. Try again in a moment.' });
+      }
+      return res.status(502).json({ success: false, code: 'CANCEL_UNCONFIRMED',
+        message: 'The supplier has not confirmed cancellation. No refund was issued. Try again shortly.' });
     }
     const rf = await claimAndRefundOrder(order, user_id, { status: 'refunded', subtitle: 'Cancelled — balance restored' });
     if (!rf.refunded && rf.reason === 'already_final') return res.status(409).json({ success: false, message: 'This order was already refunded.' });
