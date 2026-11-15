@@ -412,6 +412,9 @@ async function handleOrder(req, res) {
   const originalBalance = Number(profile.balance || 0);
   const originalBalanceUsd = Number(profile.balance_usd || 0);
   let deducted = false;
+  let supplierRequestStarted = false;
+  let supplierAccepted = false;
+  let supplierOutcomeUnknown = false;
   let walletDebitId = null;
   let newBalance = originalBalance;
   let newBalanceUsd = originalBalanceUsd;
@@ -454,6 +457,8 @@ async function handleOrder(req, res) {
 
     const orderRef = external_order_id || ('CT-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
 
+    supplierRequestStarted = true;
+    supplierOutcomeUnknown = true;
     const purchaseRes = await fetch(BASE + '/api/v1/purchase', {
       method: 'POST',
       headers: supplierHeaders(),
@@ -462,10 +467,17 @@ async function handleOrder(req, res) {
     const purchaseJson = await purchaseRes.json().catch(() => ({}));
 
     if (!purchaseRes.ok || (purchaseJson.status && purchaseJson.status !== 'success')) {
-      throw new Error(
-        purchaseJson.message || purchaseJson.error || ('ClassyTee purchase failed: ' + purchaseRes.status)
-      );
+      const supplierMessage =
+        purchaseJson.message || purchaseJson.error || ('ClassyTee purchase failed: ' + purchaseRes.status);
+      // Only a clear client-side rejection is safe to refund automatically.
+      // A timeout, 5xx, or unclear supplier response may have created an order.
+      if (purchaseRes.status >= 400 && purchaseRes.status < 500) {
+        supplierOutcomeUnknown = false;
+      }
+      throw new Error(supplierMessage);
     }
+    supplierAccepted = true;
+    supplierOutcomeUnknown = false;
 
     const delivered = purchaseJson.delivered_items || purchaseJson.items || [];
     const items = (Array.isArray(delivered) ? delivered : []).map((it, idx) => ({
@@ -596,7 +608,7 @@ return res.status(200).json({
     });
   } catch (err) {
     console.error('[classy order]', err);
-    if (deducted) {
+    if (deducted && !supplierAccepted && !supplierOutcomeUnknown) {
       try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
@@ -620,9 +632,13 @@ return res.status(200).json({
     }
     return res.status(500).json({
       success: false,
-      message: deducted
-        ? 'Something went wrong. Your balance has been refunded.'
-        : err.message || 'Something went wrong. Please try again.'
+      message: supplierAccepted
+        ? 'The supplier accepted your purchase, but MJ HUB could not finish saving it. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '. Your balance has not been refunded.'
+        : supplierOutcomeUnknown
+          ? 'The supplier response could not be confirmed. Your balance has not been refunded yet to prevent a duplicate supplier purchase. Contact support with reference ' + String(walletDebitId || 'pending') + '.'
+          : deducted
+            ? 'Something went wrong. Your balance has been refunded.'
+            : err.message || 'Something went wrong. Please try again.'
     });
   }
 }
