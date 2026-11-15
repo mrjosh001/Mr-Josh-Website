@@ -1573,7 +1573,7 @@ export default async function handler(req, res) {
     // 6. Supplier succeeded → save everything. From this point onward, never refund for local errors.
     // -------------------------------------------------
     supplierAccepted = true;
-    const items = orderData.data?.items || [];
+    const items = Array.isArray(orderData.data?.items) ? orderData.data.items : [];
     const detailsText = items.map(i => i.details).filter(Boolean).join('\n\n');
     const rawSupplierPayload = joinRawLogDetails(items) || (items.length ? detailsText : JSON.stringify(orderData.data || orderData));
     const reviewRequired = !items.length || !detailsText;
