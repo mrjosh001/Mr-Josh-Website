@@ -3107,7 +3107,7 @@ export default async function handler(req, res) {
       }
 
       const { data: prior } = await supabase.from('number_orders')
-        .select('id,order_id,phone_number,service_name,price,status,refunded,code')
+        .select('id,order_id,phone_number,service_name,price,status,refunded,code,wallet_debit_id')
         .eq('source', 'smsbus').eq('user_id', auth.userId).eq('idempotency_key', requestKey).maybeSingle();
       if (prior) {
         if (prior.refunded || String(prior.status || '').toLowerCase() === 'refunded') {
