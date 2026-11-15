@@ -3444,8 +3444,20 @@ export default async function handler(req, res) {
         return json(res, 400, { success: false, message: 'Rental and recipient account are required.' });
       }
       if (action === 'rent_transfer') {
+        const captchaToken = String(body.captcha_token || body.cf_turnstile_response || '').trim();
+        if (!captchaToken) {
+          console.warn('[smsbus_rent_transfer] CAPTCHA token missing from transfer request', {
+            requestBodyParsed: !!body && typeof body === 'object',
+            captchaTokenPresent: false
+          });
+          return json(res, 400, {
+            success: false,
+            code: 'CAPTCHA_TOKEN_MISSING',
+            message: 'Security verification was not received. Complete the check and try again.'
+          });
+        }
         const passwordCheck = await verifySmsBusRentTransferPassword(
-          auth.userId, body.password, body.captcha_token
+          auth.userId, body.password, captchaToken
         );
         if (!passwordCheck.ok) {
           if (passwordCheck.code === 'captcha_failed') {
