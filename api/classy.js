@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
@@ -440,6 +441,9 @@ async function handleOrder(req, res) {
   }
 
   try {
+    const cooldown = await claimLogPurchaseCooldown(supabase, user_id, product_key, 10);
+    if (cooldown.unavailable) return res.status(503).json({ success: false, message: 'Purchase protection is temporarily unavailable. Please try again shortly.' });
+    if (cooldown.blocked) return res.status(429).json({ success: false, code: 'DUPLICATE_PURCHASE_COOLDOWN', message: 'You just submitted this product. Wait 10 seconds before trying again.' });
     const debit = await debitWallet(supabase, user_id, total);
     if (!debit.ok) {
       return res.status(402).json({
@@ -502,7 +506,8 @@ async function handleOrder(req, res) {
       })()
     }));
     const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\n\n') || null;
-    const combinedRaw = joinRawLogDetails(items) || items.map((i) => i.details).join('\n\n') || null;
+    const reviewRequired = !items.length || !items.some((item) => item.details);
+    const combinedRaw = joinRawLogDetails(items) || (items.length ? items.map((i) => i.details).join('\n\n') : JSON.stringify(purchaseJson));
     const supplierOrderId =
       (purchaseJson.order_details && purchaseJson.order_details.order_id) ||
       purchaseJson.order_id ||
@@ -515,12 +520,12 @@ async function handleOrder(req, res) {
       product_code: product_key,
       product_name: productName,
       product_type: 'log',
-      description: (product.display_description || product.description || '').trim() || null,
+      description: [((product.display_description || product.description || '').trim() || null), reviewRequired ? 'ADMIN REVIEW REQUIRED: supplier confirmed success but returned no usable credential items.' : null].filter(Boolean).join('\n') || null,
       quantity: items.length || qty,
       amount: total,
       wallet_debit_id: walletDebitId,
       status: 'completed',
-      login_credentials: combinedCreds,
+      login_credentials: reviewRequired ? 'Purchase completed. Delivery is pending admin review. Do not purchase again.' : (combinedCreds || combinedRaw),
       login_credentials_raw: combinedRaw,
       supplier_ref: String(supplierOrderId),
       guide_url: 'https://t.me/mj_hub_tg'
@@ -532,7 +537,7 @@ async function handleOrder(req, res) {
         supplier_order_id: String(supplierOrderId),
         wallet_debit_id: String(walletDebitId)
       });
-      throw new Error('Supplier accepted purchase, but MJ HUB could not save the order: ' + insertErr.message);
+      return res.status(202).json({ success: true, pending: true, reconciliation_required: true, message: 'Your supplier purchase succeeded. MJ HUB is recovering the order record. Do not purchase again.', order_id: String(orderRef), wallet_debit_id: walletDebitId });
     }
 
     await supabase.from('transactions').insert({
