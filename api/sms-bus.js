@@ -2413,6 +2413,12 @@ export default async function handler(req, res) {
           .eq('user_id', auth.userId)
           .eq('idempotency_key', clientIdem)
           .maybeSingle();
+        if (existing && (existing.refunded || String(existing.status || '').toLowerCase() === 'refunded')) {
+          return json(res, 409, {
+            success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false, refunded: true,
+            message: 'The previous purchase attempt was refunded. Start a new purchase request.'
+          });
+        }
         if (existing && existing.order_id && String(existing.order_id).startsWith('PENDING-')) {
           return json(res, 409, {
             success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
@@ -2622,12 +2628,12 @@ export default async function handler(req, res) {
         });
       }
 
-      const { error: txUpdateError } = await supabase.from('transactions').update({
+      const { data: txUpdatedRows, error: txUpdateError } = await supabase.from('transactions').update({
         subtitle: `OTP · ${phone || requestId}`, notes: `order_id:${requestId}`,
         supplier_order: { provider: 'smsbus', request_id: requestId, country_id, project_id }
       }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
-        .eq('external_reference', String(debit.wallet_debit_id));
-      if (txUpdateError) {
+        .eq('external_reference', String(debit.wallet_debit_id)).select('id');
+      if (txUpdateError || !txUpdatedRows?.length) {
         console.error('[sms-bus order] transaction update failed after activation:', txUpdateError.message);
         await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrder.id);
         return json(res, 200, {
