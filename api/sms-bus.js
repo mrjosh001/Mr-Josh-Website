@@ -4292,8 +4292,12 @@ export default async function handler(req, res) {
           .select('order_id, phone_number, service_name, price, status, refunded, notes')
           .eq('source', 'gotsms').eq('user_id', auth.userId).ilike('notes', '%' + requestId + '%').maybeSingle();
         if (priorMulti) {
-          if (priorMulti.order_id && !String(priorMulti.order_id).startsWith('PENDING-') && !priorMulti.refunded &&
-              !['refunded', 'cancelled', 'canceled', 'expired'].includes(String(priorMulti.status || '').toLowerCase())) {
+          if (priorMulti.refunded || String(priorMulti.status || '').toLowerCase() === 'refunded') {
+            return json(res, 409, { success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false,
+              refunded: true, message: 'The previous multi-pack attempt was refunded. You can start a new purchase.' });
+          }
+          if (priorMulti.order_id && !String(priorMulti.order_id).startsWith('PENDING-') &&
+              !['cancelled', 'canceled', 'expired'].includes(String(priorMulti.status || '').toLowerCase())) {
             return json(res, 200, { success: true, replayed: true, data: {
               id: priorMulti.order_id, rent_id: priorMulti.order_id, phone: priorMulti.phone_number,
               number: priorMulti.phone_number, service_name: priorMulti.service_name,
