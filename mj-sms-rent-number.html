@@ -166,6 +166,21 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     </div>
   </div>
 </div>
+<div class="modal-bg" id="transferModal" role="dialog" aria-modal="true" aria-labelledby="trTitle">
+  <div class="modal">
+    <h3 id="trTitle">Transfer this rental</h3>
+    <p class="note">Enter the recipient's MJ HUB username or registered email address. Ownership changes immediately after you confirm.</p>
+    <label for="trRecipient" style="display:block;font-size:13px;font-weight:700;margin:12px 0 6px">Recipient account</label>
+    <input id="trRecipient" type="text" autocomplete="off" autocapitalize="none" placeholder="Username or email address" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid var(--line,#d7dce3);border-radius:12px;background:var(--surface,#fff);color:inherit;font:inherit">
+    <button type="button" class="n3-btn n3-primary" id="trReview" style="width:100%;margin-top:10px">Review transfer</button>
+    <div id="trPreview" hidden style="margin-top:14px"></div>
+    <div id="trActions" class="modal-actions" hidden>
+      <button type="button" class="n3-btn n3-ghost" id="trKeep">Go back</button>
+      <button type="button" class="n3-btn n3-primary" id="trConfirm">Confirm transfer</button>
+    </div>
+    <p class="note" style="margin-top:12px">The recipient becomes the sole owner. Your access ends immediately. Existing cancellation restrictions and the original expiry time remain unchanged.</p>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -177,7 +192,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   const params = new URLSearchParams(location.search);
   const orderId = (params.get('order_id') || '').trim();
   const CANCEL_WINDOW_MS = 20 * 60 * 1000;
-  let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, renewBusy = false, renewMonths = 1, lastCodeShown = '';
+  let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, renewBusy = false, transferBusy = false, transferPreview = null, renewMonths = 1, lastCodeShown = '';
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -263,6 +278,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       try{ sessionStorage.setItem(k,payload); }catch(e1){}
       try{ localStorage.setItem(k,payload); }catch(e2){}
     }catch(e){}
+  }
+  function clearLocalInbox(){
+    try{ var k=inboxStoreKey(); if(k){ sessionStorage.removeItem(k); localStorage.removeItem(k); } }catch(e){}
   }
   function extractCodeFromText(text){
     var body = String(text||'');
@@ -379,6 +397,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(active?'':'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh inbox</button>'+
           (active?'<button type="button" class="n3-btn n3-primary" id="btnRenew"><i class="fa-solid fa-calendar-plus"></i> Renew</button>':'')+
         '</div>'+
+        (active?'<button type="button" class="n3-btn n3-ghost" id="btnTransfer" style="width:100%;margin-top:8px"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer number</button>':'')+
         cancelHtml+
         (active?'<div class="n3-tip"><b>Tip:</b> use a VPN from the same country as this number when verifying. New messages show up below on their own.</div>':'')+
         '<div class="inbox-head"><h2>Inbox</h2><div><span class="pill" id="msgCount">0 messages</span> '+(active?'<span class="pill live">Live</span>':'')+'</div></div>'+
@@ -399,6 +418,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     };
     var rn=document.getElementById('btnRenew'); if(rn) rn.onclick=openRenew;
     var bc=document.getElementById('btnCancel'); if(bc) bc.onclick=openCancel;
+    var bt=document.getElementById('btnTransfer'); if(bt) bt.onclick=openTransfer;
 
     if(cdTimer) clearInterval(cdTimer);
     function tick(){
@@ -443,7 +463,14 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   async function loadMessages(){
     var box=document.getElementById('inbox'); if(!box||!orderId) return;
     var j=await api('rent_sms',{ query:'order_id='+encodeURIComponent(orderId) });
-    var list=(j&&j.success&&Array.isArray(j.data))?j.data:[];
+    if(!j || !j.success){
+      if(j && /rental not found|no longer belongs/i.test(String(j.message||''))){
+        clearLocalInbox();
+        box.innerHTML='<div class="empty">This rental is no longer assigned to your account.</div>';
+      }
+      return;
+    }
+    var list=Array.isArray(j.data)?j.data:[];
     list=mergeLocalInbox(readLocalInbox(), list);
     writeLocalInbox(list);
     var best='';
@@ -496,12 +523,76 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var area=rent.area_code||rent.country_name||'';
     var mobile=String(rent.phone_number||'').replace(/\D/g,'');
     if(mobile.length>10 && mobile.charAt(0)==='1') mobile=mobile.slice(1);
-    var j=await api('rent_renew',{ method:'POST', body:{ area_code:area, mobile_number:mobile, time:renewMonths }});
+    var j=await api('rent_renew',{ method:'POST', body:{ order_id: rent.order_id || orderId, area_code:area, mobile_number:mobile, time:renewMonths }});
     renewBusy=false; btn.disabled=false; btn.textContent=prev;
     hideModal('renewModal');
     if(!j.success){ toast(j.message||'Renew failed','err'); return; }
     toast('Renewed successfully','ok');
     await loadDetail();
+  }
+
+  /* ---------- SMS-BUS rental ownership transfer ---------- */
+  function openTransfer(){
+    if(!rent || !isActive()) return;
+    transferPreview=null;
+    document.getElementById('trRecipient').value='';
+    document.getElementById('trPreview').hidden=true;
+    document.getElementById('trPreview').innerHTML='';
+    document.getElementById('trActions').hidden=true;
+    document.getElementById('trReview').disabled=false;
+    document.getElementById('trReview').textContent='Review transfer';
+    showModal('transferModal');
+    setTimeout(function(){ var el=document.getElementById('trRecipient'); if(el) el.focus(); },50);
+  }
+  function transferPreviewHtml(data){
+    var r=data.rental||{}, recipient=data.recipient||{};
+    var time=r.time_left_ms==null?'Expiry unchanged':formatLeft(r.time_left_ms);
+    var cancel=r.cancellation_available
+      ? '<span style="color:#15803d;font-weight:700">Available under original rules</span>'
+      : '<span style="color:#b45309;font-weight:700">Unavailable under original rules</span>';
+    return '<div class="n3-card" style="padding:14px;margin:0">'+
+      '<div style="font-weight:800;margin-bottom:8px">Transfer to '+esc(recipient.full_name||recipient.username||'MJ HUB user')+
+      (recipient.username?' (@'+esc(recipient.username)+')':'')+'</div>'+
+      '<div class="modal-row"><span>Number</span><b>'+esc(r.phone_number||'—')+'</b></div>'+
+      '<div class="modal-row"><span>Rental</span><b>'+esc(r.service_name||'SMS-BUS rental')+'</b></div>'+
+      '<div class="modal-row"><span>Country</span><b>'+esc(r.country_name||'—')+'</b></div>'+
+      '<div class="modal-row"><span>Remaining time</span><b>'+esc(time)+'</b></div>'+
+      '<div class="modal-row"><span>Inbox history</span><b>'+Number(r.inbox_count||0)+' message(s)</b></div>'+
+      '<div class="modal-row"><span>Cancellation</span>'+cancel+'</div>'+
+      '<div class="modal-warn" style="margin-top:10px">The recipient receives the complete rental and inbox history, the original plan and expiry time, and control of any cancellation, renewal or reactivation options that remain available. Your access ends immediately. Eligible refunds after transfer go to the recipient\'s wallet.</div>'+
+      '<p class="note" style="margin-top:10px">This transfer does not reset the cancellation window or extend the rental.</p>'+
+      '</div>';
+  }
+  async function reviewTransfer(){
+    if(transferBusy) return;
+    var recipient=document.getElementById('trRecipient').value.trim();
+    if(!recipient){ toast('Enter the recipient username or email','err'); return; }
+    transferBusy=true;
+    var review=document.getElementById('trReview');
+    review.disabled=true; review.textContent='Checking account…';
+    var j=await api('rent_transfer_preview',{method:'POST',body:{order_id:orderId,recipient:recipient}});
+    transferBusy=false; review.disabled=false; review.textContent='Review transfer';
+    if(!j.success){ toast(j.message||'Could not prepare transfer','err'); return; }
+    transferPreview=j.data;
+    document.getElementById('trPreview').innerHTML=transferPreviewHtml(j.data);
+    document.getElementById('trPreview').hidden=false;
+    document.getElementById('trActions').hidden=false;
+    review.textContent='Review again';
+  }
+  async function confirmTransfer(){
+    if(transferBusy || !transferPreview) return;
+    var recipient=document.getElementById('trRecipient').value.trim();
+    if(!recipient) return;
+    transferBusy=true;
+    var btn=document.getElementById('trConfirm');
+    var prev=btn.textContent; btn.disabled=true; btn.textContent='Transferring…';
+    var j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient}});
+    transferBusy=false; btn.disabled=false; btn.textContent=prev;
+    if(!j.success){ toast(j.message||'Transfer failed. Ownership was not changed.','err'); return; }
+    clearLocalInbox();
+    hideModal('transferModal');
+    toast('Rental transferred successfully','ok');
+    setTimeout(function(){ location.href='mj-sms-history.html?view=rent'; },900);
   }
 
   /* ---------- cancel ---------- */
@@ -534,22 +625,29 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   /* ---------- wiring ---------- */
   document.getElementById('cmKeep').onclick=function(){ hideModal('cancelModal'); };
   document.getElementById('cmConfirm').onclick=doCancel;
+  document.getElementById('trReview').onclick=reviewTransfer;
+  document.getElementById('trConfirm').onclick=confirmTransfer;
+  document.getElementById('trKeep').onclick=function(){ hideModal('transferModal'); };
+  document.getElementById('trRecipient').addEventListener('input',function(){
+    transferPreview=null; document.getElementById('trPreview').hidden=true;
+    document.getElementById('trActions').hidden=true;
+  });
   document.getElementById('rnCancel').onclick=function(){ hideModal('renewModal'); };
   document.getElementById('rnConfirm').onclick=doRenew;
   document.getElementById('rnMinus').onclick=function(){ renewMonths=Math.max(1,renewMonths-1); drawRenew(); };
   document.getElementById('rnPlus').onclick=function(){ renewMonths=Math.min(12,renewMonths+1); drawRenew(); };
-  ['cancelModal','renewModal'].forEach(function(id){
+  ['cancelModal','renewModal','transferModal'].forEach(function(id){
     var m=document.getElementById(id);
     m.addEventListener('click',function(e){ if(e.target===m) hideModal(id); });
   });
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ hideModal('cancelModal'); hideModal('renewModal'); } });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ hideModal('cancelModal'); hideModal('renewModal'); hideModal('transferModal'); } });
   document.addEventListener('visibilitychange',function(){ if(!document.hidden && rent && isActive()) loadMessages(); });
 
   async function loadDetail(){
     var main=document.getElementById('main');
     if(!orderId){ main.innerHTML='<div class="empty">Missing order. Open it from <a href="mj-sms-history.html?view=rent">your rental history</a>.</div>'; return; }
     var j=await api('rent_detail',{ query:'order_id='+encodeURIComponent(orderId) });
-    if(!j.success||!j.data){ main.innerHTML='<div class="empty">'+esc(j.message||'Rental not found')+'<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>'; return; }
+    if(!j.success||!j.data){ clearLocalInbox(); main.innerHTML='<div class="empty">'+esc(j.message||'Rental not found')+'<br><a href="mj-sms-history.html?view=rent">Back to history</a></div>'; return; }
     rent=j.data;
     renderShell();
     if(params.get('ok')==='1'||params.get('success')==='1'){
