@@ -2026,6 +2026,35 @@ async function vsReq(path, opts = {}) {
   }
 }
 
+/**
+ * Cancel an activation only when the supplier confirms its terminal state.
+ * A successful HTTP response alone is not enough to credit the customer.
+ */
+async function vsCancelAndConfirm(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) return { confirmed: false, reason: 'missing_order_id' };
+  const cancel = await vsReq('/customer/cancel/' + encodeURIComponent(id), {
+    method: 'POST', timeoutMs: 20000
+  });
+  if (cancel.status === 425) return { confirmed: false, reason: 'cancel_window_not_open' };
+  const verify = await vsReq('/customer/order/' + encodeURIComponent(id), {
+    timeoutMs: 12000
+  });
+  if (verify.ok) {
+    const parsed = vsParseOrder(verify.json);
+    if (!parsed.code && ['cancelled', 'canceled', 'expired', 'refunded', 'failed'].includes(String(parsed.status || '').toLowerCase())) {
+      return { confirmed: true, status: parsed.status };
+    }
+    if (parsed.code || parsed.status === 'completed') {
+      return { confirmed: false, reason: 'sms_already_received' };
+    }
+  }
+  return {
+    confirmed: false,
+    reason: cancel.err || (cancel.json && (cancel.json.error || cancel.json.message)) || verify.err || 'supplier_cancellation_unconfirmed'
+  };
+}
+
 // Cron = the CRON_SECRET bearer only. (The old "x-vercel-cron: 1" header check is removed: any client can
 // send that header, so it let anyone start a sync and burn the supplier rate limit.)
 function vsIsCron(req) {
@@ -2707,34 +2736,90 @@ async function vsHandleOrder(req, res) {
       });
     }
 
-    // What the supplier actually charged us (USD). Store the real cost on the order, and if it is higher
-    // than the catalog says, fix the catalog row so the next customer is not sold at a loss.
+    // What the supplier actually charged us (USD). A live charge above the
+    // customer sale price must be cancelled and verified before refunding.
     const paidUsd = vsNum(j.price ?? j.cost ?? j.price_usd ?? (j.order && (j.order.price ?? j.order.cost ?? j.order.price_usd)));
     const costUsd = paidUsd > 0 ? paidUsd : (unitCostUsd || null);
+    const actualCostNgn = paidUsd > 0 ? paidUsd * vsRate() : 0;
+    const belowActualCost = paidUsd > 0 && actualCostNgn > price + 0.01;
+
+    if (paidUsd > 0 && (paidUsd > unitCostUsd + 0.0001 || belowActualCost)) {
+      try {
+        const fix = { supplier_price: paidUsd, updated_at: new Date().toISOString() };
+        if (svc.price_source !== 'manual' && svc.price_source !== 'admin') {
+          fix.price = salePriceFromUsd(paidUsd);
+          fix.price_source = 'system';
+        } else if (belowActualCost) {
+          // Keep admin's chosen price intact, but stop further sales at a known loss.
+          fix.is_available = false;
+        }
+        await supabase.from('number_services').update(fix)
+          .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId);
+      } catch (e) {
+        console.error('[vsms order] supplier cost catalogue update failed:', e?.message || e);
+      }
+    }
+
+    if (belowActualCost) {
+      console.error('[vsms order] actual supplier cost exceeded customer sale price', {
+        orderId, country: iso, service: serviceId, price, paidUsd, actualCostNgn, rate: vsRate()
+      });
+      const cancellation = await vsCancelAndConfirm(orderId);
+      if (cancellation.confirmed) {
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (refund.ok) {
+          deducted = false;
+          const cancelledRow = {
+            source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
+            country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
+            phone_number: phone, price, wallet_debit_id: walletDebitId, supplier_price: paidUsd, currency: 'NGN',
+            status: 'refunded', code: null, time_left: null, refunded: true,
+            notes: 'Supplier actual cost exceeded sale price; supplier cancellation confirmed; exact wallet debit refunded.'
+          };
+          const { error: cancelledInsertError } = await supabase.from('number_orders').insert(cancelledRow);
+          if (cancelledInsertError) console.error('[vsms order] cancelled order history insert failed:', cancelledInsertError.message, { orderId });
+          const { error: refundTxError } = await supabase.from('transactions').insert({
+            user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
+            subtitle: 'Refunded: supplier price changed; activation cancelled',
+            amount: `₦${price.toLocaleString()}`, amount_ngn: debit.ngn_debited, amount_usd: debit.usd_debited,
+            external_reference: String(walletDebitId), status: 'refunded', notes: 'VirtualSMS supplier cancellation confirmed.'
+          });
+          if (refundTxError) console.error('[vsms order] cancelled purchase refund transaction insert failed:', refundTxError.message, { orderId, walletDebitId });
+          return res.status(409).json({
+            success: false, code: 'SUPPLIER_PRICE_CHANGED_CANCELLED',
+            message: 'The supplier price changed after checkout. The activation was cancelled and your wallet was refunded. Please refresh before trying again.'
+          });
+        }
+        console.error('[vsms order] supplier cancelled but wallet refund failed; reconciliation required:', refund.error || refund.message, { orderId, walletDebitId });
+        const pendingRow = {
+          source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
+          country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
+          phone_number: phone, price, wallet_debit_id: walletDebitId, supplier_price: paidUsd, currency: 'NGN',
+          status: 'refund_pending', code: null, time_left: null, refunded: false,
+          notes: 'Supplier cancellation confirmed; exact wallet refund failed and requires reconciliation.'
+        };
+        const { error: pendingInsertError } = await supabase.from('number_orders').insert(pendingRow);
+        if (pendingInsertError) console.error('[vsms order] refund-pending order persistence failed:', pendingInsertError.message, { orderId });
+        return res.status(503).json({
+          success: false, code: 'REFUND_RECONCILIATION_REQUIRED',
+          message: 'The supplier activation was cancelled, but your wallet refund needs reconciliation. Do not purchase again yet. Contact support with reference ' + String(orderId)
+        });
+      }
+      // Do not refund an activation that the supplier has not confirmed cancelled.
+      // Keep the paid order accessible and mark it for admin reconciliation.
+      console.error('[vsms order] cancellation unconfirmed; debit retained for live activation:', cancellation.reason, { orderId, walletDebitId });
+    }
 
     const row = {
       source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
       country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
       phone_number: phone, price, wallet_debit_id: walletDebitId, supplier_price: costUsd, currency: 'NGN',
-      status: 'waiting_for_code', code: null, time_left: null, refunded: false
+      status: 'waiting_for_code', code: null, time_left: null, refunded: false,
+      notes: belowActualCost ? 'Supplier actual cost exceeded sale price; cancellation was not confirmed. Activation retained and flagged for reconciliation.' : null
     };
     let { error: insErr } = await supabase.from('number_orders').insert(row);
     if (insErr) { await new Promise((r2) => setTimeout(r2, 400)); ({ error: insErr } = await supabase.from('number_orders').insert(row)); }
     if (insErr) console.error('[vsms order] number_orders insert failed after charge:', insErr.message, { orderId, user_id });
-
-    if (paidUsd > 0) {
-      if (paidUsd * vsRate() > price) {
-        console.error('[vsms order] SOLD BELOW COST', { orderId, country: iso, service: serviceId, price, paidUsd, rate: vsRate() });
-      }
-      if (paidUsd > unitCostUsd + 0.0001) {
-        try {
-          const fix = { supplier_price: paidUsd, updated_at: new Date().toISOString() };
-          if (svc.price_source !== 'manual' && svc.price_source !== 'admin') { fix.price = salePriceFromUsd(paidUsd); fix.price_source = 'system'; }
-          await supabase.from('number_services').update(fix)
-            .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId);
-        } catch (_) { /* best effort */ }
-      }
-    }
 
     try {
       await supabase.from('transactions').insert({
