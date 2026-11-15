@@ -4018,9 +4018,14 @@ export default async function handler(req, res) {
         refunded_usd: Number(refund.usd_restored || 0)
       });
       } finally {
-        await supabase.rpc('smsbus_rent_release_operation', {
-          p_rental_order_id: row.id, p_user_id: auth.userId, p_lock_token: cancelLockToken
-        }).catch(() => {});
+        try {
+          const { error: releaseError } = await supabase.rpc('smsbus_rent_release_operation', {
+            p_rental_order_id: row.id, p_user_id: auth.userId, p_lock_token: cancelLockToken
+          });
+          if (releaseError) console.warn('[smsbus rent cancel] operation lock release failed', releaseError.message);
+        } catch (releaseError) {
+          console.warn('[smsbus rent cancel] operation lock release threw', releaseError?.message || releaseError);
+        }
       }
     }
 
@@ -4163,9 +4168,14 @@ export default async function handler(req, res) {
         ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited
       });
       } finally {
-        await supabase.rpc('smsbus_rent_release_operation', {
-          p_rental_order_id: rentalRow.id, p_user_id: auth.userId, p_lock_token: renewLockToken
-        }).catch(() => {});
+        try {
+          const { error: releaseError } = await supabase.rpc('smsbus_rent_release_operation', {
+            p_rental_order_id: rentalRow.id, p_user_id: auth.userId, p_lock_token: renewLockToken
+          });
+          if (releaseError) console.warn('[smsbus rent renew] operation lock release failed', releaseError.message);
+        } catch (releaseError) {
+          console.warn('[smsbus rent renew] operation lock release threw', releaseError?.message || releaseError);
+        }
       }
     }
 
