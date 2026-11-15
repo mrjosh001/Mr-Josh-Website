@@ -7,6 +7,7 @@
 <script>(function(){try{var p=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||localStorage.getItem('mjhub_theme')||'system';var t=(p==='light'||p==='dark')?p:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <script>
 // Show all dates/times in Nigeria time (WAT), same as the other MJ HUB pages.
 (function(){var a=Date.prototype.toLocaleString,b=Date.prototype.toLocaleDateString,c=Date.prototype.toLocaleTimeString;function w(o){return Object.assign({timeZone:'Africa/Lagos'},o||{})}
@@ -222,6 +223,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         <label for="trPassword">Your account password</label>
         <input id="trPassword" type="password" autocomplete="current-password" placeholder="Enter your MJ HUB password">
         <div class="transfer-help">Confirm your identity before handing over ownership. Your password is verified securely with your sign-in provider and is not included in the transfer request.</div>
+        <div id="trCaptchaWrap" style="margin-top:14px">
+          <div id="trCaptcha" aria-label="Security verification"></div>
+          <div class="transfer-help" id="trCaptchaHelp">Complete the security check to confirm this transfer.</div>
+        </div>
       </div>
       <div class="transfer-warning">
         <strong>This transfer is permanent and cannot be undone.</strong>
@@ -246,6 +251,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   const orderId = (params.get('order_id') || '').trim();
   const CANCEL_WINDOW_MS = 20 * 60 * 1000;
   let rent = null, pollTimer = null, cdTimer = null, hasSms = false, cancelBusy = false, renewBusy = false, transferBusy = false, transferPreview = null, renewMonths = 1, lastCodeShown = '';
+  let transferCaptchaWidget = null, transferCaptchaToken = '', transferCaptchaPromise = null;
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
   function pad(n){ return String(n).padStart(2,'0'); }
@@ -616,6 +622,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     document.getElementById('trExpiry').textContent=till?new Date(till).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'Not available';
     document.getElementById('trRecipient').value='';
     document.getElementById('trPassword').value='';
+    transferCaptchaToken='';
+    var captchaMount=document.getElementById('trCaptcha');
+    if(transferCaptchaWidget!==null && window.turnstile){try{window.turnstile.remove(transferCaptchaWidget);}catch(e){}}
+    transferCaptchaWidget=null;
+    if(captchaMount) captchaMount.replaceChildren();
+    document.getElementById('trCaptchaHelp').textContent='Complete the security check to confirm this transfer.';
     document.getElementById('trPreview').hidden=true;
     document.getElementById('trPreview').innerHTML='';
     document.getElementById('trPasswordWrap').hidden=true;
@@ -657,20 +669,77 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     document.getElementById('trPasswordWrap').hidden=false;
     document.getElementById('trActions').hidden=false;
     review.textContent='Review recipient again';
+    mountTransferCaptcha();
   }
+  function loadTransferTurnstile(){
+    if(window.turnstile && typeof window.turnstile.render==='function') return Promise.resolve(window.turnstile);
+    if(transferCaptchaPromise) return transferCaptchaPromise;
+    transferCaptchaPromise=new Promise(function(resolve,reject){
+      var script=document.getElementById('mjTransferTurnstileApi');
+      if(!script){
+        script=document.createElement('script');
+        script.id='mjTransferTurnstileApi';
+        script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async=true; script.defer=true;
+        document.head.appendChild(script);
+      }
+      var settled=false;
+      function finish(err){
+        if(settled)return; settled=true;
+        if(err){transferCaptchaPromise=null;reject(err);return;}
+        if(window.turnstile && typeof window.turnstile.render==='function') resolve(window.turnstile);
+        else {transferCaptchaPromise=null;reject(new Error('Security verification could not initialise'));}
+      }
+      script.addEventListener('load',function(){finish(null);},{once:true});
+      script.addEventListener('error',function(){finish(new Error('Security verification failed to load'));},{once:true});
+      if(window.turnstile) finish(null);
+      setTimeout(function(){if(!settled)finish(new Error('Security verification timed out'));},12000);
+    });
+    return transferCaptchaPromise;
+  }
+  async function mountTransferCaptcha(){
+    var mount=document.getElementById('trCaptcha');
+    if(!mount || transferCaptchaWidget!==null) return;
+    try{
+      var api=await loadTransferTurnstile();
+      if(!document.getElementById('trPasswordWrap') || document.getElementById('trPasswordWrap').hidden) return;
+      transferCaptchaWidget=api.render(mount,{
+        sitekey:'0x4AAAAAAF0CXjc8jL8djc4l',
+        theme:'auto',
+        callback:function(token){transferCaptchaToken=token||'';document.getElementById('trCaptchaHelp').textContent=transferCaptchaToken?'Security verification complete.':'Complete the security check to continue.';},
+        'expired-callback':function(){transferCaptchaToken='';document.getElementById('trCaptchaHelp').textContent='Verification expired. Please complete it again.';},
+        'error-callback':function(){transferCaptchaToken='';document.getElementById('trCaptchaHelp').textContent='Verification could not load. Please retry.';}
+      });
+    }catch(error){
+      document.getElementById('trCaptchaHelp').textContent='Security verification could not load. Refresh this page and try again.';
+      console.warn('[smsbus_rent_transfer] CAPTCHA widget unavailable');
+    }
+  }
+  function resetTransferCaptcha(){
+    transferCaptchaToken='';
+    if(transferCaptchaWidget!==null && window.turnstile){
+      try{window.turnstile.reset(transferCaptchaWidget);}catch(e){}
+    }
+    var help=document.getElementById('trCaptchaHelp');
+    if(help) help.textContent='Complete the security check to confirm this transfer.';
+  }
+
   async function confirmTransfer(){
     if(transferBusy || !transferPreview) return;
     var recipient=document.getElementById('trRecipient').value.trim();
     var password=document.getElementById('trPassword').value;
     if(!recipient || !password){ toast('Enter your password to confirm the transfer','err'); return; }
+    if(!transferCaptchaToken){ toast('Complete the security verification before confirming the transfer.','err'); return; }
     transferBusy=true;
     var btn=document.getElementById('trConfirm');
     var prev=btn.textContent; btn.disabled=true; btn.textContent='Verifying…';
     var j;
     try{
       btn.textContent='Verifying password…';
-      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient,password:password}});
+      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient,password:password,captcha_token:transferCaptchaToken}});
+      resetTransferCaptcha();
     }catch(authErr){
+      resetTransferCaptcha();
       transferBusy=false; btn.disabled=false; btn.textContent=prev;
       toast(authErr.message||'Could not verify your password','err');
       return;
