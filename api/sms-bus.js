@@ -1040,7 +1040,9 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
     try { data = await res.json(); } catch { data = { success: false, message: 'Invalid supplier response' }; }
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
-    return { ok: false, status: 502, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
+    // A failed POST may have reached the supplier before the connection dropped.
+    return { ok: false, status: 502, uncertain: method !== 'GET', error: e?.message || String(e),
+      data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
   }
 }
 
@@ -4282,6 +4284,25 @@ export default async function handler(req, res) {
         }
         const plan_id = String(body.plan_id || '').trim();
         if (!plan_id) return json(res, 400, { success: false, message: 'Select a 1 hour or 1 day plan.' });
+        const requestId = String(body.request_id || '').trim().slice(0, 120);
+        if (!requestId) return json(res, 400, { success: false, message: 'Missing purchase request reference. Refresh and try again.' });
+        const requestKey = 'gotsms-multi-' + requestId;
+        const pendingRef = 'PENDING-GOTSMS-MULTI-' + requestId;
+        const { data: priorMulti } = await supabase.from('number_orders')
+          .select('order_id, phone_number, service_name, price, status, refunded, notes')
+          .eq('source', 'gotsms').eq('user_id', auth.userId).eq('idempotency_key', requestKey).maybeSingle();
+        if (priorMulti) {
+          if (priorMulti.order_id && !String(priorMulti.order_id).startsWith('PENDING-') && !priorMulti.refunded &&
+              !['refunded', 'cancelled', 'canceled', 'expired'].includes(String(priorMulti.status || '').toLowerCase())) {
+            return json(res, 200, { success: true, replayed: true, data: {
+              id: priorMulti.order_id, rent_id: priorMulti.order_id, phone: priorMulti.phone_number,
+              number: priorMulti.phone_number, service_name: priorMulti.service_name,
+              price_ngn: Number(priorMulti.price || 0), status: priorMulti.status
+            }});
+          }
+          return json(res, 409, { success: false, reconciliation_required: true,
+            message: 'This multi-pack request is already recorded and is being checked. Do not submit another purchase. Reference ' + requestId });
+        }
 
         let plan = null;
         {
@@ -4346,23 +4367,100 @@ export default async function handler(req, res) {
           return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         }
 
+        const pendingOrderRow = {
+          source: 'gotsms', user_id: auth.userId, customer_id: debit.customer_id || null,
+          order_id: pendingRef, idempotency_key: requestKey, country_id: 12, country_name: 'United States',
+          service_id: serviceIds.join(','), service_name: 'USA multi-pack · processing',
+          phone_number: null, price, wallet_debit_id: debit.wallet_debit_id, supplier_price: packUsd,
+          currency: 'NGN', status: 'processing', refunded: false,
+          notes: JSON.stringify({ request_id: requestId, plan_id, service_ids: serviceIds, multi: true, supplier_outcome: 'pending' })
+        };
+        const { data: pendingOrder, error: pendingOrderError } = await supabase.from('number_orders')
+          .insert(pendingOrderRow).select('id').single();
+        if (pendingOrderError || !pendingOrder) {
+          const rf = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+          return json(res, rf?.ok ? 500 : 503, {
+            success: false, refunded: !!rf?.ok,
+            message: rf?.ok ? 'Could not save the purchase record. Your wallet was restored.' : 'Purchase record and wallet refund need support reconciliation. Do not retry.'
+          });
+        }
+        const pendingTx = {
+          user_id: auth.userId, customer_id: debit.customer_id || null, type: 'purchase', category: 'MJ SMS',
+          title: 'USA multi-pack', subtitle: 'Purchase status checking — do not retry',
+          amount: '₦' + price.toLocaleString(), amount_ngn: Number(debit.ngn_debited || 0),
+          amount_usd: Number(debit.usd_debited || 0), status: 'pending',
+          external_reference: pendingRef, notes: 'gotsms_multi_request:' + requestId
+        };
+        const { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+        if (pendingTxError) console.error('[gotsms_rent_multi] pending transaction insert failed:', pendingTxError.message);
+
         const payload = { plan_id };
         if (areaCode) payload.area_code = areaCode;
         if (carrierId) payload.cellular_carrier_id = carrierId;
 
         const g1 = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
         if (!g1.ok || !g1.data?.success || !g1.data?.data) {
-          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
-          return json(res, g1.status || 400, {
-            success: false,
-            message: gotsmsSafeMsg(g1.data?.message, 'Could not rent number for multi-pack'),
-            data: { out_of_stock: /stock|unavailable|no number/i.test(String(g1.data?.message || '')) }
+          const ambiguous = !!g1.uncertain || Number(g1.status || 0) >= 500;
+          if (ambiguous) {
+            await supabase.from('number_orders').update({
+              status: 'reconciliation_required',
+              notes: JSON.stringify({ request_id: requestId, plan_id, service_ids: serviceIds, multi: true,
+                supplier_outcome: 'unconfirmed', supplier_http_status: Number(g1.status || 0),
+                supplier_error: String(g1.error || g1.data?.message || '').slice(0, 180) })
+            }).eq('id', pendingOrder.id);
+            return json(res, 503, {
+              success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+              message: 'The supplier response was not conclusive. Your wallet has not been refunded yet. Do not submit another purchase. Reference ' + requestId
+            });
+          }
+          const rf = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+          await supabase.from('number_orders').update({ status: rf?.ok ? 'refunded' : 'refund_pending', refunded: !!rf?.ok })
+            .eq('id', pendingOrder.id);
+          await supabase.from('transactions').update({
+            status: rf?.ok ? 'refunded' : 'pending',
+            subtitle: rf?.ok ? 'Multi-pack purchase rejected — wallet refunded' : 'Supplier rejected purchase; wallet refund pending'
+          }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase').eq('external_reference', pendingRef);
+          return json(res, rf?.ok ? (g1.status || 400) : 503, {
+            success: false, refunded: !!rf?.ok, reconciliation_required: !rf?.ok,
+            message: rf?.ok
+              ? gotsmsSafeMsg(g1.data?.message, 'Could not rent number for multi-pack. Your wallet was restored.')
+              : 'The supplier rejected the request, but your wallet refund is pending. Do not retry yet.'
           });
         }
 
         const rent = g1.data.data;
         const rentId = rent.id || rent.rent_id;
         const phone = rent.phone || rent.phone_number || '';
+        if (!rentId || !phone) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ request_id: requestId, plan_id, service_ids: serviceIds, multi: true,
+              supplier_outcome: 'accepted_response_incomplete', supplier_fields: Object.keys(rent || {}).slice(0, 20) })
+          }).eq('id', pendingOrder.id);
+          return json(res, 503, {
+            success: false, reconciliation_required: true, refunded: false,
+            message: 'The supplier may have created your rental, but its details were incomplete. Your wallet has not been refunded. Do not retry. Reference ' + requestId
+          });
+        }
+        const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\\s*·.*$/,'').trim();
+        const expiry = rent.active_till || rent.expires_at || null;
+        const { error: attachOrderError } = await supabase.from('number_orders').update({
+          order_id: String(rentId), idempotency_key: 'gotsms-' + String(rentId), phone_number: phone,
+          service_name: primaryName + ' · Multi-pack processing', service_id: String(serviceIds[0] || ''),
+          status: 'active', code: expiry,
+          notes: JSON.stringify({ request_id: requestId, linked_rent_ids: [String(rentId)], multi: true,
+            services: [primaryName], inbox: [], wh_ids: [], attachment_status: 'pending' })
+        }).eq('id', pendingOrder.id);
+        if (attachOrderError) {
+          console.error('[gotsms_rent_multi] accepted supplier rental could not be linked:', attachOrderError.message);
+          return json(res, 503, { success: false, reconciliation_required: true, refunded: false,
+            message: 'Your supplier rental is active but its purchase record needs reconciliation. Do not retry. Reference ' + rentId });
+        }
+        await supabase.from('transactions').update({
+          external_reference: String(rentId), title: 'USA multi-pack · ' + primaryName,
+          subtitle: phone + ' · second service being attached',
+          supplier_order: { provider: 'gotsms', rent_id: String(rentId), request_id: requestId }
+        }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase').eq('external_reference', pendingRef);
         const secondId = serviceIds[1];
         let g2 = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`, {
           method: 'POST',
