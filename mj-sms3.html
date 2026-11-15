@@ -831,7 +831,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     document.getElementById('psCountry').innerHTML = flagHtml(currentCountry.country_name) + esc(currentCountry.country_name);
     document.getElementById('psTotal').textContent = money(svc.price);
     document.getElementById('psReuseNote').style.display = document.getElementById('reusePref').checked ? 'flex' : 'none';
-    window.__mjSms3BuyId = null;
+    var sms3RequestKey='mj_sms3_order_'+String(currentCountry.country_id)+'_'+String(svc.project_id);
+    try{
+      var storedSms3Id=sessionStorage.getItem(sms3RequestKey);
+      window.__mjSms3BuyId=storedSms3Id||null;
+      window.__mjSms3BuyStorageKey=sms3RequestKey;
+    }catch(e){window.__mjSms3BuyId=null;window.__mjSms3BuyStorageKey=null;}
     document.getElementById('purchaseModal').classList.add('active');
   }
   function closePurchaseModal(){
@@ -858,6 +863,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Purchasing...';
     if(!window.__mjSms3BuyId){
       window.__mjSms3BuyId = 'MJ-SB-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+      try{if(window.__mjSms3BuyStorageKey)sessionStorage.setItem(window.__mjSms3BuyStorageKey,window.__mjSms3BuyId);}catch(e){}
     }
     // Keep modal open so user sees progress; close on success right before redirect
     buy(svc.project_id, btn, prevHtml, window.__mjSms3BuyId);
@@ -933,6 +939,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       if(j && j.reconciliation_required){
         throw new Error(j.message || 'Your purchase is being reconciled. Do not retry yet.');
       }
+      if(!j?.reconciliation_required){
+        try{if(window.__mjSms3BuyStorageKey)sessionStorage.removeItem(window.__mjSms3BuyStorageKey);}catch(e){}
+      }
       const oid = j && j.data && j.data.order_id;
       if(!oid) throw new Error((j && j.message) || 'Purchase failed — no order id returned. Try again.');
       const num = (j.data && (j.data.number || j.data.phone_number)) || '';
@@ -972,6 +981,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       // retry replays the pending attempt instead of creating another charge.
       if(!/reconcil|do not retry|not confirmed|inconclusive|being checked/i.test(msg)){
         window.__mjSms3BuyId = null;
+        try{if(window.__mjSms3BuyStorageKey)sessionStorage.removeItem(window.__mjSms3BuyStorageKey);}catch(e){}
       }
       if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
       isBuying = false;
