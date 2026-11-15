@@ -4375,83 +4375,178 @@ export default async function handler(req, res) {
           return json(res, 400, { success: false, message: 'Invalid rental price. Refresh and try again.' });
         }
 
-        // STRICT: wallet must cover full price BEFORE supplier is called
-        const debit = await debitWalletStrict(auth.userId, price, 'gotsms_rent');
-        if (!debit.ok) {
-          return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
+        const requestId = String(body.request_id || '').trim() ||
+          ('gotsms-single-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9));
+        const requestKey = 'gotsms-single-' + requestId;
+        const pendingRef = 'PENDING-GOTSMS-' + requestId;
+        const { data: priorRent } = await supabase.from('number_orders')
+          .select('order_id, phone_number, service_name, price, status, refunded, notes, code')
+          .eq('source', 'gotsms').eq('user_id', auth.userId).ilike('notes', '%' + requestId + '%').maybeSingle();
+        if (priorRent) {
+          if (priorRent.refunded || String(priorRent.status || '').toLowerCase() === 'refunded') {
+            return json(res, 409, { success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false,
+              message: 'The previous rental attempt was refunded. Start a new purchase request.' });
+          }
+          if (String(priorRent.order_id || '').startsWith('PENDING-') ||
+              ['processing', 'reconciliation_required', 'refund_pending'].includes(String(priorRent.status || '').toLowerCase())) {
+            return json(res, 409, { success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+              message: 'This rental request is already being checked. Do not submit another purchase.' });
+          }
+          return json(res, 200, { success: true, replayed: true, data: {
+            order_id: priorRent.order_id, rent_id: priorRent.order_id, number: priorRent.phone_number,
+            service_name: priorRent.service_name, price_ngn: Number(priorRent.price || 0),
+            expire_at: priorRent.code, status: priorRent.status
+          }});
         }
+
+        // Debit, persist the attempt, and transaction before supplier I/O.
+        const debit = await debitWalletStrict(auth.userId, price, 'gotsms_rent');
+        if (!debit.ok) return json(res, 400, { success: false, message: debit.message || 'Insufficient wallet balance' });
         const profile = { id: auth.userId, balance: debit.balance_before, customer_id: debit.customer_id };
+        const pendingOrderRow = {
+          source: 'gotsms', user_id: auth.userId, customer_id: profile.customer_id || null,
+          order_id: pendingRef, idempotency_key: requestKey, country_id: 12, country_name: 'United States',
+          service_id: String(plan?.service?.id || service_id || 'gotsms'), service_name: String(plan?.service?.name || 'USA rental') + ' · processing',
+          phone_number: null, price, wallet_debit_id: debit.wallet_debit_id, supplier_price: supplierUsd,
+          currency: 'NGN', status: 'processing', refunded: false,
+          notes: JSON.stringify({ request_id: requestId, plan_id, supplier_outcome: 'pending' })
+        };
+        const { data: pendingOrder, error: pendingOrderError } = await supabase.from('number_orders')
+          .insert(pendingOrderRow).select('id').single();
+        if (pendingOrderError || !pendingOrder) {
+          const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+          return json(res, refund?.ok ? 500 : 503, {
+            success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+            message: refund?.ok ? 'Could not save the rental attempt. Your wallet was restored.' : 'Rental attempt and wallet refund need reconciliation. Do not retry.'
+          });
+        }
+        const pendingTx = {
+          user_id: auth.userId, customer_id: profile.customer_id || null, type: 'purchase', category: 'MJ SMS',
+          title: `USA number rental · ${plan?.service?.name || 'SMS'}`,
+          subtitle: 'GotSMS rental status checking — do not retry',
+          amount: '₦' + price.toLocaleString(), amount_ngn: Number(debit.ngn_debited || 0),
+          amount_usd: Number(debit.usd_debited || 0), external_reference: String(debit.wallet_debit_id),
+          status: 'pending', notes: 'gotsms_single_request:' + requestId
+        };
+        let { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+        if (pendingTxError) {
+          await new Promise(resolve => setTimeout(resolve, 350));
+          pendingTxError = (await supabase.from('transactions').insert(pendingTx)).error;
+        }
+        if (pendingTxError) {
+          const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+          await supabase.from('number_orders').update({
+            status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+            notes: 'Supplier request was not sent because pending transaction could not be recorded.'
+          }).eq('id', pendingOrder.id);
+          return json(res, refund?.ok ? 500 : 503, {
+            success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+            message: refund?.ok ? 'Could not record the rental transaction. Your wallet was restored.' : 'Wallet refund needs reconciliation. Do not retry yet.'
+          });
+        }
 
         const payload = { plan_id };
         if (body.area_code) payload.area_code = String(body.area_code).replace(/\D/g, '').slice(0, 6);
         if (body.cellular_carrier_id) payload.cellular_carrier_id = String(body.cellular_carrier_id);
 
-        const g = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
+        let g;
+        try {
+          g = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
+        } catch (supplierError) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ request_id: requestId, plan_id, supplier_outcome: 'unknown_after_timeout',
+              error: String(supplierError?.message || supplierError).slice(0, 300) })
+          }).eq('id', pendingOrder.id);
+          return json(res, 503, {
+            success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+            message: 'The supplier response was not received. Your wallet debit is being held while we verify the rental. Do not retry yet.'
+          });
+        }
         if (!g.ok || !g.data?.success || !g.data?.data) {
-          let restored = false;
-          try {
-            const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-            restored = refund.ok;
-            if (!restored) console.error('[gotsms] exact wallet refund not verified', {
-              userId: auth.userId, amount: price, debitId: debit.wallet_debit_id, error: refund.error || refund.message
+          const supplierMessage = String(g.data?.message || g.data?.error || '');
+          const ambiguous = !!g.uncertain || Number(g.status || 0) === 0 || Number(g.status || 0) >= 500 ||
+            (!g.data && !supplierMessage);
+          if (ambiguous) {
+            await supabase.from('number_orders').update({
+              status: 'reconciliation_required',
+              notes: JSON.stringify({ request_id: requestId, plan_id, supplier_outcome: 'unconfirmed',
+                supplier_http_status: Number(g.status || 0), supplier_message: supplierMessage.slice(0, 300) })
+            }).eq('id', pendingOrder.id);
+            return json(res, 503, {
+              success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+              message: 'The supplier result is not confirmed. Your wallet debit is being held while we verify the rental. Do not retry yet.'
             });
-          } catch (e) {
-            console.error('[gotsms] restore failed', e.message || e);
           }
-          const supplierMessage = String(g.data?.message || '');
+          const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
           const outOfStock = /out.?of.?stock|no stock|unavailable|sold.?out|not available|insufficient stock/i.test(supplierMessage);
-          return json(res, restored ? (outOfStock ? 409 : (g.status || 400)) : 500, {
-            success: false,
-            message: restored
+          await supabase.from('number_orders').update({
+            status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+            notes: JSON.stringify({ request_id: requestId, supplier_outcome: 'rejected', supplier_message: supplierMessage.slice(0, 300) })
+          }).eq('id', pendingOrder.id);
+          await supabase.from('transactions').update({
+            status: refund?.ok ? 'refunded' : 'pending',
+            subtitle: refund?.ok ? 'Rental rejected — wallet refunded' : 'Rental rejected — refund pending'
+          }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+            .eq('external_reference', String(debit.wallet_debit_id));
+          return json(res, refund?.ok ? (outOfStock ? 409 : (g.status || 400)) : 503, {
+            success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+            message: refund?.ok
               ? (outOfStock ? 'This rental plan is out of stock. Your wallet has been refunded.' : (gotsmsSafeMsg(supplierMessage) || 'Rental failed. Your wallet has been refunded.'))
-              : 'The supplier rejected the rental and wallet restoration could not be verified. Do not retry yet. Support has been alerted.',
-            data: { refunded: restored, refund_pending: !restored, out_of_stock: outOfStock }
+              : 'The supplier rejected the rental, but wallet restoration is pending. Do not retry yet.'
           });
         }
 
         const rent = g.data.data;
-        let savedOrder;
-        try {
-          savedOrder = await gotsmsSaveOrder({
-          userId: auth.userId,
-          customerId: profile.customer_id,
-          rentId: rent.id,
-          phone: rent.phone,
-          serviceName: rent.service?.name || plan?.service?.name,
-          serviceId: rent.service?.id || plan?.service?.id,
-          priceNgn: price,
-          supplierUsd,
-          status: rent.status || 'active',
-          activeTill: rent.active_till,
-          planLabel: rent.plan?.duration_translation || plan?.duration_translation,
-          carrierName: rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
-          areaCode: body.area_code || rent.area_code || null,
-          walletDebitId: debit.wallet_debit_id
-          });
-        } catch (orderError) {
-          console.error('[gotsms] rental provisioned but order persistence failed', {
-            rentId: rent.id, userId: auth.userId, error: orderError.message || orderError
-          });
-          return json(res, 500, {
-            success: false,
-            message: 'The supplier created the rental, but the order record could not be saved. Do not purchase again. Contact support with rental reference ' + String(rent.id),
-            data: { supplier_rent_id: rent.id, persistence_error: true }
+        if (!rent.id || !rent.phone) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ request_id: requestId, plan_id, supplier_outcome: 'accepted_response_incomplete',
+              supplier_fields: Object.keys(rent || {}).slice(0, 20) })
+          }).eq('id', pendingOrder.id);
+          return json(res, 503, {
+            success: false, reconciliation_required: true, refunded: false,
+            message: 'GotSMS may have created the rental, but its response was incomplete. Your wallet debit is being held. Do not retry yet.'
           });
         }
-        const orderId = savedOrder;
-        const transactionSaved = await gotsmsRecordPurchaseTx({
-          userId: auth.userId,
-          customerId: profile.customer_id,
-          rent,
-          priceNgn: price,
-          orderId,
-          title: `USA number rental · ${rent.service?.name || 'SMS'}`,
+
+        const orderId = `GS-${String(rent.id).slice(0, 8)}-${Date.now().toString(36)}`;
+        const displayBits = [rent.service?.name || plan?.service?.name || 'USA rental',
+          rent.plan?.duration_translation || plan?.duration_translation,
+          rent.cellular_carrier?.name || rent.carrier?.name || body.carrier_name || null,
+          body.area_code || rent.area_code || null].filter(Boolean);
+        const finalOrder = {
+          order_id: orderId, idempotency_key: 'gotsms-' + String(rent.id),
+          service_name: displayBits.join(' · '), service_id: String(rent.service?.id || plan?.service?.id || service_id || 'gotsms'),
+          phone_number: rent.phone, price, supplier_price: supplierUsd, status: rent.status || 'active',
+          code: rent.active_till ? String(rent.active_till) : null,
+          notes: JSON.stringify({ request_id: requestId, linked_rent_ids: [String(rent.id)], multi: false, services: [], inbox: [], wh_ids: [] })
+        };
+        let orderUpdate = await supabase.from('number_orders').update(finalOrder).eq('id', pendingOrder.id).select('id');
+        if (orderUpdate.error || !orderUpdate.data?.length) {
+          await new Promise(resolve => setTimeout(resolve, 350));
+          orderUpdate = await supabase.from('number_orders').update(finalOrder).eq('id', pendingOrder.id).select('id');
+        }
+        if (orderUpdate.error || !orderUpdate.data?.length) {
+          return json(res, 200, {
+            success: true, reconciliation_required: true,
+            message: 'GotSMS created your rental and your wallet was charged. Order history is being reconciled. Do not purchase again. Reference ' + String(rent.id),
+            data: { supplier_rent_id: rent.id, phone: rent.phone, order_id: orderId, price_ngn: price }
+          });
+        }
+        const { error: txFinalizeError } = await supabase.from('transactions').update({
+          external_reference: String(rent.id), title: `USA number rental · ${rent.service?.name || 'SMS'}`,
           subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
-          walletDebitId: debit.wallet_debit_id
-        });
-        if (!transactionSaved) {
-          console.error('[gotsms] rental transaction persistence failed', { rentId: rent.id, userId: auth.userId, amount: price });
+          supplier_order: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId, request_id: requestId }
+        }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+          .eq('external_reference', String(debit.wallet_debit_id));
+        if (txFinalizeError) {
+          return json(res, 200, { success: true, reconciliation_required: true,
+            message: 'GotSMS created your rental and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
+            data: { supplier_rent_id: rent.id, phone: rent.phone, order_id: orderId, price_ngn: price }
+          });
         }
+        const transactionSaved = true;
         const { data: fresh } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).single();
         // Optional auto-renew (GotSMS: POST renewal/toggle flips state; default is off)
         let autoRenew = false;
