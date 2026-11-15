@@ -4446,7 +4446,7 @@ export default async function handler(req, res) {
             message: 'The supplier may have created your rental, but its details were incomplete. Your wallet has not been refunded. Do not retry. Reference ' + requestId
           });
         }
-        const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\\s*·.*$/,'').trim();
+        const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\s*·.*$/,'').trim();
         const expiry = rent.active_till || rent.expires_at || null;
         const { error: attachOrderError } = await supabase.from('number_orders').update({
           order_id: String(rentId), idempotency_key: 'gotsms-' + String(rentId), phone_number: phone,
@@ -4483,7 +4483,7 @@ export default async function handler(req, res) {
           if (secondAttached) {
             g2 = { ok: true, status: 200, data: { success: true, data: { service: { name: (body.service_names && body.service_names[1]) || 'Service 2' } } } };
           } else {
-            const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\\s*·.*$/,'').trim();
+            const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\s*·.*$/,'').trim();
             const primaryOrderName = detail.ok && Array.isArray(detailServices)
               ? primaryName + ' · Multi-pack attachment failed'
               : primaryName + ' · Multi-pack verification pending';
