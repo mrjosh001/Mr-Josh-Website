@@ -168,6 +168,23 @@ a{color:inherit;text-decoration:none}
   .deposit-guide-chip{padding:8px 10px}
 }
 
+
+.va-name-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(8,15,30,.66);backdrop-filter:blur(7px)}
+.va-name-overlay.show{display:flex}
+.va-name-dialog{width:min(100%,420px);padding:26px;border:1px solid var(--border,rgba(148,163,184,.25));border-radius:22px;background:var(--card,#fff);box-shadow:0 24px 80px rgba(0,0,0,.28);color:var(--text,#0f172a)}
+.va-name-mark{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:rgba(37,99,235,.12);color:#2563eb;font-size:20px;margin-bottom:16px}
+.va-name-dialog h3{font-size:21px;line-height:1.25;margin:0 0 9px;font-weight:800}
+.va-name-dialog>p{font-size:13px;line-height:1.65;color:var(--muted,#64748b);margin:0 0 18px}
+.va-name-dialog label{display:block;font-size:12px;font-weight:750;margin:0 0 8px}
+.va-name-dialog input{box-sizing:border-box;width:100%;height:48px;padding:0 13px;border:1px solid var(--border,#cbd5e1);border-radius:12px;background:var(--input-bg,transparent);color:inherit;font:inherit;font-size:15px;outline:none}
+.va-name-dialog input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.va-name-dialog .va-name-note{font-size:11px;margin:10px 0 20px;display:flex;gap:7px;align-items:flex-start}
+.va-name-note i{color:#2563eb;margin-top:2px}
+.va-name-actions{display:flex;gap:10px}
+.va-name-actions button{flex:1;min-height:44px;border:0;border-radius:12px;font:inherit;font-size:13px;font-weight:750;cursor:pointer}
+.va-name-cancel{background:rgba(148,163,184,.16);color:inherit}
+.va-name-confirm{background:#2563eb;color:#fff}
+.va-name-confirm:disabled{opacity:.55;cursor:not-allowed}
 </style>
 <link rel="stylesheet" href="/css/skeleton.css">
 <link rel="stylesheet" href="/css/mj-motion.css">
@@ -385,6 +402,20 @@ document.addEventListener('click', function(e){
     <div id="vaErrorState" style="display:none;">
       <p class="hint" id="vaErrorText" style="color:var(--danger);text-align:left;"></p>
       <button type="button" class="btn btn-outline" onclick="checkVirtualAccount()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
+    </div>
+    <div class="va-name-overlay" id="vaLegalNameModal" aria-hidden="true">
+      <div class="va-name-dialog" role="dialog" aria-modal="true" aria-labelledby="vaLegalNameTitle">
+        <div class="va-name-mark"><i class="fa-solid fa-id-card"></i></div>
+        <h3 id="vaLegalNameTitle">Confirm your legal name</h3>
+        <p>Enter your full name exactly as it appears on your bank account. This name will update your MJ HUB profile and will be sent to our account provider.</p>
+        <label for="vaLegalFullName">Full name</label>
+        <input id="vaLegalFullName" type="text" maxlength="80" autocomplete="name" placeholder="e.g. John Michael Doe">
+        <p class="va-name-note"><i class="fa-solid fa-shield-halved"></i> Use your real first and last name. Do not enter a nickname or business name.</p>
+        <div class="va-name-actions">
+          <button type="button" class="va-name-cancel" onclick="closeVaLegalNameModal()">Cancel</button>
+          <button type="button" class="va-name-confirm" id="vaLegalNameContinue" onclick="confirmVaLegalName()">Continue</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -910,7 +941,37 @@ async function checkVirtualAccount(opts) {
     showVaState('error');
   }
 }
+function openVaLegalNameModal() {
+  const modal = document.getElementById('vaLegalNameModal');
+  if (!modal) return;
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => document.getElementById('vaLegalFullName')?.focus(), 60);
+}
+function closeVaLegalNameModal() {
+  const modal = document.getElementById('vaLegalNameModal');
+  if (!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+}
+function confirmVaLegalName() {
+  const input = document.getElementById('vaLegalFullName');
+  const name = String(input?.value || '').trim().replace(/\\s+/g, ' ');
+  const valid = /^[\\p{L}][\\p{L}\\p{M}'’.-]*(?:\\s+[\\p{L}][\\p{L}\\p{M}'’.-]*)+$/u;
+  if (name.length < 5 || name.length > 80 || !valid.test(name)) {
+    toast('Enter your full legal name, including at least your first and last name.');
+    input?.focus();
+    return;
+  }
+  window.__vaLegalFullName = name;
+  closeVaLegalNameModal();
+  generateVirtualAccount();
+}
 async function generateVirtualAccount() {
+  if (!window.__vaLegalFullName) {
+    openVaLegalNameModal();
+    return;
+  }
   if (generatingVa) return;
   generatingVa = true;
   const btn = document.getElementById('vaGenerateBtn');
@@ -928,7 +989,7 @@ async function generateVirtualAccount() {
     const res = await fetch('/api/deposit?action=virtual_account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-      body: JSON.stringify({ create: true, bank: bank })
+      body: JSON.stringify({ create: true, bank: bank, full_name: window.__vaLegalFullName })
     });
     let data = {};
     try { data = await res.json(); } catch (_) {}
