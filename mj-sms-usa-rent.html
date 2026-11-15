@@ -1167,8 +1167,25 @@ async function doRent(){
   var j;
   try{
     if(selectedPlan.source==='virtualsms_rent'){
-      var requestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjvr-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+      var vsSignature=String(selectedPlan.service_id)+'|'+String(selectedPlan.duration_hours);
+      var vsStored=null;
+      try{vsStored=JSON.parse(sessionStorage.getItem('mj_virtualsms_rent_request')||'null');}catch(e){}
+      if(vsStored&&vsStored.id&&vsStored.signature!==vsSignature){
+        unlockFail();
+        var vsPendingMsg='A previous VirtualSMS rental is still being reconciled. Retry that request or contact support before starting another rental.';
+        if(errEl)errEl.textContent=vsPendingMsg;
+        showRentToast(vsPendingMsg,false);
+        return;
+      }
+      var requestId=vsStored&&vsStored.id&&vsStored.signature===vsSignature?vsStored.id:
+        ((window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjvr-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+      if(!(vsStored&&vsStored.id&&vsStored.signature===vsSignature)){
+        try{sessionStorage.setItem('mj_virtualsms_rent_request',JSON.stringify({id:requestId,signature:vsSignature}));}catch(e){}
+      }
       j=await vsRentApi('order',{method:'POST',body:{service_id:selectedPlan.service_id,service_name:selectedService&&selectedService.name||selectedPlan.service_name,duration_hours:selectedPlan.duration_hours,quoted_price_ngn:Number(selectedPlan.price_ngn||0),request_id:requestId}});
+      if(j&&(j.success||(j.refunded===true&&!j.reconciliation_required))){
+        try{sessionStorage.removeItem('mj_virtualsms_rent_request');}catch(e){}
+      }
     }else if(multiMode){
       if(!multiSelected||multiSelected.length!==2){
         unlockFail();
