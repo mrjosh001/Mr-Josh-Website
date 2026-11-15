@@ -241,6 +241,36 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Verify the account password on the server before allowing an irreversible rental transfer.
+// Supabase Auth performs the password check and applies the project's configured abuse controls.
+async function verifySmsBusRentTransferPassword(userId, password, captchaToken) {
+  const secret = String(password || '');
+  if (!secret) return { ok: false };
+  const { data: account, error: accountError } = await supabase.auth.admin.getUserById(userId);
+  const email = account?.user?.email;
+  if (accountError || !email) return { ok: false };
+  const anonKey = process.env.SUPABASE_ANON_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
+  try {
+    const response = await fetch(
+      process.env.SUPABASE_URL + '/auth/v1/token?grant_type=password',
+      {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password: secret,
+          ...(captchaToken ? { captcha_token: String(captchaToken) } : {})
+        })
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+    return { ok: response.ok && result?.user?.id === userId };
+  } catch (_) {
+    return { ok: false };
+  }
+}
+
 
 // ---------- GotSMS (USA physical SIM rentals) — folded in to stay within Vercel 12-function limit ----------
 
@@ -3393,6 +3423,14 @@ export default async function handler(req, res) {
       const recipientInput = String(body.recipient || body.recipient_identifier || '').trim();
       if (!order_id || !recipientInput) {
         return json(res, 400, { success: false, message: 'Rental and recipient account are required.' });
+      }
+      if (action === 'rent_transfer') {
+        const passwordCheck = await verifySmsBusRentTransferPassword(
+          auth.userId, body.password, body.captcha_token
+        );
+        if (!passwordCheck.ok) {
+          return json(res, 401, { success: false, message: 'Password verification failed. Check your password and try again.' });
+        }
       }
 
       let { data: row, error: rowErr } = await supabase.from('number_orders').select('*')
