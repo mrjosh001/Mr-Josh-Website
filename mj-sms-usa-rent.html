@@ -1180,6 +1180,24 @@ async function doRent(){
       body.service_ids=multiSelected.map(function(s){return s.id;});
       body.service_names=multiSelected.map(function(s){return s.name;});
       body.service_id=multiSelected[0].id;
+      // Reuse the same request reference after a lost response so the backend
+      // can return the existing attempt instead of charging for a second rental.
+      var multiSignature=String(selectedPlan.id)+'|'+body.service_ids.slice().sort().join(',');
+      var multiStored=null;
+      try{multiStored=JSON.parse(sessionStorage.getItem('mj_gotsms_multi_request')||'null');}catch(e){}
+      if(multiStored&&multiStored.id&&multiStored.signature!==multiSignature){
+        unlockFail();
+        var pendingMsg='A previous multi-pack purchase is still being reconciled. Do not start another one yet.';
+        if(errEl)errEl.textContent=pendingMsg;
+        showRentToast(pendingMsg,false);
+        return;
+      }
+      if(multiStored&&multiStored.id&&multiStored.signature===multiSignature){
+        body.request_id=multiStored.id;
+      }else{
+        body.request_id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjgm-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+        try{sessionStorage.setItem('mj_gotsms_multi_request',JSON.stringify({id:body.request_id,signature:multiSignature}));}catch(e){}
+      }
       j=await api('rent_multi',{method:'POST',body:body});
     }else if(qty>1){
       body.quantity=qty;
@@ -1204,6 +1222,10 @@ async function doRent(){
       if(multiMode) j=await api('rent_multi',{method:'POST',body:body});
       else if(qty>1){ body.quantity=qty; j=await api('rent_bulk',{method:'POST',body:body}); }
       else j=await api('rent',{method:'POST',body:body});
+    }
+
+    if(multiMode && body.request_id && j && !j.reconciliation_required){
+      try{sessionStorage.removeItem('mj_gotsms_multi_request');}catch(e){}
     }
 
     if(selectedPlan.source==='virtualsms_rent' && j && !j.success && j.code==='PRICE_UPDATED'){
