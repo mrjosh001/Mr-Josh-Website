@@ -965,7 +965,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         return;
       }
       toast(msg, 'error');
-      window.__mjSms3BuyId = null;
+      // Keep the same request key when the supplier result is uncertain so a
+      // retry replays the pending attempt instead of creating another charge.
+      if(!/reconcil|do not retry|not confirmed|inconclusive|being checked/i.test(msg)){
+        window.__mjSms3BuyId = null;
+      }
       if(btn){ btn.disabled = false; btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
       isBuying = false;
     }
