@@ -7,7 +7,8 @@
 <script>(function(){try{var p=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||localStorage.getItem('mjhub_theme')||'system';var t=(p==='light'||p==='dark')?p:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <script src="/js/mj-page-loader.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="dns-prefetch" href="//challenges.cloudflare.com">
+<link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+<link rel="preload" as="script" href="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit">
 <script>
 // Show all dates/times in Nigeria time (WAT), same as the other MJ HUB pages.
 (function(){var a=Date.prototype.toLocaleString,b=Date.prototype.toLocaleDateString,c=Date.prototype.toLocaleTimeString;function w(o){return Object.assign({timeZone:'Africa/Lagos'},o||{})}
@@ -776,7 +777,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         script=document.createElement('script');
         script.id='mjTransferTurnstileApi';
         script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        script.async=true; script.defer=true;
+        script.async=true;
         document.head.appendChild(script);
       }
       var settled=false;
@@ -786,9 +787,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         if(window.turnstile && typeof window.turnstile.render==='function') resolve(window.turnstile);
         else {transferCaptchaPromise=null;reject(new Error('Security verification could not initialise'));}
       }
+      // The script may have completed during page startup before this promise was requested.
+      if(window.turnstile && typeof window.turnstile.render==='function'){finish(null);return;}
       script.addEventListener('load',function(){finish(null);},{once:true});
       script.addEventListener('error',function(){finish(new Error('Security verification failed to load'));},{once:true});
-      if(window.turnstile) finish(null);
       setTimeout(function(){if(!settled)finish(new Error('Security verification timed out'));},12000);
     });
     return transferCaptchaPromise;
