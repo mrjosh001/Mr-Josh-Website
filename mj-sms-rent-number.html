@@ -466,7 +466,11 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(!j || !j.success){
       if(j && /rental not found|no longer belongs/i.test(String(j.message||''))){
         clearLocalInbox();
-        box.innerHTML='<div class="empty">This rental is no longer assigned to your account.</div>';
+        if(pollTimer) clearInterval(pollTimer);
+        if(cdTimer) clearInterval(cdTimer);
+        rent=null;
+        var main=document.getElementById('main');
+        if(main) main.innerHTML='<div class="empty">This rental is no longer assigned to your account. <a href="mj-sms-history.html?view=rent">Return to rental history</a>.</div>';
       }
       return;
     }
