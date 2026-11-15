@@ -1334,7 +1334,7 @@ async function handleCheckout(req, res, raw, publicKey, businessId) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, email, phone, customer_id')
+    .select('full_name, email, phone, phone_number, customer_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -1579,23 +1579,35 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
     .eq('id', user.id)
     .maybeSingle();
 
-  // Use the customer's real profile name so PocketFi labels the VA with their name
-  // (not a generic "Fresh" / merchant placeholder).
-  const profileFullName = String(
-    profile?.full_name ||
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.user_metadata?.username ||
-      ''
-  ).trim();
-  const { first_name, last_name } = splitName(
-    profileFullName || String(user.email || '').split('@')[0] || 'MJ Hub Customer'
-  );
-  const displayAccountName = profileFullName || `${first_name} ${last_name}`.trim();
+  // Legal name is self-declared by the customer and becomes the canonical MJ HUB profile name.
+  const legalFullName = String(body.full_name || '').trim().replace(/\s+/g, ' ');
+  const validName = /^[\p{L}][\p{L}\p{M}'’.-]*(?:\s+[\p{L}][\p{L}\p{M}'’.-]*)+$/u;
+  if (legalFullName.length < 5 || legalFullName.length > 80 || !validName.test(legalFullName)) {
+    return res.status(400).json({ success: false, message: 'Enter your full legal name as it appears on your bank account (at least first and last name).' });
+  }
 
+  const phoneDigits = String(profile?.phone || profile?.phone_number || user.phone || '').replace(/\D/g, '');
+  let phone = phoneDigits;
+  if (phoneDigits.length === 13 && phoneDigits.startsWith('234')) phone = '0' + phoneDigits.slice(3);
+  if (phone.length !== 11) {
+    return res.status(400).json({ success: false, message: 'Your saved phone number must be a valid 11-digit Nigerian number. Update your phone number in your profile, then try again.' });
+  }
+
+  const { data: savedProfile, error: nameUpdateError } = await supabase
+    .from('profiles')
+    .update({ full_name: legalFullName, updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+    .select('id, full_name')
+    .maybeSingle();
+  if (nameUpdateError || !savedProfile?.full_name) {
+    console.error('[virtual-account] legal-name profile update failed', nameUpdateError?.message || 'profile row missing');
+    return res.status(500).json({ success: false, message: 'We could not save your legal name. No account was created. Please try again.' });
+  }
+
+  const profileFullName = savedProfile.full_name;
+  const { first_name, last_name } = splitName(profileFullName);
+  const displayAccountName = profileFullName;
   const email = profile?.email || user.email || `user-${user.id.slice(0, 8)}@mjhub.store`;
-  const phoneDigits = String(profile?.phone || user.phone || '').replace(/\D/g, '');
-  const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-11) : '08000000000';
 
   // Only Paga or Safe Haven
   const ALLOWED_BANKS = new Set(['paga', 'saveheaven']);
