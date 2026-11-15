@@ -2357,29 +2357,23 @@ export default async function handler(req, res) {
       // Prefer admin-controlled selling price from DB, but never sell below the
       // live supplier cost converted at the atomic wallet FX rate.
       let price = applyMarkup(costUsd);
+      let dbSvc = null;
       try {
-        const { data: dbSvc } = await supabase
+        const result = await supabase
           .from('number_services')
-          .select('price, is_available')
+          .select('price, is_available, price_source')
           .eq('source', 'smsbus')
           .eq('country_id', String(country_id))
           .eq('service_id', String(project_id))
           .maybeSingle();
+        dbSvc = result.data || null;
         if (dbSvc && dbSvc.is_available === false) {
           return json(res, 400, { success: false, message: 'This service is not available. Try another or contact support.' });
         }
         if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
       } catch (_) {}
-      if (!(costUsd > 0) || !Number.isFinite(costUsd)) {
-        await supabase.from('number_services').update({ is_available: false, updated_at: new Date().toISOString() })
-          .eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
-        return json(res, 409, {
-          success: false, code: 'SUPPLIER_PRICE_UNAVAILABLE',
-          message: 'This SMS service is temporarily unavailable because its supplier cost could not be verified. No charge was made.'
-        });
-      }
       if (!(price > 0) || !saleCoversCost(price, costUsd, WALLET_USD_RATE)) {
-        if (svc.price_source !== 'manual' && svc.price_source !== 'admin') {
+        if (dbSvc?.price_source !== 'manual' && dbSvc?.price_source !== 'admin') {
           const correctedPrice = profitFloorNgn(costUsd, WALLET_USD_RATE);
           await supabase.from('number_services').update({
             price: correctedPrice, price_source: 'system', updated_at: new Date().toISOString()
