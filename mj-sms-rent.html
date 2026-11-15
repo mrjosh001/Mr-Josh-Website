@@ -235,7 +235,7 @@ document.getElementById('rentBtn').onclick = async function() {
     document.getElementById('err').textContent = j.message || 'Could not complete rental';
     return;
   }
-  try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {}
+  if (!j.reconciliation_required) { try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {} }
   var oid = (j.data && (j.data.order_id || j.data.id)) || '';
   var num = (j.data && j.data.number) || '';
   document.getElementById('ok').textContent =
