@@ -458,7 +458,7 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
     const prev = existingMap.get(String(serviceCode));
     if (prev) {
       // Admin hid this row — keep hidden even if supplier has stock again
-      const nextAvail = prev.is_available === false ? false : availableQty > 0;
+      const nextAvail = prev.is_available === false ? false : (availableQty > 0 && supplierPriceUsd > 0 && Number.isFinite(supplierPriceUsd));
       const sameCost = Number(prev.supplier_price || 0) === supplierPriceUsd;
       const sameQty = Number(prev.available_quantity || 0) === availableQty;
       const sameName = String(prev.service_name || '') === String(friendlyName);
@@ -492,7 +492,8 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
         currency: 'NGN',
         available_quantity: availableQty,
         providers_raw: providersRaw,
-        is_available: availableQty > 0,
+        // Never publish a purchasable Grizzly service without a verified supplier cost.
+        is_available: availableQty > 0 && supplierPriceUsd > 0 && Number.isFinite(supplierPriceUsd),
         updated_at: now
       });
     }
@@ -787,6 +788,13 @@ async function handleOrder(req, res) {
       resolvedProviderId = providerId;
     }
 
+    if (SOURCE === 'grizzlysms' && (!(supplierPriceUsd > 0) || !Number.isFinite(Number(supplierPriceUsd)))) {
+      return res.status(409).json({
+        success: false,
+        code: 'SUPPLIER_PRICE_UNAVAILABLE',
+        message: 'This number service is temporarily unavailable because its supplier cost could not be verified. No charge was made.'
+      });
+    }
     {
       const guard = assertSaleCoversCost(price, supplierPriceUsd);
       if (!guard.ok) {
