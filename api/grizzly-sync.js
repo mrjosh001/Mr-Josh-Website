@@ -4,6 +4,7 @@ import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { sendPushToUser } from '../lib/push.js';
 import { createHero } from '../lib/hero.js';
 import { applyApiCors, handleOptions, requireAdminOrCron } from '../lib/secure.js';
+import { reserveServer1Attempt, updateServer1Attempt, recordServer1PurchaseTransaction } from '../lib/server1-purchase-attempts.js';
 
 /**
  * /api/grizzly-sync — GrizzlySMS (Server 1) + VirtualSMS (Server 3) operations in one file.
@@ -725,6 +726,8 @@ async function handleOrder(req, res) {
   let customerId = null;
   let deducted = false;
   let walletDebitId = null;
+  let purchaseAttemptId = null;
+  let preserveDebitForReconciliation = false;
 
   try {
     const { data: svc, error: svcErr } = await supabase
@@ -849,6 +852,22 @@ async function handleOrder(req, res) {
       }
     }
 
+    // Reserve a durable attempt before taking money. A duplicate key is never
+    // allowed to create a second supplier purchase.
+    const reserved = await reserveServer1Attempt(supabase, {
+      userId: user_id, source: SOURCE, idempotencyKey,
+      countryId, serviceId, providerId: resolvedProviderId,
+      priceNgn: price, supplierPriceUsd
+    });
+    if (!reserved.created) {
+      return res.status(409).json({
+        success: false, code: 'PURCHASE_ATTEMPT_EXISTS',
+        message: 'This purchase request has already been recorded. Check Number History before trying again.',
+        attempt_state: reserved.attempt.state
+      });
+    }
+    purchaseAttemptId = reserved.attempt.id;
+
     // Central atomic debit: NGN first, USD remainder.
     const debit = await debitWallet(supabase, user_id, price);
     if (!debit.ok) {
@@ -864,6 +883,10 @@ async function handleOrder(req, res) {
     const newBalance = debit.balance_ngn;
     const newBalanceUsd = debit.balance_usd;
     deducted = true;
+    await updateServer1Attempt(supabase, purchaseAttemptId, {
+      state: 'debited', wallet_debit_id: walletDebitId,
+      ngn_debited: Number(debit.ngn_debited || 0), usd_debited: Number(debit.usd_debited || 0)
+    });
     const qs = new URLSearchParams({
       api_key: SUP_KEY,
       action: 'getNumberV2',
@@ -879,8 +902,26 @@ async function handleOrder(req, res) {
       qs.set('maxPrice', String(Number(supplierPriceUsd)));
     }
 
-    let supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
-    let rawText = await supplierRes.text();
+    await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'supplier_pending' });
+    let supplierRes;
+    let rawText;
+    try {
+      supplierRes = await fetch(`${sup.base}?${qs.toString()}`, {
+        method: 'GET', signal: AbortSignal.timeout(20000)
+      });
+      rawText = await supplierRes.text();
+    } catch (supplierError) {
+      preserveDebitForReconciliation = true;
+      await updateServer1Attempt(supabase, purchaseAttemptId, {
+        state: 'outcome_unknown', error_code: 'SUPPLIER_TIMEOUT_OR_NETWORK',
+        error_message: String(supplierError?.message || supplierError).slice(0, 500),
+        supplier_response: { outcome: 'unknown_after_supplier_request' }
+      });
+      return res.status(503).json({
+        success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+        message: 'The supplier response was not received. Your wallet debit is being held while we verify the order. Do not retry yet.'
+      });
+    }
 
     // If the selected Grizzly pool is empty, make one bounded fallback request
     // across other pools, still capped at the selected pool's USD maxPrice.
@@ -889,8 +930,23 @@ async function handleOrder(req, res) {
     if (SOURCE === 'grizzlysms' && rawText.trim() === 'NO_NUMBERS') {
       if (resolvedProviderId) qs.delete('providerIds');
       await new Promise(r => setTimeout(r, 350));
-      supplierRes = await fetch(`${sup.base}?${qs.toString()}`, { method: 'GET' });
-      rawText = await supplierRes.text();
+      try {
+        supplierRes = await fetch(`${sup.base}?${qs.toString()}`, {
+          method: 'GET', signal: AbortSignal.timeout(20000)
+        });
+        rawText = await supplierRes.text();
+      } catch (supplierError) {
+        preserveDebitForReconciliation = true;
+        await updateServer1Attempt(supabase, purchaseAttemptId, {
+          state: 'outcome_unknown', error_code: 'SUPPLIER_FALLBACK_UNCONFIRMED',
+          error_message: String(supplierError?.message || supplierError).slice(0, 500),
+          supplier_response: { first_response: 'NO_NUMBERS', fallback_outcome: 'unknown' }
+        });
+        return res.status(503).json({
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+          message: 'The supplier fallback response was not received. Your wallet debit is being held while we verify the order. Do not retry yet.'
+        });
+      }
     }
 
     let orderData = null;
@@ -905,38 +961,57 @@ async function handleOrder(req, res) {
       }
     }
 
-    // Supplier failed → restore balance only (no refund transaction row)
+    // A supplier's explicit known rejection is safe to refund. A malformed
+    // response, missing activation ID, or server/network error is ambiguous.
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
-      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
-      if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-      deducted = false;
-
-      // Optional single failed purchase marker (not a refund row)
-      try {
-        await supabase.from('transactions').insert({
-          user_id,
-          customer_id: customerId,
-          type: 'purchase',
-          category: 'MJ SMS',
-          title: serviceName,
-          subtitle: `Refunded: ${humanizeGrizzlyError(failureReason) || 'Unavailable'} · wallet restored`,
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: debit.ngn_debited,
-          amount_usd: debit.usd_debited,
-          external_reference: String(walletDebitId),
-          status: 'refunded',
-          notes: rawText.slice(0, 500)
+      const explicitReject = KNOWN_ERRORS.has(rawText.trim());
+      if (!explicitReject) {
+        preserveDebitForReconciliation = true;
+        await updateServer1Attempt(supabase, purchaseAttemptId, {
+          state: 'outcome_unknown',
+          supplier_http_status: Number(supplierRes.status || 0),
+          error_code: failureReason || 'UNRECOGNIZED_SUPPLIER_RESPONSE',
+          error_message: String(rawText || '').slice(0, 500),
+          supplier_response: { raw: String(rawText || '').slice(0, 1500) }
         });
-      } catch (_) {}
-
+        return res.status(503).json({
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+          message: 'The supplier response could not confirm whether a number was created. Your wallet debit is being held while we verify the result. Do not retry yet.'
+        });
+      }
+      await updateServer1Attempt(supabase, purchaseAttemptId, {
+        state: 'supplier_rejected', supplier_http_status: Number(supplierRes.status || 0),
+        error_code: failureReason, error_message: String(rawText || '').slice(0, 500),
+        supplier_response: { raw: String(rawText || '').slice(0, 1500) }
+      });
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      if (!refund.ok) {
+        await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'reconciliation_required' });
+        throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
+      }
+      deducted = false;
+      await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'refunded' });
+      await recordServer1PurchaseTransaction(supabase, {
+        userId: user_id, customerId, priceNgn: price,
+        ngnDebited: debit.ngn_debited, usdDebited: debit.usd_debited,
+        walletDebitId, status: 'refunded', title: serviceName,
+        subtitle: `Refunded: ${humanizeGrizzlyError(failureReason) || 'Unavailable'} · wallet restored`,
+        notes: String(rawText || '').slice(0, 500)
+      });
       return res.status(400).json({
-        success: false,
-        code: failureReason || 'SUPPLIER_ERROR',
-        message:
-          humanizeGrizzlyError(failureReason) ||
-          'Purchase failed. Your balance has been restored.'
+        success: false, code: failureReason || 'SUPPLIER_ERROR',
+        message: humanizeGrizzlyError(failureReason) || 'Purchase failed. Your balance has been restored.'
       });
     }
+
+    preserveDebitForReconciliation = true;
+    await updateServer1Attempt(supabase, purchaseAttemptId, {
+      state: 'activated',
+      supplier_http_status: Number(supplierRes.status || 0),
+      supplier_activation_id: String(orderData.activationId),
+      supplier_phone: orderData.phoneNumber ? String(orderData.phoneNumber) : null,
+      supplier_response: orderData
+    });
 
     const numberOrderRow = {
       source: SOURCE,
@@ -970,36 +1045,54 @@ async function handleOrder(req, res) {
     }
 
     if (insertErr) {
-      console.error(
-        '[grizzly order] FAILED to save number_orders row after retry — customer charged and number reserved:',
-        insertErr.message,
-        {
-          activationId: orderData.activationId,
-          user_id,
-          country_id: countryId,
-          service_id: serviceId
+      console.error('[grizzly order] number_orders persistence failed after supplier activation:', insertErr.message, {
+        activationId: orderData.activationId, user_id, country_id: countryId, service_id: serviceId
+      });
+      await updateServer1Attempt(supabase, purchaseAttemptId, {
+        state: 'reconciliation_required',
+        supplier_activation_id: String(orderData.activationId),
+        supplier_phone: orderData.phoneNumber ? String(orderData.phoneNumber) : null
+      });
+      return res.status(200).json({
+        success: true, reconciliation_required: true,
+        message: 'Your number was activated and your wallet was charged. Order history is being reconciled. Do not purchase again.',
+        data: {
+          order_id: orderData.activationId, number: orderData.phoneNumber, status: 'waiting_for_code',
+          service_name: serviceName, country_name: countryName, price,
+          new_balance: newBalance, new_balance_usd: newBalanceUsd,
+          ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited,
+          created_at: new Date().toISOString()
         }
-      );
+      });
     }
 
-    // Pending until code arrives — history should not show "completed" early
-    await supabase.from('transactions').insert({
-      user_id,
-      customer_id: customerId,
-      type: 'purchase',
-      category: 'MJ SMS',
-      title: countryName ? `${serviceName} · ${countryName}` : serviceName,
-      subtitle: `${countryName || ''} · waiting for SMS`.trim(),
-      amount: `₦${price.toLocaleString()}`,
-      amount_ngn: debit.ngn_debited,
-      amount_usd: debit.usd_debited,
-      external_reference: String(walletDebitId),
-      status: 'pending',
-      notes: orderData && (orderData.activationId || orderData.id)
-        ? ('sms_order:' + String(orderData.activationId || orderData.id))
-        : null,
-      supplier_order: orderData
-    });
+    // Persist the purchase transaction; a failure is recoverable from the attempt ledger.
+    try {
+      await recordServer1PurchaseTransaction(supabase, {
+        userId: user_id, customerId, priceNgn: price,
+        ngnDebited: debit.ngn_debited, usdDebited: debit.usd_debited,
+        walletDebitId, status: 'pending',
+        title: countryName ? `${serviceName} · ${countryName}` : serviceName,
+        subtitle: `${countryName || ''} · waiting for SMS`.trim(),
+        notes: 'sms_order:' + String(orderData.activationId),
+        supplierOrder: orderData
+      });
+    } catch (txError) {
+      console.error('[grizzly order] transaction persistence failed:', txError?.message || txError);
+      await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'reconciliation_required' });
+      return res.status(200).json({
+        success: true, reconciliation_required: true,
+        message: 'Your number was activated and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
+        data: {
+          order_id: orderData.activationId, number: orderData.phoneNumber, status: 'waiting_for_code',
+          service_name: serviceName, country_name: countryName, price,
+          new_balance: newBalance, new_balance_usd: newBalanceUsd,
+          ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited,
+          created_at: new Date().toISOString()
+        }
+      });
+    }
+    await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'order_persisted' });
 
     return res.status(200).json({
       success: true,
@@ -1021,21 +1114,26 @@ async function handleOrder(req, res) {
   } catch (err) {
     console.error('grizzly order error:', err);
 
-    if (deducted) {
+    if (deducted && !preserveDebitForReconciliation) {
       try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-        // no refund transaction row
+        if (purchaseAttemptId) await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'refunded' });
       } catch (refundErr) {
         console.error('CRITICAL: Auto-restore failed (grizzly order)', refundErr);
+        if (purchaseAttemptId) {
+          try { await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'reconciliation_required' }); } catch (_) {}
+        }
       }
+    } else if (purchaseAttemptId && preserveDebitForReconciliation) {
+      try { await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'reconciliation_required' }); } catch (_) {}
     }
 
     return res.status(500).json({
       success: false,
-      message: deducted
-        ? 'Something went wrong. Your balance has been restored.'
-        : 'Something went wrong. Please try again.'
+      message: preserveDebitForReconciliation
+        ? 'The supplier outcome is being reconciled. Your wallet debit is being held. Do not purchase again yet.'
+        : (deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.')
     });
   }
 }
