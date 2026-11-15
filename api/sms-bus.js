@@ -245,10 +245,10 @@ const supabase = createClient(
 // Supabase Auth performs the password check and applies the project's configured abuse controls.
 async function verifySmsBusRentTransferPassword(userId, password, captchaToken) {
   const secret = String(password || '');
-  if (!secret) return { ok: false };
+  if (!secret) return { ok: false, code: 'missing_password' };
   const { data: account, error: accountError } = await supabase.auth.admin.getUserById(userId);
   const email = account?.user?.email;
-  if (accountError || !email) return { ok: false };
+  if (accountError || !email) return { ok: false, code: 'account_email_unavailable' };
   const anonKey = process.env.SUPABASE_ANON_KEY ||
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
   try {
@@ -258,16 +258,18 @@ async function verifySmsBusRentTransferPassword(userId, password, captchaToken) 
         method: 'POST',
         headers: { apikey: anonKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email,
+          email: String(email).trim().toLowerCase(),
           password: secret,
           ...(captchaToken ? { captcha_token: String(captchaToken) } : {})
         })
       }
     );
     const result = await response.json().catch(() => ({}));
-    return { ok: response.ok && result?.user?.id === userId };
+    const returnedUserId = result?.user?.id || result?.data?.user?.id;
+    if (response.ok && returnedUserId === userId) return { ok: true };
+    return { ok: false, code: String(result?.code || result?.error_code || ''), status: response.status };
   } catch (_) {
-    return { ok: false };
+    return { ok: false, code: 'auth_request_failed' };
   }
 }
 
@@ -3429,7 +3431,14 @@ export default async function handler(req, res) {
           auth.userId, body.password, body.captcha_token
         );
         if (!passwordCheck.ok) {
-          return json(res, 401, { success: false, message: 'Password verification failed. Check your password and try again.' });
+          if (passwordCheck.code === 'captcha_failed') {
+            return json(res, 400, { success: false, code: 'CAPTCHA_REQUIRED', message: 'Complete the security verification, then try again.' });
+          }
+          if (passwordCheck.code === 'invalid_credentials') {
+            return json(res, 401, { success: false, code: 'INVALID_PASSWORD', message: 'Password verification failed. Check your password and try again.' });
+          }
+          console.warn('[smsbus_rent_transfer] password verification unavailable:', passwordCheck.code || 'unknown');
+          return json(res, 503, { success: false, code: 'PASSWORD_VERIFICATION_UNAVAILABLE', message: 'We could not verify your account right now. No transfer was made. Please try again.' });
         }
       }
 
