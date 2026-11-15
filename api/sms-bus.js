@@ -2498,8 +2498,26 @@ export default async function handler(req, res) {
         amount_usd: Number(debit.usd_debited || 0), external_reference: String(debit.wallet_debit_id),
         status: 'pending', notes: 'smsbus_pending:' + clientIdem
       };
-      const { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
-      if (pendingTxError) console.error('[sms-bus order] pending transaction insert failed:', pendingTxError.message);
+      let { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+      if (pendingTxError) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        const retryTx = await supabase.from('transactions').insert(pendingTx);
+        pendingTxError = retryTx.error;
+      }
+      if (pendingTxError) {
+        console.error('[sms-bus order] pending transaction insert failed after retry:', pendingTxError.message);
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: 'Supplier request was not sent because pending transaction could not be recorded.'
+        }).eq('id', pendingOrder.id);
+        return json(res, refund?.ok ? 500 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok
+            ? 'Could not create the purchase transaction. Your wallet was restored and no supplier request was sent.'
+            : 'Purchase was not sent to the supplier, but your wallet refund needs reconciliation. Do not retry yet.'
+        });
+      }
       const params = {
         country_id: String(country_id),
         project_id: String(project_id)
