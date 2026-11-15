@@ -13,6 +13,11 @@ create table if not exists public.smsbus_rent_transfers (
 );
 create index if not exists smsbus_rent_transfers_rental_time_idx
   on public.smsbus_rent_transfers (rental_order_id, transferred_at);
+-- A rental can be transferred only once for its entire lifetime.
+-- This unique constraint is the final concurrency-safe guard against B -> C.
+create unique index if not exists smsbus_rent_transfers_one_transfer_per_rental_uidx
+  on public.smsbus_rent_transfers (rental_order_id);
+
 
 create table if not exists public.smsbus_rent_operation_locks (
   rental_order_id uuid primary key references public.number_orders(id) on delete cascade,
@@ -74,6 +79,13 @@ begin
   if coalesce(v_order.refunded,false)
      or lower(coalesce(v_order.status,'')) in ('refunded','cancelled','canceled','expired') then
     return jsonb_build_object('success', false, 'message', 'Only active, non-refunded rentals can be transferred.');
+  end if;
+
+  if exists (
+    select 1 from public.smsbus_rent_transfers
+     where rental_order_id = v_order.id
+  ) then
+    return jsonb_build_object('success', false, 'message', 'This rental has already been transferred once and cannot be transferred again.');
   end if;
 
   if nullif(trim(coalesce(v_order.code,'')), '') is not null
