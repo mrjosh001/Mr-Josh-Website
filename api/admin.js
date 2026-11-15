@@ -2050,7 +2050,7 @@ async function getOverviewStats(body) {
     1450;
 
   let logsQuery = supabase.from('orders')
-    .select('amount, quantity, product_key, product_code, product_name, product_id, status')
+    .select('amount, quantity, product_code, product_name, product_id, status')
     .in('status', ['completed', 'paid', 'success', 'delivered', 'complete', 'fulfilled'])
     .gte('created_at', cutoff);
   if (endAt) logsQuery = logsQuery.lte('created_at', endAt);
