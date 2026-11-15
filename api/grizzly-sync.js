@@ -871,6 +871,10 @@ async function handleOrder(req, res) {
     // Central atomic debit: NGN first, USD remainder.
     const debit = await debitWallet(supabase, user_id, price);
     if (!debit.ok) {
+      await updateServer1Attempt(supabase, purchaseAttemptId, {
+        state: 'supplier_rejected', error_code: 'WALLET_DEBIT_FAILED',
+        error_message: String(debit.message || 'Insufficient combined wallet balance.').slice(0, 300)
+      });
       return res.status(402).json({
         success: false,
         message: debit.message || 'Insufficient combined wallet balance.',
@@ -991,13 +995,18 @@ async function handleOrder(req, res) {
       }
       deducted = false;
       await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'refunded' });
-      await recordServer1PurchaseTransaction(supabase, {
-        userId: user_id, customerId, priceNgn: price,
-        ngnDebited: debit.ngn_debited, usdDebited: debit.usd_debited,
-        walletDebitId, status: 'refunded', title: serviceName,
-        subtitle: `Refunded: ${humanizeGrizzlyError(failureReason) || 'Unavailable'} · wallet restored`,
-        notes: String(rawText || '').slice(0, 500)
-      });
+      try {
+        await recordServer1PurchaseTransaction(supabase, {
+          userId: user_id, customerId, priceNgn: price,
+          ngnDebited: debit.ngn_debited, usdDebited: debit.usd_debited,
+          walletDebitId, status: 'refunded', title: serviceName,
+          subtitle: `Refunded: ${humanizeGrizzlyError(failureReason) || 'Unavailable'} · wallet restored`,
+          notes: String(rawText || '').slice(0, 500)
+        });
+      } catch (txError) {
+        await updateServer1Attempt(supabase, purchaseAttemptId, { state: 'reconciliation_required' });
+        console.error('[grizzly order] refunded transaction history failed:', txError?.message || txError);
+      }
       return res.status(400).json({
         success: false, code: failureReason || 'SUPPLIER_ERROR',
         message: humanizeGrizzlyError(failureReason) || 'Purchase failed. Your balance has been restored.'
@@ -1053,6 +1062,18 @@ async function handleOrder(req, res) {
         supplier_activation_id: String(orderData.activationId),
         supplier_phone: orderData.phoneNumber ? String(orderData.phoneNumber) : null
       });
+      try {
+        await recordServer1PurchaseTransaction(supabase, {
+          userId: user_id, customerId, priceNgn: price,
+          ngnDebited: debit.ngn_debited, usdDebited: debit.usd_debited,
+          walletDebitId, status: 'pending', title: serviceName,
+          subtitle: 'Order history reconciliation pending',
+          notes: 'sms_order:' + String(orderData.activationId),
+          supplierOrder: orderData
+        });
+      } catch (txError) {
+        console.error('[grizzly order] recovery transaction insert failed:', txError?.message || txError);
+      }
       return res.status(200).json({
         success: true, reconciliation_required: true,
         message: 'Your number was activated and your wallet was charged. Order history is being reconciled. Do not purchase again.',
