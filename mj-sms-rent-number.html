@@ -140,6 +140,104 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .transfer-actions .n3-btn{min-height:46px}
 .transfer-actions .n3-primary{flex:1}
 @media(max-width:420px){.modal-bg{padding:8px}.transfer-head{padding:16px}.transfer-body{padding:15px 16px 17px}.transfer-summary-row span{flex-basis:86px}}
+
+/* Transfer confirmation: compact, editorial modal treatment */
+.modal.transfer-modal{
+  width:min(100%,420px);
+  max-width:420px;
+  max-height:min(86dvh,760px);
+  border-radius:19px;
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  box-shadow:0 24px 72px rgba(0,0,0,.34);
+}
+.transfer-modal .transfer-head{
+  padding:15px 18px;
+  gap:10px;
+}
+.transfer-modal h3{
+  font-size:17px;
+  line-height:1.25;
+  letter-spacing:-.045em;
+  font-weight:800;
+}
+.transfer-modal .transfer-close{
+  width:32px;height:32px;flex:0 0 32px;border-radius:10px;
+}
+.transfer-modal .transfer-body{
+  padding:15px 18px 17px;
+}
+.transfer-modal .transfer-summary{
+  padding:10px 13px;
+  border-radius:12px;
+  margin-bottom:12px;
+}
+.transfer-modal .transfer-summary-row{
+  padding:5px 0;
+  gap:10px;
+  font-size:12px;
+  line-height:1.4;
+}
+.transfer-modal .transfer-summary-row span{flex-basis:88px}
+.transfer-modal .transfer-summary-row strong{font-weight:700}
+.transfer-modal .transfer-intro{
+  font-size:12px;
+  line-height:1.55;
+  margin-bottom:13px;
+  letter-spacing:-.01em;
+}
+.transfer-modal .transfer-field{margin-bottom:12px}
+.transfer-modal .transfer-field label{
+  font-size:10px;
+  letter-spacing:.055em;
+  margin-bottom:6px;
+}
+.transfer-modal .transfer-field input{
+  min-height:43px;
+  padding:10px 12px;
+  border-radius:11px;
+  font-size:13px;
+  letter-spacing:-.01em;
+}
+.transfer-modal .transfer-help{
+  font-size:10.5px;
+  line-height:1.45;
+  margin-top:5px;
+}
+.transfer-modal .transfer-preview{
+  padding:11px 12px;
+  border-radius:12px;
+}
+.transfer-modal .transfer-warning{
+  padding:10px 12px;
+  margin:12px 0;
+  border-radius:0 10px 10px 0;
+  font-size:11px;
+  line-height:1.5;
+}
+.transfer-modal .transfer-warning strong{
+  font-size:11.5px;
+  margin-bottom:3px;
+}
+.transfer-modal .transfer-actions{
+  gap:8px;
+  padding-top:12px;
+  margin-top:12px;
+}
+.transfer-modal .transfer-actions .n3-btn{
+  min-height:42px;
+  border-radius:11px;
+  font-size:12px;
+}
+.transfer-modal #trCaptchaWrap{margin-top:10px!important}
+.transfer-modal #trCaptcha{max-width:100%;overflow:hidden}
+@media(max-width:480px){
+  .modal-bg:has(.transfer-modal){padding:10px;align-items:center}
+  .modal.transfer-modal{width:min(100%,400px);max-height:84dvh;border-radius:17px}
+  .transfer-modal .transfer-head{padding:13px 15px}
+  .transfer-modal .transfer-body{padding:13px 15px 15px}
+  .transfer-modal .transfer-summary-row span{flex-basis:82px}
+}
+
 .modal p.note{font-size:12.5px;color:var(--muted);line-height:1.5;font-weight:600;margin-bottom:12px}
 .modal-rows{background:var(--card-2);border:1px solid var(--line);border-radius:14px;margin-bottom:12px}
 .modal-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px;font-weight:600}
