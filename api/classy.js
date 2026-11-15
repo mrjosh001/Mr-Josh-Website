@@ -17,7 +17,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
-import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
@@ -477,9 +477,21 @@ async function handleOrder(req, res) {
     // Otherwise leave empty so formatCredentials auto-detects email:pass / multi-part lines.
     const rawHint = String(product.display_description || product.description || '').trim();
     const formatHint = /:/.test(rawHint) && rawHint.length < 120 ? rawHint : '';
-    const combinedCreds =
-      formatMultiLogCredentials(items, formatHint) ||
-      (items[0] ? formatCredentials(items[0].details, formatHint) || items[0].details : null);
+    // Format each delivered credential independently. The shared multi-log formatter
+    // currently has a broken internal reference and can throw after supplier fulfillment.
+    // Keep the supplier's raw credential text as a safe fallback.
+    const formattedItems = items.map((item) => ({
+      ...item,
+      formattedDetails: (() => {
+        try {
+          return formatCredentials(item.details, formatHint) || item.details;
+        } catch (formatError) {
+          console.error('[classy] credential formatting failed; preserving raw delivery:', formatError.message);
+          return item.details;
+        }
+      })()
+    }));
+    const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\n\n') || null;
     const combinedRaw = joinRawLogDetails(items) || items.map((i) => i.details).join('\n\n') || null;
     const supplierOrderId =
       (purchaseJson.order_details && purchaseJson.order_details.order_id) ||
@@ -565,8 +577,8 @@ return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: items.map((i) => ({
-          details: formatCredentials(i.details, formatHint) || i.details,
+        items: formattedItems.map((i) => ({
+          details: i.formattedDetails,
           serial: i.serial
         })),
         login_credentials: combinedCreds,
