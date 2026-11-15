@@ -3985,38 +3985,116 @@ export default async function handler(req, res) {
         return json(res, 409, { success: false, message: renewLock?.message || 'Another rental operation is processing. Try again shortly.' });
       }
       try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('balance, customer_id')
-        .eq('id', auth.userId)
-        .single();
+      const profileResult = await supabase.from('profiles')
+        .select('balance, customer_id').eq('id', auth.userId).single();
+      const profile = profileResult.data;
+      if (!profile) return json(res, 400, { success: false, message: 'Profile not found.' });
+      const requestId = String(body.request_id || '').trim() ||
+        ('sb-renew-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9));
+      const renewalRef = 'SMSBUS-RENEW-' + requestId;
+      const { data: priorRenewal } = await supabase.from('transactions')
+        .select('id, status, supplier_order, subtitle')
+        .eq('user_id', auth.userId).eq('type', 'purchase').eq('category', 'MJ SMS')
+        .eq('external_reference', renewalRef).maybeSingle();
+      if (priorRenewal) {
+        if (String(priorRenewal.status || '').toLowerCase() === 'completed') {
+          return json(res, 200, { success: true, replayed: true, data: priorRenewal.supplier_order || {}, message: 'Renewal already completed.' });
+        }
+        if (String(priorRenewal.status || '').toLowerCase() === 'refunded') {
+          return json(res, 409, { success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false,
+            message: 'The previous renewal attempt was refunded. Start a new renewal request.' });
+        }
+        return json(res, 409, { success: false, code: 'RENEWAL_PENDING', reconciliation_required: true,
+          message: 'This renewal is still being verified. Do not submit another renewal yet.' });
+      }
+
       const quote = await resolveSmsBusRentQuote(area_code, time);
-      if (!quote.ok) return json(res, 409, {
-        success: false, code: quote.code, message: quote.message
-      });
+      if (!quote.ok) return json(res, 409, { success: false, code: quote.code, message: quote.message });
       const { supplierUsd, price } = quote;
       const debit = await debitWallet(supabase, auth.userId, price);
       if (!debit.ok) return json(res, 402, {
         success: false, message: debit.message || 'Insufficient combined wallet balance.',
         required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
       });
+
+      const pendingRenewalTx = {
+        user_id: auth.userId, customer_id: profile.customer_id || null, type: 'purchase', category: 'MJ SMS',
+        title: 'Number rental renewal', subtitle: 'Renewal status checking — do not retry',
+        amount: `₦${price.toLocaleString()}`, amount_ngn: Number(debit.ngn_debited || 0),
+        amount_usd: Number(debit.usd_debited || 0), external_reference: renewalRef,
+        status: 'pending', notes: JSON.stringify({ rental_order_id: order_id, request_id: requestId, area_code, months: time })
+      };
+      let { error: renewalTxError } = await supabase.from('transactions').insert(pendingRenewalTx);
+      if (renewalTxError) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        renewalTxError = (await supabase.from('transactions').insert(pendingRenewalTx)).error;
+      }
+      if (renewalTxError) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, refund?.ok ? 500 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Could not record the renewal. Your wallet was restored.' : 'Renewal transaction and wallet refund need reconciliation. Do not retry.'
+        });
+      }
+
       let bus;
       try {
         bus = await smsbusGet(RENT_BASE, '/v1/rent/renew/number', {
-          area_code,
-          mobile_number,
-          time: String(time)
+          area_code, mobile_number, time: String(time)
         });
       } catch (e) {
-        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        return json(res, 502, { success: false, message: 'Renewal could not be confirmed. Your wallet was restored.' });
+        await supabase.from('transactions').update({
+          subtitle: 'Renewal outcome unknown — supplier reconciliation required',
+          notes: JSON.stringify({ rental_order_id: order_id, request_id: requestId, outcome: 'unknown_after_timeout',
+            error: String(e?.message || e).slice(0, 300) })
+        }).eq('user_id', auth.userId).eq('external_reference', renewalRef);
+        return json(res, 503, {
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+          message: 'The supplier response was not received. Your renewal debit is being held while we verify it. Do not retry yet.'
+        });
       }
-      if (!busOk(bus.data)) {
-        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        return json(res, 400, { success: false, message: 'Renew failed. Your wallet was restored. Try again later or contact support.' });
+      if (!busOk(bus.data) || !bus.data?.data) {
+        const supplierMessage = String(bus.data?.message || bus.data?.error || '');
+        const explicitReject = /not active|expired|not found|invalid area|invalid duration|renewal not available|cannot renew/i.test(supplierMessage);
+        if (!explicitReject) {
+          await supabase.from('transactions').update({
+            subtitle: 'Renewal outcome unconfirmed — supplier reconciliation required',
+            notes: JSON.stringify({ rental_order_id: order_id, request_id: requestId, outcome: 'unconfirmed_response',
+              supplier_code: bus.data?.code || null, supplier_message: supplierMessage.slice(0, 300) })
+          }).eq('user_id', auth.userId).eq('external_reference', renewalRef);
+          return json(res, 503, {
+            success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+            message: 'The supplier could not confirm the renewal result. Your wallet debit is being held while we verify it. Do not retry yet.'
+          });
+        }
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('transactions').update({
+          status: refund?.ok ? 'refunded' : 'pending',
+          subtitle: refund?.ok ? 'Renewal rejected — wallet refunded' : 'Renewal rejected — refund pending',
+          notes: JSON.stringify({ rental_order_id: order_id, request_id: requestId, outcome: 'supplier_rejected',
+            supplier_message: supplierMessage.slice(0, 300) })
+        }).eq('user_id', auth.userId).eq('external_reference', renewalRef);
+        return json(res, refund?.ok ? 400 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Renewal failed. Your wallet was restored.' : 'Renewal failed and your wallet refund is pending. Do not retry yet.'
+        });
       }
+
+      const renewalData = bus.data.data;
+      const { error: finishRenewalError } = await supabase.from('transactions').update({
+        status: 'completed', subtitle: `${mobile_number} · ${time} month(s) renewed`,
+        supplier_order: { provider: 'smsbus_rent', order_id, renewal: renewalData, request_id: requestId },
+        notes: JSON.stringify({ rental_order_id: order_id, request_id: requestId, area_code, months: time, outcome: 'renewed' })
+      }).eq('user_id', auth.userId).eq('external_reference', renewalRef);
+      if (finishRenewalError) {
+        return json(res, 200, { success: true, reconciliation_required: true,
+          message: 'The supplier confirmed your renewal, but transaction history needs reconciliation. Do not renew again yet.',
+          data: renewalData, price, new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd });
+      }
+      const newExpiry = renewalData.expire_at || renewalData.keep_at || renewalData.active_till || null;
+      if (newExpiry) await supabase.from('number_orders').update({ code: newExpiry }).eq('id', rentalRow.id).eq('user_id', auth.userId);
       return json(res, 200, {
-        success: true, data: bus.data.data, price,
+        success: true, data: renewalData, price,
         new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd,
         ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited
       });
