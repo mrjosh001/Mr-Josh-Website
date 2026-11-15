@@ -8474,10 +8474,23 @@ window.confirmDeleteAccount = async function() {
     if (!supabaseClient || !currentUserId) {
         return showToast('Not signed in', 'error');
     }
+
+    const deleteButton = document.querySelector('#deleteAccountModal button[onclick="confirmDeleteAccount()"]');
+    if (window.__mjAccountDeleteInProgress) return;
+    window.__mjAccountDeleteInProgress = true;
+    const originalButtonHtml = deleteButton?.innerHTML || '';
+    if (deleteButton) {
+        deleteButton.disabled = true;
+        deleteButton.setAttribute('aria-busy', 'true');
+        deleteButton.style.opacity = '0.78';
+        deleteButton.style.cursor = 'wait';
+        deleteButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Deleting account...';
+    }
+
     try {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (!session?.access_token) {
-            return showToast('Session expired. Sign in again.', 'error');
+            throw new Error('Session expired. Sign in again.');
         }
         const res = await fetch('/api/admin', {
             method: 'POST',
@@ -8491,12 +8504,22 @@ window.confirmDeleteAccount = async function() {
         if (!res.ok || data.success === false) {
             throw new Error(data.message || 'Could not delete account');
         }
-        await supabaseClient.auth.signOut();
-        localStorage.clear();
+        try { await supabaseClient.auth.signOut(); } catch (_) {}
+        try { localStorage.clear(); } catch (_) {}
+        try { sessionStorage.clear(); } catch (_) {}
         showToast('Account deleted', 'success');
-        setTimeout(() => { window.location.href = '/'; }, 1000);
+        setTimeout(() => { window.location.href = '/'; }, 700);
     } catch (err) {
         showToast(err.message || 'Delete failed', 'error');
+    } finally {
+        window.__mjAccountDeleteInProgress = false;
+        if (deleteButton && document.body.contains(deleteButton)) {
+            deleteButton.disabled = false;
+            deleteButton.removeAttribute('aria-busy');
+            deleteButton.style.opacity = '';
+            deleteButton.style.cursor = '';
+            deleteButton.innerHTML = originalButtonHtml;
+        }
     }
 };
 
