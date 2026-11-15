@@ -202,21 +202,40 @@ document.getElementById('rentBtn').onclick = async function() {
   if (!a) return;
   const h = await headers();
   if (!h) return;
+  const signature = String(a.area_code) + '|' + String(months);
+  let stored = null;
+  try { stored = JSON.parse(sessionStorage.getItem('mj_smsbus_rent_request') || 'null'); } catch(e) {}
+  if (stored && stored.id && stored.signature !== signature) {
+    document.getElementById('err').textContent = 'A previous rental is still being reconciled. Do not start another rental yet.';
+    return;
+  }
+  const requestId = stored && stored.id ? stored.id :
+    ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('sbr-' + Date.now() + '-' + Math.random().toString(36).slice(2,8)));
+  try { sessionStorage.setItem('mj_smsbus_rent_request', JSON.stringify({id:requestId,signature})); } catch(e) {}
   this.disabled = true; this.textContent = 'Processing…';
-  const res = await fetch('/api/sms-bus?action=rent_order', {
-    method: 'POST', headers: h,
-    body: JSON.stringify({
-      area_code: a.area_code,
-      time: months,
-      quoted_usd: a.unit_usd
-    })
-  });
-  const j = await res.json();
+  let j;
+  try {
+    const res = await fetch('/api/sms-bus?action=rent_order', {
+      method: 'POST', headers: h,
+      body: JSON.stringify({
+        area_code: a.area_code, time: months, request_id: requestId,
+        quoted_price_ngn: a.price_ngn || a.price || 0,
+        quoted_usd: a.unit_usd
+      })
+    });
+    j = await res.json();
+  } catch(e) {
+    this.disabled = false; this.textContent = 'Rent now';
+    document.getElementById('err').textContent = 'The supplier result is not confirmed yet. Do not submit another rental. Refresh Number History or contact support.';
+    return;
+  }
   this.disabled = false; this.textContent = 'Rent now';
   if (!j.success) {
+    if (!j.reconciliation_required) { try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {} }
     document.getElementById('err').textContent = j.message || 'Could not complete rental';
     return;
   }
+  try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {}
   var oid = (j.data && (j.data.order_id || j.data.id)) || '';
   var num = (j.data && j.data.number) || '';
   document.getElementById('ok').textContent =
