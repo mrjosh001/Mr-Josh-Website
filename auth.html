@@ -1347,18 +1347,18 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
         }
 
         /**
-         * After a failed password login, try to tell "no account" vs "wrong password".
-         * Uses optional RPC public.email_registered(p_email) when you add it in Supabase.
-         * Falls back to a clear combined message if the RPC is not installed.
+         * Avoid account enumeration: failed sign-ins use the same response
+         * regardless of whether the email address exists.
          */
         async function resolveLoginError(error, email) {
             const raw = String(error && (error.message || error.error_description) || '').toLowerCase();
             const code = String(error && (error.code || error.error_code) || '').toLowerCase();
             const isInvalidCreds = code === 'invalid_credentials' || raw.includes('invalid login credentials') || raw.includes('invalid credentials');
-
-            if (!isInvalidCreds) {
-                return formatAuthError(error);
+            if (isInvalidCreds) {
+                return 'Incorrect email or password. Check both and try again.';
             }
+            return formatAuthError(error);
+        }
 
             try {
                 const { data, error: rpcErr } = await supabaseClient.rpc('email_registered', { p_email: String(email || '').trim().toLowerCase() });
