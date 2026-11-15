@@ -1447,8 +1447,8 @@ function smsBusRentTransferState(row) {
 async function refreshSmsBusRentInbox(row) {
   let areaCode = String(row.country_name || '').toUpperCase().trim();
   const reverse = { CANADA:'CA', 'UNITED STATES':'US', USA:'US', 'UNITED KINGDOM':'GB', UK:'GB' };
-  if (areaCode.length > 3) areaCode = reverse[areaCode] || (String(row.service_name || '').match(/\\b([A-Z]{2})\\b/) || [])[1] || areaCode.slice(0,2);
-  let mobile = String(row.phone_number || '').replace(/\\D/g, '');
+  if (areaCode.length > 3) areaCode = reverse[areaCode] || (String(row.service_name || '').match(/\b([A-Z]{2})\b/) || [])[1] || areaCode.slice(0,2);
+  let mobile = String(row.phone_number || '').replace(/\D/g, '');
   if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
   if (!areaCode || !mobile) return { ok: false, message: 'Could not verify the rental inbox. Try again.' };
 
