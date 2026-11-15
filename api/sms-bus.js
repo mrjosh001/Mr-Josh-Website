@@ -3415,6 +3415,11 @@ export default async function handler(req, res) {
         return json(res, 400, { success: false, message: 'Only active, non-refunded SMS-BUS rentals can be transferred.' });
       }
 
+      const { data: priorTransfer, error: priorTransferError } = await supabase
+        .from('smsbus_rent_transfers').select('id').eq('rental_order_id', row.id).limit(1).maybeSingle();
+      if (priorTransferError) return json(res, 500, { success: false, message: 'Could not verify transfer eligibility. Please try again.' });
+      if (priorTransfer) return json(res, 409, { success: false, message: 'This rental has already been transferred once and cannot be transferred again.' });
+
       const found = await findSmsBusRentRecipient(recipientInput, auth.userId);
       if (!found.ok) return json(res, 400, { success: false, message: found.message });
       const recipient = found.recipient;
@@ -3495,12 +3500,16 @@ export default async function handler(req, res) {
         .eq('order_id', order_id)
         .maybeSingle();
       if (error || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      const { data: priorTransfer, error: transferCheckError } = await supabase
+        .from('smsbus_rent_transfers').select('id').eq('rental_order_id', row.id).limit(1).maybeSingle();
+      if (transferCheckError) return json(res, 500, { success: false, message: 'Could not load rental transfer status.' });
       const till = row.code ? Date.parse(String(row.code)) : 0;
       const active = !(row.refunded) && (!till || till > Date.now()) && !['refunded','cancelled','canceled','expired'].includes(String(row.status||'').toLowerCase());
       return json(res, 200, {
         success: true,
         data: {
           ...row,
+          transfer_used: !!priorTransfer,
           area_code: row.country_name,
           expire_at: row.code,
           active: !!active,
