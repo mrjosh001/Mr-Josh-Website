@@ -4327,7 +4327,7 @@ export default async function handler(req, res) {
             data: { plan_id, service_id: service_id || null, out_of_stock: true }
           });
         }
-        const supplierUsd = Number(plan?.price || body.quoted_usd || 0);
+        const supplierUsd = Number(plan?.price || 0);
         if (!(supplierUsd > 0)) {
           return json(res, 400, {
             success: false,
@@ -5023,7 +5023,10 @@ export default async function handler(req, res) {
             if (page >= Number(g.data?.meta?.last_page || 1)) break;
           }
         }
-        const unitUsd = Number(plan?.price || body.quoted_usd || 0);
+        if (!plan || gotsmsPlanUnavailable(plan)) {
+          return json(res, 409, { success: false, message: 'This rental plan is currently out of stock. Your wallet has not been charged.' });
+        }
+        const unitUsd = Number(plan?.price || 0);
         if (!(unitUsd > 0)) return json(res, 400, { success: false, message: 'Plan unavailable or out of stock. Pick the service again.' });
         let unitNgn = gotsmsFixedDurationPriceNgn(plan) != null
           ? gotsmsFixedDurationPriceNgn(plan)
