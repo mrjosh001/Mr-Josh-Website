@@ -2602,13 +2602,14 @@ export default async function handler(req, res) {
         is_reusable: !!wantReuse
       };
 
-      const ins = await supabase.from('number_orders').update(row).eq('id', pendingOrder.id);
-      if (ins.error) {
-        console.error('[sms-bus order] insert failed after retries:', ins.error.message, {
-          requestId,
-          user_id: auth.userId,
-          phone,
-          columns: Object.keys(row)
+      let ins = await supabase.from('number_orders').update(row).eq('id', pendingOrder.id).select('id');
+      if (ins.error || !ins.data?.length) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        ins = await supabase.from('number_orders').update(row).eq('id', pendingOrder.id).select('id');
+      }
+      if (ins.error || !ins.data?.length) {
+        console.error('[sms-bus order] order update failed after retry:', ins.error?.message || 'no row updated', {
+          requestId, user_id: auth.userId, phone, columns: Object.keys(row)
         });
         // The supplier already issued a number. Keep the debit and pending
         // transaction; the durable pending row is the recovery anchor.
@@ -2628,13 +2629,27 @@ export default async function handler(req, res) {
         });
       }
 
-      const { data: txUpdatedRows, error: txUpdateError } = await supabase.from('transactions').update({
+      const txFields = {
         subtitle: `OTP · ${phone || requestId}`, notes: `order_id:${requestId}`,
         supplier_order: { provider: 'smsbus', request_id: requestId, country_id, project_id }
-      }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+      };
+      const { data: txUpdatedRows, error: txUpdateError } = await supabase.from('transactions').update(txFields)
+        .eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
         .eq('external_reference', String(debit.wallet_debit_id)).select('id');
-      if (txUpdateError || !txUpdatedRows?.length) {
-        console.error('[sms-bus order] transaction update failed after activation:', txUpdateError.message);
+      let txPersisted = !txUpdateError && !!txUpdatedRows?.length;
+      if (!txPersisted) {
+        const { error: txInsertError } = await supabase.from('transactions').insert({
+          user_id: auth.userId, customer_id: profile.customer_id || null, type: 'purchase', category: 'MJ SMS',
+          title: serviceName, subtitle: txFields.subtitle, amount: `₦${price.toLocaleString()}`,
+          amount_ngn: Number(debit.ngn_debited || 0), amount_usd: Number(debit.usd_debited || 0),
+          external_reference: String(debit.wallet_debit_id), status: 'pending',
+          notes: txFields.notes, supplier_order: txFields.supplier_order
+        });
+        txPersisted = !txInsertError;
+        if (txInsertError) console.error('[sms-bus order] transaction insert recovery failed:', txInsertError.message);
+      }
+      if (!txPersisted) {
+        console.error('[sms-bus order] transaction persistence failed after activation:', txUpdateError?.message || 'no pending transaction row');
         await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrder.id);
         return json(res, 200, {
           success: true, reconciliation_required: true,
