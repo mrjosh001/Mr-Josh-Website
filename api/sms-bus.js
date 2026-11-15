@@ -260,7 +260,11 @@ async function verifySmsBusRentTransferPassword(userId, password, captchaToken) 
         body: JSON.stringify({
           email: String(email).trim().toLowerCase(),
           password: secret,
-          ...(captchaToken ? { captcha_token: String(captchaToken) } : {})
+          // Match Supabase JS signInWithPassword({ options: { captchaToken } }).
+          // GoTrue expects CAPTCHA inside gotrue_meta_security, not at the JSON root.
+          ...(captchaToken ? {
+            gotrue_meta_security: { captcha_token: String(captchaToken) }
+          } : {})
         })
       }
     );
