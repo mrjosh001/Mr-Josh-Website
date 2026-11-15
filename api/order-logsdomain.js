@@ -648,6 +648,11 @@ export default async function handler(req, res) {
       } catch (_) {}
     }
 
+    if (reviewRequired) {
+      try { await sendPushToAdmins(supabase, { title: 'Log purchase needs review', body: productName + ' supplier purchase succeeded but returned no usable items. Ref: ' + supplierOrderId, url: '/admin.html', type: 'admin_review' }); } catch (_) {}
+      return res.status(200).json({ success: true, completed: true, delivery_pending_review: true, message: 'Your purchase was successful. Delivery is being checked by MJ HUB. Do not purchase again.', order_id: supplierOrderId, wallet_debit_id: walletDebitId, total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd });
+    }
+
     try {
       await sendPushToUser(supabase, user_id, {
         title: 'Order completed',
