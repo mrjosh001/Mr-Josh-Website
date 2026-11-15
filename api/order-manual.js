@@ -7,6 +7,7 @@ import {
   formatCredentials,
   formatMultiLogCredentials
 } from '../lib/formatCredentials.js';
+import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import esimHandler from './esim.js';
 import { applyApiCors, handleOptions } from '../lib/secure.js';
 
@@ -322,6 +323,10 @@ export default async function handler(req, res) {
         });
       }
     }
+
+    const cooldown = await claimLogPurchaseCooldown(supabase, user_id, product_key, 10);
+    if (cooldown.unavailable) return res.status(503).json({ success: false, message: 'Purchase protection is temporarily unavailable. Please try again shortly.' });
+    if (cooldown.blocked) return res.status(429).json({ success: false, code: 'DUPLICATE_PURCHASE_COOLDOWN', message: 'You just submitted this product. Wait 10 seconds before trying again.' });
 
     // Central atomic debit: NGN first, USD remainder.
     debitResult = await debitWallet(supabase, user_id, total);
