@@ -1360,18 +1360,6 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             return formatAuthError(error);
         }
 
-            try {
-                const { data, error: rpcErr } = await supabaseClient.rpc('email_registered', { p_email: String(email || '').trim().toLowerCase() });
-                if (!rpcErr && data === true) {
-                    return 'Incorrect password. Try again or use Forgot Password.';
-                }
-                if (!rpcErr && data === false) {
-                    return 'No account found with this email. Please sign up first.';
-                }
-            } catch (e) { /* RPC not installed yet */ }
-
-            return 'Incorrect email or password. If you do not have an account, sign up first.';
-        }
 
         function showError(message) {
             const errorEl = document.getElementById('errorContainer');
