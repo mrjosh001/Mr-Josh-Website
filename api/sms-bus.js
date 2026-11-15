@@ -3232,7 +3232,8 @@ export default async function handler(req, res) {
           message: 'The supplier response was not received. Your wallet debit is being held while we verify the reuse. Do not retry yet. Reference ' + requestId });
       }
 
-      if (!busOk(bus.data) || !bus.data?.data?.request_id) {
+      // A supplier request ID is evidence that a reuse was created, even if the wrapper status is inconsistent.
+      if (!bus.data?.data?.request_id) {
         const code = Number(bus.data?.code || 0);
         const msg = String(bus.data?.message || bus.data?.error || '');
         const httpStatus = Number(bus.http || 0);
