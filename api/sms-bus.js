@@ -3358,89 +3358,183 @@ export default async function handler(req, res) {
           message: 'This rental price is no longer valid. Refresh and try again. No charge was made.'
         });
       }
+      const requestId = String(body.request_id || '').trim() ||
+        ('sb-rent-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9));
+      const idemKey = 'smsbus_rent-' + requestId;
+      const { data: priorRent } = await supabase.from('number_orders')
+        .select('order_id, phone_number, status, refunded, price, service_name, code')
+        .eq('source', 'smsbus_rent').eq('user_id', auth.userId).eq('idempotency_key', idemKey).maybeSingle();
+      if (priorRent) {
+        if (priorRent.refunded || String(priorRent.status || '').toLowerCase() === 'refunded') {
+          return json(res, 409, { success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false,
+            message: 'The previous rental attempt was refunded. Start a new purchase request.' });
+        }
+        if (String(priorRent.order_id || '').startsWith('PENDING-') ||
+            ['processing', 'reconciliation_required', 'refund_pending'].includes(String(priorRent.status || '').toLowerCase())) {
+          return json(res, 409, { success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+            message: 'This rental request is already being checked. Do not submit another purchase.' });
+        }
+        return json(res, 200, { success: true, replayed: true, data: {
+          order_id: priorRent.order_id, number: priorRent.phone_number, price: Number(priorRent.price || 0),
+          expire_at: priorRent.code, status: priorRent.status, source: 'smsbus_rent'
+        }});
+      }
+
       const debit = await debitWallet(supabase, auth.userId, price);
       if (!debit.ok) return json(res, 402, {
         success: false, message: debit.message || 'Insufficient combined wallet balance.',
         required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
       });
 
-      const bus = await smsbusGet(RENT_BASE, '/v1/rent/get/number', {
-        area_code,
-        time: String(time)
-      });
+      const pendingRef = 'PENDING-' + requestId;
+      const countryName = rentCountryName(area_code, areaTitle);
+      const serviceName = `Rental ${time} mo · ${countryName}`;
+      const pendingOrder = {
+        source: 'smsbus_rent', user_id: auth.userId, customer_id: profile.customer_id,
+        order_id: pendingRef, idempotency_key: idemKey, country_id: null, country_name: countryName,
+        service_id: 'rent', service_name: serviceName, phone_number: null, price,
+        wallet_debit_id: debit.wallet_debit_id, supplier_price: supplierUsd, currency: 'NGN',
+        status: 'processing', code: null, refunded: false,
+        notes: JSON.stringify({ request_id: requestId, area_code, months: time, supplier_outcome: 'pending' })
+      };
+      const { data: pendingOrderRow, error: pendingOrderError } = await supabase.from('number_orders')
+        .insert(pendingOrder).select('id').single();
+      if (pendingOrderError || !pendingOrderRow) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, refund?.ok ? 500 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Could not save the rental record. Your wallet was restored.' : 'Rental record and wallet refund need reconciliation. Do not retry.'
+        });
+      }
+
+      const pendingTx = {
+        user_id: auth.userId, customer_id: profile.customer_id, type: 'purchase', category: 'MJ SMS',
+        title: `Number rental ${area_code}`, subtitle: 'SMS-BUS rental status checking — do not retry',
+        amount: `₦${price.toLocaleString()}`, amount_ngn: Number(debit.ngn_debited || 0),
+        amount_usd: Number(debit.usd_debited || 0), external_reference: String(debit.wallet_debit_id),
+        status: 'pending', notes: 'smsbus_rent_request:' + requestId
+      };
+      let { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+      if (pendingTxError) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        pendingTxError = (await supabase.from('transactions').insert(pendingTx)).error;
+      }
+      if (pendingTxError) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: 'Supplier request was not sent because pending transaction could not be recorded.'
+        }).eq('id', pendingOrderRow.id);
+        return json(res, refund?.ok ? 500 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Could not create the rental transaction. Your wallet was restored.' : 'Your wallet refund needs reconciliation. Do not retry yet.'
+        });
+      }
+
+      let bus;
+      try {
+        bus = await smsbusGet(RENT_BASE, '/v1/rent/get/number', { area_code, time: String(time) });
+      } catch (supplierError) {
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ request_id: requestId, area_code, months: time, supplier_outcome: 'unknown_after_timeout',
+            error: String(supplierError?.message || supplierError).slice(0, 300) })
+        }).eq('id', pendingOrderRow.id);
+        return json(res, 503, {
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+          message: 'The supplier response was not received. Your wallet debit is being held while we verify the rental. Do not retry yet.'
+        });
+      }
 
       if (!busOk(bus.data) || !bus.data?.data) {
-        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        return json(res, 400, {
-          success: false,
-          message: 'Rental is unavailable for this area right now. Contact support if you need help.'
+        const supplierMessage = String(bus.data?.message || bus.data?.error || '');
+        const explicitReject = /no number|out of stock|not available|area not found|invalid area|invalid duration|unsupported duration/i.test(supplierMessage);
+        if (!explicitReject) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ request_id: requestId, area_code, months: time, supplier_outcome: 'unconfirmed_response',
+              supplier_code: bus.data?.code || null, supplier_message: supplierMessage.slice(0, 300) })
+          }).eq('id', pendingOrderRow.id);
+          return json(res, 503, {
+            success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+            message: 'The supplier response could not confirm whether a rental was created. Your wallet debit is being held while we verify the result. Do not retry yet.'
+          });
+        }
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: JSON.stringify({ request_id: requestId, supplier_outcome: 'rejected', supplier_message: supplierMessage.slice(0, 300) })
+        }).eq('id', pendingOrderRow.id);
+        await supabase.from('transactions').update({
+          status: refund?.ok ? 'refunded' : 'pending',
+          subtitle: refund?.ok ? 'SMS-BUS rental unavailable — wallet refunded' : 'SMS-BUS rental rejected — refund pending'
+        }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+          .eq('external_reference', String(debit.wallet_debit_id));
+        return json(res, refund?.ok ? 400 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Rental is unavailable for this area. Your wallet was refunded.' : 'The supplier rejected the rental, but your wallet refund is pending. Do not retry.'
         });
       }
 
       const d = bus.data.data;
-      const orderId = String(d.order_id || d.id || `RENT-${Date.now()}`);
+      const orderId = String(d.order_id || d.id || '');
       const phone = String(d.mobile_number || d.number || '');
       const dial = String(d.dialing_code || '');
       const fullPhone = dial && phone && !phone.startsWith(dial) ? `${dial}${phone}` : phone;
-
-      await supabase.from('number_orders').insert({
-        source: 'smsbus_rent',
-        user_id: auth.userId,
-        customer_id: profile.customer_id,
-        order_id: orderId,
-        idempotency_key: `smsbus_rent-${orderId}`,
-        country_id: null,
-        country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
-        service_id: 'rent',
-        service_name: `Rental ${time} mo · ${rentCountryName(d.area_code || area_code, d.area_title || d.area_name)}`,
-        phone_number: fullPhone || phone,
-        price,
-        wallet_debit_id: debit.wallet_debit_id,
-        supplier_price: supplierUsd,
-        currency: 'NGN',
-        status: 'active',
-        code: d.expire_at || d.keep_at || null,
-        refunded: false
-      });
-
-      try {
-        await supabase.from('transactions').insert({
-          user_id: auth.userId,
-          customer_id: profile.customer_id,
-          type: 'purchase',
-          category: 'MJ SMS',
-          title: `Number rental ${area_code}`,
-          subtitle: `${fullPhone || phone} · ${time} month(s)`,
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: debit.ngn_debited,
-          amount_usd: debit.usd_debited,
-          external_reference: String(debit.wallet_debit_id),
-          status: 'completed'
+      if (!orderId || !fullPhone) {
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ request_id: requestId, area_code, months: time, supplier_outcome: 'accepted_response_incomplete',
+            supplier_order_id: orderId || null, supplier_phone: fullPhone || null })
+        }).eq('id', pendingOrderRow.id);
+        return json(res, 503, {
+          success: false, reconciliation_required: true, refunded: false,
+          message: 'The supplier may have created your rental, but its response was incomplete. Your wallet debit is being held while we verify it. Do not retry yet.'
         });
-      } catch (_) {}
+      }
 
-      await notifyUserPush(
-        auth.userId,
-        'Number rental active',
-        (fullPhone || phone || 'Your number') + ' is ready. Open Number History to manage it.',
-        '/sms-history.html',
-        'sms_rent'
-      );
+      const finalOrder = {
+        order_id: orderId, phone_number: fullPhone, service_name: serviceName, country_name: countryName,
+        supplier_price: supplierUsd, status: 'active', code: d.expire_at || d.keep_at || null,
+        notes: JSON.stringify({ request_id: requestId, area_code, months: time, supplier_outcome: 'confirmed' })
+      };
+      let orderUpdate = await supabase.from('number_orders').update(finalOrder).eq('id', pendingOrderRow.id).select('id');
+      if (orderUpdate.error || !orderUpdate.data?.length) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        orderUpdate = await supabase.from('number_orders').update(finalOrder).eq('id', pendingOrderRow.id).select('id');
+      }
+      if (orderUpdate.error || !orderUpdate.data?.length) {
+        return json(res, 200, {
+          success: true, reconciliation_required: true,
+          message: 'Your rental is active and your wallet was charged. Order history is being reconciled. Do not purchase again.',
+          data: { order_id: orderId, number: fullPhone, price, source: 'smsbus_rent', status: 'active' }
+        });
+      }
+
+      const { data: txRows, error: txError } = await supabase.from('transactions').update({
+        title: `Number rental ${area_code}`, subtitle: `${fullPhone} · ${time} month(s)`,
+        status: 'completed', notes: 'smsbus_rent_order:' + orderId,
+        supplier_order: { provider: 'smsbus_rent', order_id: orderId, request_id: requestId }
+      }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+        .eq('external_reference', String(debit.wallet_debit_id)).select('id');
+      if (txError || !txRows?.length) {
+        await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrderRow.id);
+        return json(res, 200, {
+          success: true, reconciliation_required: true,
+          message: 'Your rental is active and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
+          data: { order_id: orderId, number: fullPhone, price, source: 'smsbus_rent', status: 'active' }
+        });
+      }
+
+      await notifyUserPush(auth.userId, 'Number rental active',
+        fullPhone + ' is ready. Open Number History to manage it.', '/sms-history.html', 'sms_rent');
       return json(res, 200, {
         success: true,
         data: {
-          order_id: orderId,
-          number: fullPhone || phone,
-          area_code: d.area_code || area_code,
-          country_name: rentCountryName(d.area_code || area_code, d.area_title || d.area_name),
-          expire_at: d.expire_at,
-          keep_at: d.keep_at,
-          price,
-          new_balance: debit.balance_ngn,
-          new_balance_usd: debit.balance_usd,
-          ngn_debited: debit.ngn_debited,
-          usd_debited: debit.usd_debited,
-          source: 'smsbus_rent'
+          order_id: orderId, number: fullPhone, area_code: d.area_code || area_code,
+          country_name: countryName, expire_at: d.expire_at, keep_at: d.keep_at, price,
+          new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd,
+          ngn_debited: debit.ngn_debited, usd_debited: debit.usd_debited, source: 'smsbus_rent'
         }
       });
     }
