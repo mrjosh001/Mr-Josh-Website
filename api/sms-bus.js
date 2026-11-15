@@ -1608,7 +1608,10 @@ async function smsbusGet(base, path, params = {}) {
   if (!TOKEN) throw new Error('SMSBUS_API_TOKEN is not configured');
   const q = new URLSearchParams({ token: TOKEN, ...params });
   const url = `${base}${path}?${q.toString()}`;
-  const r = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  const r = await fetch(url, {
+    method: 'GET', headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(20000)
+  });
   const data = await r.json().catch(() => ({}));
   return { http: r.status, data };
 }
@@ -2400,16 +2403,24 @@ export default async function handler(req, res) {
       const clientIdem =
         (body.external_order_id && String(body.external_order_id).trim()) ||
         (body.idempotency_key && String(body.idempotency_key).trim()) ||
-        '';
+        `MJ-SB-${String(auth.userId).slice(0, 8)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const pendingRef = 'PENDING-SMSBUS-' + clientIdem;
       if (clientIdem) {
         const { data: existing } = await supabase
           .from('number_orders')
-          .select('order_id, phone_number, status, price, service_name, country_name')
+          .select('order_id, phone_number, status, price, service_name, country_name, refunded')
           .eq('source', 'smsbus')
           .eq('user_id', auth.userId)
           .eq('idempotency_key', clientIdem)
           .maybeSingle();
-        if (existing && existing.order_id) {
+        if (existing && existing.order_id && String(existing.order_id).startsWith('PENDING-')) {
+          return json(res, 409, {
+            success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+            message: 'This purchase request is still being reconciled. Do not submit another purchase.'
+          });
+        }
+        if (existing && existing.order_id && !existing.refunded &&
+            !['refunded', 'cancelled', 'canceled'].includes(String(existing.status || '').toLowerCase())) {
           const { data: balRow } = await supabase.from('profiles').select('balance, balance_usd').eq('id', auth.userId).maybeSingle();
           return json(res, 200, {
             success: true,
@@ -2456,6 +2467,33 @@ export default async function handler(req, res) {
         });
       }
       const newBalance = debit.balance_ngn;
+      const pendingRow = {
+        source: 'smsbus', user_id: auth.userId, customer_id: profile.customer_id || null,
+        order_id: pendingRef, idempotency_key: clientIdem, country_id: Number(country_id) || null,
+        country_name: countryName || String(country_id), service_id: String(project_id),
+        service_name: serviceName, phone_number: null, price,
+        wallet_debit_id: debit.wallet_debit_id, supplier_price: costUsd, currency: 'NGN',
+        status: 'processing', code: null, refunded: false, is_reusable: !!wantReuse,
+        notes: JSON.stringify({ supplier_outcome: 'pending', idempotency_key: clientIdem })
+      };
+      const { data: pendingOrder, error: pendingOrderError } = await supabase.from('number_orders')
+        .insert(pendingRow).select('id').single();
+      if (pendingOrderError || !pendingOrder) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, refund?.ok ? 500 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'Could not save the purchase record. Your wallet was restored.' : 'Purchase record and wallet refund need reconciliation. Do not retry.'
+        });
+      }
+      const pendingTx = {
+        user_id: auth.userId, customer_id: profile.customer_id || null, type: 'purchase', category: 'MJ SMS',
+        title: serviceName, subtitle: 'SMS-BUS purchase status checking — do not retry',
+        amount: `₦${price.toLocaleString()}`, amount_ngn: Number(debit.ngn_debited || 0),
+        amount_usd: Number(debit.usd_debited || 0), external_reference: String(debit.wallet_debit_id),
+        status: 'pending', notes: 'smsbus_pending:' + clientIdem
+      };
+      const { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+      if (pendingTxError) console.error('[sms-bus order] pending transaction insert failed:', pendingTxError.message);
       const params = {
         country_id: String(country_id),
         project_id: String(project_id)
@@ -2466,11 +2504,14 @@ export default async function handler(req, res) {
       try {
         bus = await smsbusGet(OTP_BASE, '/get/number', params);
       } catch (e) {
-        // The supplier request outcome is ambiguous after a network failure.
-        // Attempt only the idempotent refund RPC; never overwrite a wallet snapshot.
-        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        if (!refund.ok) console.error('[sms-bus order] ambiguous supplier result; exact refund requires review:', refund.error || refund.message);
-        return json(res, 502, { success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', message: 'The supplier did not confirm the result. Check your order history before trying again, or contact support.' });
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ supplier_outcome: 'unknown_after_network_error', error: String(e?.message || e).slice(0, 300) })
+        }).eq('id', pendingOrder.id);
+        return json(res, 503, {
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+          message: 'The supplier response was not received. Your wallet debit is being held while we verify the order. Do not retry yet.'
+        });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
@@ -2496,22 +2537,36 @@ export default async function handler(req, res) {
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        // Restore only through the idempotent wallet RPC. Never reset a profile
-        // snapshot: that could overwrite concurrent deposits or purchases.
-        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        if (!refund.ok) console.error('[sms-bus order] exact wallet refund requires reconciliation:', refund.error || refund.message);
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
-        if (code === 50201 || /balance not enough/i.test(msg)) {
+        const explicitNoStock = /no numbers?|out of stock|stock unavailable|not available/i.test(msg);
+        const explicitReject = explicitNoStock || /balance not enough|invalid token|bad token|unauthorized/i.test(msg);
+        if (!explicitReject) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ supplier_outcome: 'unconfirmed_response', supplier_code: code || null, supplier_message: msg.slice(0, 300) })
+          }).eq('id', pendingOrder.id);
           return json(res, 503, {
-            success: false,
-            code: 'SERVER_BUSY',
-            message: 'This SMS server is temporarily unavailable. Try the other server, or contact support.'
+            success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+            message: 'The supplier response could not confirm whether a number was created. Your wallet debit is being held while we verify the result. Do not retry yet.'
           });
         }
-        return json(res, 400, {
-          success: false,
-          message: 'No number available right now. Try another service or country, or contact support.'
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: JSON.stringify({ supplier_outcome: 'rejected', supplier_code: code || null, supplier_message: msg.slice(0, 300) })
+        }).eq('id', pendingOrder.id);
+        await supabase.from('transactions').update({
+          status: refund?.ok ? 'refunded' : 'pending',
+          subtitle: refund?.ok ? 'SMS-BUS rejected purchase — wallet refunded' : 'SMS-BUS rejected purchase — refund pending'
+        }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+          .eq('external_reference', String(debit.wallet_debit_id));
+        return json(res, refund?.ok ? 400 : 503, {
+          success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+          code: explicitNoStock ? 'NO_STOCK' : (code || 'SUPPLIER_REJECTED'),
+          message: refund?.ok
+            ? (explicitNoStock ? 'No number available right now. Your wallet was refunded.' : 'The supplier rejected the request. Your wallet was refunded.')
+            : 'The supplier rejected the request, but your wallet refund is pending. Do not retry yet.'
         });
       }
 
@@ -2523,7 +2578,7 @@ export default async function handler(req, res) {
         user_id: auth.userId,
         customer_id: profile.customer_id || null,
         order_id: requestId,
-        idempotency_key: clientIdem || `smsbus-${requestId}`,
+        idempotency_key: clientIdem,
         country_id: Number(country_id) || null,
         country_name: countryName || String(country_id),
         service_id: String(project_id),
@@ -2531,17 +2586,15 @@ export default async function handler(req, res) {
         phone_number: phone,
         price,
         wallet_debit_id: debit.wallet_debit_id,
-        // Supplier cost in USD — admin overview converts with USD_TO_NGN_RATE
-        supplier_price: costUsd > 0 ? costUsd : null,
+        supplier_price: costUsd,
         currency: 'NGN',
         status: 'waiting_for_code',
         code: null,
         refunded: false,
-        // User checked "Prefer reusable number" at buy time
         is_reusable: !!wantReuse
       };
 
-      const ins = await insertNumberOrder(row);
+      const ins = await supabase.from('number_orders').update(row).eq('id', pendingOrder.id);
       if (ins.error) {
         console.error('[sms-bus order] insert failed after retries:', ins.error.message, {
           requestId,
