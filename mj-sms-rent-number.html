@@ -611,7 +611,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var phone=String(rent.phone_number||rent.number||'—');
     var till=parseExpire(rent);
     document.getElementById('trNumber').textContent=phone;
-    document.getElementById('trService').textContent=String(rent.service_name||'SMS-BUS rental').replace(/\\s*·\\s*SMS\\s*received/ig,'').trim();
+    document.getElementById('trService').textContent=String(rent.service_name||'SMS-BUS rental').replace(/\s*·\s*SMS\s*received/ig,'').trim();
     document.getElementById('trTimeLeft').textContent=till?formatLeft(till-Date.now()):'Not available';
     document.getElementById('trExpiry').textContent=till?new Date(till).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'Not available';
     document.getElementById('trRecipient').value='';
@@ -644,7 +644,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   async function reviewTransfer(){
     if(transferBusy) return;
     var recipient=document.getElementById('trRecipient').value.trim();
-    if(!recipient || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient)){ toast('Enter a valid recipient email address','err'); return; }
+    if(!recipient || !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(recipient)){ toast('Enter a valid recipient email address','err'); return; }
     transferBusy=true;
     var review=document.getElementById('trReview');
     review.disabled=true; review.textContent='Checking account…';
