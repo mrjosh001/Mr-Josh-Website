@@ -1609,7 +1609,6 @@ export default async function handler(req, res) {
       product_code: product_key,
       product_name: productName,
       product_type: 'log',
-      description: orderDescription,
       quantity: items.length || safeQty,
       amount: total,
       wallet_debit_id: walletDebitId,
