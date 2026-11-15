@@ -412,7 +412,6 @@ async function handleOrder(req, res) {
   const originalBalance = Number(profile.balance || 0);
   const originalBalanceUsd = Number(profile.balance_usd || 0);
   let deducted = false;
-  let supplierRequestStarted = false;
   let supplierAccepted = false;
   let supplierOutcomeUnknown = false;
   let walletDebitId = null;
@@ -457,7 +456,6 @@ async function handleOrder(req, res) {
 
     const orderRef = external_order_id || ('CT-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
 
-    supplierRequestStarted = true;
     supplierOutcomeUnknown = true;
     const purchaseRes = await fetch(BASE + '/api/v1/purchase', {
       method: 'POST',
@@ -528,7 +526,13 @@ async function handleOrder(req, res) {
       guide_url: 'https://t.me/mj_hub_tg'
     });
     if (insertErr) {
-      console.error('[classy] insert order failed', insertErr.message);
+      console.error('[classy] supplier accepted purchase but order persistence failed', {
+        message: insertErr.message,
+        order_id: String(orderRef),
+        supplier_order_id: String(supplierOrderId),
+        wallet_debit_id: String(walletDebitId)
+      });
+      throw new Error('Supplier accepted purchase, but MJ HUB could not save the order: ' + insertErr.message);
     }
 
     await supabase.from('transactions').insert({
@@ -630,7 +634,7 @@ return res.status(200).json({
         console.error('[classy] CRITICAL refund failed', refundErr);
       }
     }
-    return res.status(500).json({
+    return res.status(supplierAccepted || supplierOutcomeUnknown ? 202 : 500).json({
       success: false,
       message: supplierAccepted
         ? 'The supplier accepted your purchase, but MJ HUB could not finish saving it. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '. Your balance has not been refunded.'
