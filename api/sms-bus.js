@@ -4534,13 +4534,13 @@ export default async function handler(req, res) {
             data: { supplier_rent_id: rent.id, phone: rent.phone, order_id: orderId, price_ngn: price }
           });
         }
-        const { error: txFinalizeError } = await supabase.from('transactions').update({
+        const { data: txFinalizedRows, error: txFinalizeError } = await supabase.from('transactions').update({
           external_reference: String(rent.id), title: `USA number rental · ${rent.service?.name || 'SMS'}`,
           subtitle: `${rent.phone || ''} · ${rent.plan?.duration_translation || ''}`.trim(),
           supplier_order: { provider: 'gotsms', rent_id: String(rent.id), order_id: orderId, request_id: requestId }
         }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
-          .eq('external_reference', String(debit.wallet_debit_id));
-        if (txFinalizeError) {
+          .eq('external_reference', String(debit.wallet_debit_id)).select('id');
+        if (txFinalizeError || !txFinalizedRows?.length) {
           return json(res, 200, { success: true, reconciliation_required: true,
             message: 'GotSMS created your rental and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
             data: { supplier_rent_id: rent.id, phone: rent.phone, order_id: orderId, price_ngn: price }
