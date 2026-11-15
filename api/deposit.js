@@ -1586,9 +1586,10 @@ async function handleVirtualAccount(req, res, publicKey, businessId) {
     return res.status(400).json({ success: false, message: 'Enter your full legal name as it appears on your bank account (at least first and last name).' });
   }
 
-  const phoneDigits = String(profile?.phone || profile?.phone_number || user.phone || '').replace(/\D/g, '');
-  let phone = phoneDigits;
-  if (phoneDigits.length === 13 && phoneDigits.startsWith('234')) phone = '0' + phoneDigits.slice(3);
+  const phoneCandidates = [profile?.phone, profile?.phone_number, user.phone]
+    .map(value => String(value || '').replace(/\D/g, ''))
+    .map(value => value.length === 13 && value.startsWith('234') ? '0' + value.slice(3) : value);
+  const phone = phoneCandidates.find(value => value.length === 11) || '';
   if (phone.length !== 11) {
     return res.status(400).json({ success: false, message: 'Your saved phone number must be a valid 11-digit Nigerian number. Update your phone number in your profile, then try again.' });
   }
