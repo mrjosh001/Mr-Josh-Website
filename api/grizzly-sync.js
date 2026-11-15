@@ -390,7 +390,19 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
   const countryPrices =
     priceData?.[String(countryId)] || priceData?.[countryId] || {};
   const entries = Object.entries(countryPrices);
-  if (!entries.length) return;
+
+  // A valid, successfully parsed country price response is authoritative.
+  // If it contains no services, clear stale stock for this country instead
+  // of leaving old rows purchasable on the storefront.
+  if (!entries.length) {
+    const { error: clearError } = await supabase
+      .from('number_services')
+      .update({ available_quantity: 0, is_available: false, updated_at: new Date().toISOString() })
+      .eq('source', 'grizzlysms')
+      .eq('country_id', countryId);
+    if (clearError) counters.errors.push(`country ${countryId} empty-stock reconciliation: ${clearError.message}`);
+    return;
+  }
 
   // One query for all existing services in this country
   // Incremental: only INSERT brand-new service_ids and UPDATE rows whose
@@ -409,6 +421,16 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
   const existingMap = new Map(
     (existingRows || []).map((r) => [String(r.service_id), r])
   );
+  const supplierServiceCodes = new Set(entries.map(([code]) => String(code)));
+  const omittedRows = (existingRows || []).filter((row) => !supplierServiceCodes.has(String(row.service_id)) && Number(row.available_quantity || 0) > 0);
+  for (let i = 0; i < omittedRows.length; i += 100) {
+    const ids = omittedRows.slice(i, i + 100).map((row) => row.id);
+    const { error: omittedError } = await supabase
+      .from('number_services')
+      .update({ available_quantity: 0, is_available: false, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    if (omittedError) counters.errors.push(`country ${countryId} omitted-service reconciliation: ${omittedError.message}`);
+  }
 
   const toInsert = [];
   const toUpdate = [];
