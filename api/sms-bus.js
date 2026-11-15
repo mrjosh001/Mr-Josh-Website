@@ -4290,7 +4290,7 @@ export default async function handler(req, res) {
         const pendingRef = 'PENDING-GOTSMS-MULTI-' + requestId;
         const { data: priorMulti } = await supabase.from('number_orders')
           .select('order_id, phone_number, service_name, price, status, refunded, notes')
-          .eq('source', 'gotsms').eq('user_id', auth.userId).eq('idempotency_key', requestKey).maybeSingle();
+          .eq('source', 'gotsms').eq('user_id', auth.userId).ilike('notes', '%' + requestId + '%').maybeSingle();
         if (priorMulti) {
           if (priorMulti.order_id && !String(priorMulti.order_id).startsWith('PENDING-') && !priorMulti.refunded &&
               !['refunded', 'cancelled', 'canceled', 'expired'].includes(String(priorMulti.status || '').toLowerCase())) {
@@ -4483,20 +4483,13 @@ export default async function handler(req, res) {
             const primaryOrderName = detail.ok && Array.isArray(detailServices)
               ? primaryName + ' · Multi-pack attachment failed'
               : primaryName + ' · Multi-pack verification pending';
-            let savedOrderId = null;
             try {
-              savedOrderId = await gotsmsSaveOrder({
-                userId: auth.userId, customerId: debit.customer_id, rentId, phone,
-                serviceName: primaryOrderName, serviceId: String(serviceIds[0] || ''),
-                priceNgn: price, supplierUsd: packUsd, status: 'active',
-                activeTill: rent.active_till || rent.expires_at || null,
-                planLabel: 'Multi-pack', carrierName: body.carrier_name || null,
-                areaCode: areaCode || null, walletDebitId: debit.wallet_debit_id
-              });
               await supabase.from('number_orders').update({
+                service_name: primaryOrderName, service_id: String(serviceIds[0] || ''),
+                status: 'active', code: rent.active_till || rent.expires_at || null,
                 notes: JSON.stringify({
-                  linked_rent_ids: [String(rentId)], multi: true, services: [primaryName],
-                  inbox: [], wh_ids: [],
+                  request_id: requestId, linked_rent_ids: [String(rentId)], multi: true,
+                  services: [primaryName], inbox: [], wh_ids: [],
                   multi_pack_review: {
                     second_service_id: String(secondId),
                     attachment_status: detail.ok && Array.isArray(detailServices) ? 'not_attached' : 'unverified',
@@ -4504,14 +4497,13 @@ export default async function handler(req, res) {
                     updated_at: new Date().toISOString()
                   }
                 })
-              }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
-              await gotsmsRecordPurchaseTx({
-                userId: auth.userId, customerId: debit.customer_id, rent,
-                priceNgn: price, orderId: savedOrderId || rentId,
+              }).eq('id', pendingOrder.id);
+              await supabase.from('transactions').update({
                 title: 'USA multi-pack · ' + primaryName,
                 subtitle: phone || 'Second service attachment under review',
-                walletDebitId: debit.wallet_debit_id
-              });
+                supplier_order: { provider: 'gotsms', rent_id: String(rentId), request_id: requestId, multi_pack_review: true }
+              }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+                .eq('external_reference', String(rentId));
             } catch (saveErr) {
               console.error('[gotsms_rent_multi] partial rental persistence failed:', saveErr?.message || saveErr);
             }
@@ -4570,33 +4562,24 @@ export default async function handler(req, res) {
         if (secondaryRentId && String(secondaryRentId) !== String(rentId)) linkedIds.push(String(secondaryRentId));
 
         try {
-          await gotsmsSaveOrder({
-            userId: auth.userId,
-            customerId: debit.customer_id,
-            rentId,
-            phone,
-            serviceName: combinedName,
-            serviceId: serviceIds.join(','),
-            priceNgn: price,
-            supplierUsd: packUsd,
+          const { error: primaryFinalizeError } = await supabase.from('number_orders').update({
+            service_name: combinedName + ' · ' + planLabel,
+            service_id: serviceIds.join(','),
             status: 'active',
-            activeTill: rent.active_till || rent.expires_at || null,
-            planLabel,
-            carrierName: body.carrier_name || null,
-            areaCode: areaCode || null,
-            walletDebitId: debit.wallet_debit_id
-          });
-          try {
-            await supabase.from('number_orders').update({
-              notes: gotsmsSerializeNotes({
-                linked_rent_ids: linkedIds,
-                multi: true,
-                services: [name1, name2],
-                inbox: [],
-                wh_ids: []
-              })
-            }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
-          } catch (ne) { console.warn('[gotsms_rent_multi] notes', ne.message || ne); }
+            code: rent.active_till || rent.expires_at || null,
+            notes: JSON.stringify({
+              request_id: requestId, linked_rent_ids: linkedIds, multi: true,
+              services: [name1, name2], inbox: [], wh_ids: [],
+              multi_pack_review: { attachment_status: 'confirmed', supplier_refund_status: 'not_needed' }
+            })
+          }).eq('id', pendingOrder.id);
+          if (primaryFinalizeError) throw new Error(primaryFinalizeError.message);
+          await supabase.from('transactions').update({
+            title: 'USA multi-pack · ' + combinedName,
+            subtitle: phone || planLabel,
+            supplier_order: { provider: 'gotsms', rent_id: String(rentId), request_id: requestId, services: [name1, name2] }
+          }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+            .eq('external_reference', String(rentId));
           if (secondaryRentId && String(secondaryRentId) !== String(rentId)) {
             try {
               await gotsmsSaveOrder({
