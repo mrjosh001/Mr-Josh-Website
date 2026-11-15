@@ -968,7 +968,9 @@ async function handleOrder(req, res) {
     // A supplier's explicit known rejection is safe to refund. A malformed
     // response, missing activation ID, or server/network error is ambiguous.
     if (!supplierRes.ok || failureReason || !orderData?.activationId) {
-      const explicitReject = KNOWN_ERRORS.has(rawText.trim());
+      const supplierHttpStatus = Number(supplierRes.status || 0);
+      const explicitReject = KNOWN_ERRORS.has(rawText.trim()) ||
+        (supplierHttpStatus >= 400 && supplierHttpStatus < 500 && ![408, 425, 429].includes(supplierHttpStatus));
       if (!explicitReject) {
         preserveDebitForReconciliation = true;
         await updateServer1Attempt(supabase, purchaseAttemptId, {
