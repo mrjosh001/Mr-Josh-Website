@@ -267,7 +267,24 @@ async function verifySmsBusRentTransferPassword(userId, password, captchaToken) 
     const result = await response.json().catch(() => ({}));
     const returnedUserId = result?.user?.id || result?.data?.user?.id;
     if (response.ok && returnedUserId === userId) return { ok: true };
-    return { ok: false, code: String(result?.code || result?.error_code || ''), status: response.status };
+    // Supabase Auth may return CAPTCHA failures as HTTP 400 without a stable error_code.
+    // Log only sanitized error metadata: never log the password, email, CAPTCHA token, or response body.
+    const errorCode = String(result?.code || result?.error_code || result?.error || '');
+    const errorReason = String(result?.msg || result?.message || result?.error_description || '');
+    const diagnostic = [errorCode, errorReason].join(' ').slice(0, 240);
+    if (/captcha|turnstile|challenge/i.test(diagnostic)) {
+      console.warn('[smsbus_rent_transfer] Supabase CAPTCHA verification rejected', {
+        status: response.status, code: errorCode || null, reason: errorReason.slice(0, 180)
+      });
+      return { ok: false, code: 'captcha_failed', status: response.status };
+    }
+    if (/invalid login credentials|invalid_credentials/i.test(diagnostic)) {
+      return { ok: false, code: 'invalid_credentials', status: response.status };
+    }
+    console.warn('[smsbus_rent_transfer] Supabase Auth rejected password verification', {
+      status: response.status, code: errorCode || null, reason: errorReason.slice(0, 180)
+    });
+    return { ok: false, code: 'auth_rejected', status: response.status };
   } catch (_) {
     return { ok: false, code: 'auth_request_failed' };
   }
