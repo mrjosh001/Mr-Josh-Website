@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
@@ -582,6 +583,10 @@ async function handleOrder(req, res) {
       return res.status(400).json({ success: false, message: 'This product has no price set yet' });
     }
 
+    const cooldown = await claimLogPurchaseCooldown(supabase, user_id, product_key, 10);
+    if (cooldown.unavailable) return res.status(503).json({ success: false, message: 'Purchase protection is temporarily unavailable. Please try again shortly.' });
+    if (cooldown.blocked) return res.status(429).json({ success: false, code: 'DUPLICATE_PURCHASE_COOLDOWN', message: 'You just submitted this product. Wait 10 seconds before trying again.' });
+
     // 3. Central atomic debit: NGN first, USD for the remainder.
     debitResult = await debitWallet(supabase, user_id, total);
     if (!debitResult.ok) {
@@ -666,6 +671,8 @@ async function handleOrder(req, res) {
     const items = extractItems(orderData);
     const supplierOrderId = orderData.data?.order_id || orderData.order_id || orderRef;
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
+    const reviewRequired = !items.length || !detailsText;
+    const rawSupplierPayload = joinRawLogDetails(items) || (items.length ? detailsText : JSON.stringify(orderData.data || orderData));
 
     console.log('[sujan order] fulfilling', {
       order_id: supplierOrderId,
@@ -689,7 +696,7 @@ async function handleOrder(req, res) {
       return { ...item, formattedDetails: formatted };
     }).filter((item) => item.formattedDetails);
     const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\\n\\n') || detailsText || null;
-    const combinedRaw = joinRawLogDetails(items) || detailsText || null;
+    const combinedRaw = rawSupplierPayload || detailsText || null;
     const insertErr = await insertLogOrder({
       order_id: String(orderRef),
       user_id,
@@ -697,12 +704,12 @@ async function handleOrder(req, res) {
       product_code: product_key,
       product_name: productName,
       product_type: 'log',
-      description: (product.display_description || product.description || '').trim() || null,
+      description: [((product.display_description || product.description || '').trim() || null), reviewRequired ? 'ADMIN REVIEW REQUIRED: supplier confirmed success but returned no usable credential items.' : null].filter(Boolean).join('\n') || null,
       quantity: items.length || qty,
       amount: total,
       wallet_debit_id: walletDebitId,
       status: 'completed',
-      login_credentials: combinedCreds,
+      login_credentials: reviewRequired ? 'Purchase completed. Delivery is pending admin review. Do not purchase again.' : combinedCreds,
       login_credentials_raw: combinedRaw,
       supplier_ref: items.map((it) => it.ref).filter(Boolean).join(', ') || String(supplierOrderId),
       guide_url: 'https://t.me/mj_hub_tg'
@@ -766,6 +773,10 @@ async function handleOrder(req, res) {
       });
     } catch (_) {}
 
+    if (reviewRequired) {
+      try { await sendPushToAdmins(supabase, { title: 'Log purchase needs review', body: productName + ' supplier purchase succeeded but returned no usable items. Ref: ' + supplierOrderId, url: '/admin.html', type: 'admin_review' }); } catch (_) {}
+      return res.status(200).json({ success: true, completed: true, delivery_pending_review: true, message: 'Your purchase was successful. Delivery is being checked by MJ HUB. Do not purchase again.', order_id: supplierOrderId, wallet_debit_id: walletDebitId, total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd });
+    }
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
