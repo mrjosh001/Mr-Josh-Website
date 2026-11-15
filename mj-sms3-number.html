@@ -309,7 +309,15 @@ function renderCompleted(data){
       rb.onclick=async function(){
         rb.disabled=true;rb.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Reusing…';
         try{
-          var r=await api('reuse',{country_id:cid,project_id:sid,mobile_number:ph,country_name:meta.country_name||data.country_name,service_name:meta.service_name||data.service_name});
+          var reuseStorageKey='mj_smsbus_reuse_'+String(data.order_id||meta.order_id||ph);
+          var reuseRequestId='';
+          try{reuseRequestId=sessionStorage.getItem(reuseStorageKey)||'';}catch(_){}
+          if(!reuseRequestId){
+            reuseRequestId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mj-reuse-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+            try{sessionStorage.setItem(reuseStorageKey,reuseRequestId);}catch(_){}
+          }
+          var r=await api('reuse',{country_id:cid,project_id:sid,mobile_number:ph,country_name:meta.country_name||data.country_name,service_name:meta.service_name||data.service_name,request_id:reuseRequestId});
+          if(r.data&&(r.data.success||(r.data.refunded===true&&!r.data.reconciliation_required))){try{sessionStorage.removeItem(reuseStorageKey);}catch(_){}}
           if(!r.ok||!r.data||!r.data.success||!r.data.data||!r.data.data.order_id)throw new Error((r.data&&r.data.message)||'Reuse failed');
           var d=r.data.data, num=d.number||d.phone_number||ph;
           try{sessionStorage.setItem('mj_sms3_last_order',JSON.stringify({order_id:d.order_id,number:num,price:d.price,service_name:d.service_name,country_name:d.country_name,ts:Date.now()}))}catch(_){}
