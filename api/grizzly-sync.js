@@ -2760,7 +2760,7 @@ async function vsHandleOrder(req, res) {
   }
   if (!vsApiKey()) return res.status(500).json({ success: false, message: 'This SMS server is not available right now. Please contact support.' });
 
-  let originalBalance = 0, price = 0, deducted = false, customerId = null, serviceName = '', countryName = '', walletDebitId = null, newBalanceUsd = null;
+  let originalBalance = 0, price = 0, deducted = false, preserveDebitForReconciliation = false, customerId = null, serviceName = '', countryName = '', walletDebitId = null, newBalanceUsd = null;
   try {
     const { data: svc } = await supabase.from('number_services')
       .select('service_name, country_name, price, supplier_price, price_source, is_available')
@@ -2792,19 +2792,27 @@ async function vsHandleOrder(req, res) {
     customerId = profile.customer_id;
 
     const idem = (external_order_id && String(external_order_id).trim()) || `MJ-VS-${String(user_id).slice(0, 8)}-${Date.now()}`;
-    if (external_order_id) {
-      const { data: ex } = await supabase.from('number_orders')
-        .select('order_id, phone_number, status, price, service_name, country_name, created_at')
-        .eq('source', VS_SOURCE).eq('user_id', user_id).eq('idempotency_key', idem).maybeSingle();
-      if (ex && ex.order_id) {
-        return res.status(200).json({ success: true, replayed: true, message: 'Order already completed', data: {
-          order_id: ex.order_id, number: ex.phone_number, status: ex.status || 'waiting_for_code',
-          service_name: ex.service_name || serviceName, country_name: ex.country_name || countryName,
-          price: ex.price != null ? Number(ex.price) : price, new_balance: originalBalance, new_balance_usd: Number(profile.balance_usd || 0), created_at: ex.created_at
-        } });
+    const { data: ex } = await supabase.from('number_orders')
+      .select('order_id, phone_number, status, refunded, price, service_name, country_name, created_at')
+      .eq('source', VS_SOURCE).eq('user_id', user_id).eq('idempotency_key', idem).maybeSingle();
+    if (ex) {
+      if (ex.refunded || String(ex.status || '').toLowerCase() === 'refunded') {
+        return res.status(409).json({ success: false, code: 'PREVIOUS_ATTEMPT_REFUNDED', reconciliation_required: false,
+          message: 'The previous purchase attempt was refunded. Start a new purchase request.' });
       }
+      if (String(ex.order_id || '').startsWith('PENDING-') ||
+          ['processing', 'reconciliation_required', 'refund_pending'].includes(String(ex.status || '').toLowerCase())) {
+        return res.status(409).json({ success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true,
+          message: 'This purchase request is still being reconciled. Do not submit another purchase.' });
+      }
+      return res.status(200).json({ success: true, replayed: true, message: 'Order already completed', data: {
+        order_id: ex.order_id, number: ex.phone_number, status: ex.status || 'waiting_for_code',
+        service_name: ex.service_name || serviceName, country_name: ex.country_name || countryName,
+        price: ex.price != null ? Number(ex.price) : price, new_balance: originalBalance,
+        new_balance_usd: Number(profile.balance_usd || 0), created_at: ex.created_at
+      } });
     }
-    // Central atomic debit: NGN first, USD remainder.
+
     const debit = await debitWallet(supabase, user_id, price);
     if (!debit.ok) {
       return res.status(402).json({
@@ -2817,10 +2825,55 @@ async function vsHandleOrder(req, res) {
     newBalanceUsd = debit.balance_usd;
     deducted = true;
 
-    let r = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000 });
-    // Only retry when VirtualSMS explicitly reports no stock. A timeout or
-    // ambiguous response is NOT retried because the first request may have
-    // created an order whose response was lost.
+    const pendingRef = 'PENDING-' + idem;
+    const pendingOrder = {
+      source: VS_SOURCE, user_id, customer_id: customerId, order_id: pendingRef, idempotency_key: idem,
+      country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
+      phone_number: null, price, wallet_debit_id: walletDebitId, supplier_price: unitCostUsd || null,
+      currency: 'NGN', status: 'processing', code: null, time_left: null, refunded: false,
+      notes: JSON.stringify({ supplier_outcome: 'pending', idempotency_key: idem })
+    };
+    const { data: pendingOrderRow, error: pendingOrderError } = await supabase.from('number_orders')
+      .insert(pendingOrder).select('id').single();
+    if (pendingOrderError || !pendingOrderRow) {
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      deducted = !refund?.ok;
+      return res.status(refund?.ok ? 500 : 503).json({
+        success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+        message: refund?.ok ? 'Could not save the purchase record. Your wallet was restored.' : 'Purchase record and wallet refund need reconciliation. Do not retry.'
+      });
+    }
+    const pendingTx = {
+      user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
+      subtitle: 'VirtualSMS purchase status checking — do not retry', amount: `₦${price.toLocaleString()}`,
+      amount_ngn: Number(debit.ngn_debited || 0), amount_usd: Number(debit.usd_debited || 0),
+      external_reference: String(walletDebitId), status: 'pending', notes: 'sms_order_pending:' + idem
+    };
+    let { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
+    if (pendingTxError) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      pendingTxError = (await supabase.from('transactions').insert(pendingTx)).error;
+    }
+    if (pendingTxError) {
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      deducted = !refund?.ok;
+      await supabase.from('number_orders').update({
+        status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+        notes: 'Supplier request was not sent because pending transaction could not be recorded.'
+      }).eq('id', pendingOrderRow.id);
+      return res.status(refund?.ok ? 500 : 503).json({
+        success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+        message: refund?.ok ? 'Could not create the purchase transaction. Your wallet was restored.' : 'Your wallet refund needs reconciliation. Do not retry yet.'
+      });
+    }
+
+    // Once the purchase request is sent, a timeout or unrecognized response is
+    // not a rejection. Keep the debit until the supplier order is reconciled.
+    preserveDebitForReconciliation = true;
+    let r = await vsReq('/customer/purchase', {
+      method: 'POST', body: { service: serviceId, country: iso }, timeoutMs: 30000
+    });
+    let retryUncertain = false;
     const firstPayload = r.json || {};
     const firstError = String(firstPayload.error || firstPayload.message || '').toLowerCase();
     const firstOrderId = firstPayload.order_id || firstPayload.id || firstPayload.order?.order_id || firstPayload.order?.id;
@@ -2828,35 +2881,57 @@ async function vsHandleOrder(req, res) {
       /no[_ ]numbers|not[_ ]available|out[_ ]of[_ ]stock|no stock/.test(firstError);
     if (!firstOrderId && firstNoStock && VS_INCLUDE_VOIP && r.status !== 401 && r.status !== 402 && r.status !== 429) {
       await new Promise(resolve => setTimeout(resolve, 350));
-      const r2 = await vsReq('/customer/purchase', { method: 'POST', body: { service: serviceId, country: iso, include_voip: true }, timeoutMs: 30000 });
+      const r2 = await vsReq('/customer/purchase', {
+        method: 'POST', body: { service: serviceId, country: iso, include_voip: true }, timeoutMs: 30000
+      });
       const retryOrderId = r2.json?.order_id || r2.json?.id || r2.json?.order?.order_id || r2.json?.order?.id;
       if (retryOrderId) r = r2;
+      else {
+        r = r2;
+        retryUncertain = r2.status === 0 || r2.status >= 500 || (!r2.json && !r2.text);
+      }
     }
+
     const j = r.json || {};
     const orderId = j.order_id || j.id || (j.order && (j.order.order_id || j.order.id));
     const phone = j.phone_number || j.number || (j.order && (j.order.phone_number || j.order.number)) || null;
     if (!r.ok || j.success === false || !orderId) {
-      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
-      if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-      deducted = false;
-      const code = String(j.error || '').toLowerCase();
-      const noStock = r.status === 404 || r.status === 409 || /no_numbers|not_available|out_of_stock|unavailable|no numbers/.test(code);
-      try {
-        await supabase.from('transactions').insert({
-          user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
-          subtitle: `Failed: ${noStock ? 'No stock' : 'Unavailable'}`, amount: `₦${price.toLocaleString()}`,
-          amount_ngn: debit.ngn_debited, amount_usd: debit.usd_debited, external_reference: String(walletDebitId), status: 'failed', notes: (r.text || r.err || '').slice(0, 500)
+      const errorText = String(j.error || j.message || r.text || r.err || '').trim();
+      const noStock = r.status === 404 || r.status === 409 ||
+        /no[_ ]numbers|not[_ ]available|out[_ ]of[_ ]stock|unavailable|no numbers/i.test(errorText);
+      const explicitReject = !retryUncertain && (
+        noStock || (r.status >= 400 && r.status < 500 && r.status !== 408)
+      );
+      if (!explicitReject) {
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ supplier_outcome: 'unknown', supplier_http_status: r.status,
+            supplier_error: errorText.slice(0, 400), retry_uncertain: retryUncertain })
+        }).eq('id', pendingOrderRow.id);
+        return res.status(503).json({
+          success: false, code: 'SUPPLIER_RESULT_UNCONFIRMED', reconciliation_required: true, refunded: false,
+          message: 'The supplier result is not confirmed. Your wallet debit is being held while we verify the order. Do not retry yet.'
         });
-      } catch (_) { /* optional */ }
-      return res.status(400).json({
-        success: false, code: j.error || 'SUPPLIER_ERROR',
-        message: noStock ? 'No numbers available for this service/country right now. Try another country or service.'
-          : 'Purchase failed. Your balance has been restored.'
+      }
+      const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+      deducted = !refund?.ok;
+      await supabase.from('number_orders').update({
+        status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+        notes: JSON.stringify({ supplier_outcome: 'rejected', supplier_http_status: r.status, supplier_error: errorText.slice(0, 400) })
+      }).eq('id', pendingOrderRow.id);
+      await supabase.from('transactions').update({
+        status: refund?.ok ? 'refunded' : 'pending',
+        subtitle: refund?.ok ? `Failed: ${noStock ? 'No stock' : 'Unavailable'} · wallet refunded` : 'Supplier rejected purchase — refund pending'
+      }).eq('user_id', user_id).eq('category', 'MJ SMS').eq('type', 'purchase').eq('external_reference', String(walletDebitId));
+      return res.status(refund?.ok ? 400 : 503).json({
+        success: false, refunded: !!refund?.ok, reconciliation_required: !refund?.ok,
+        code: j.error || 'SUPPLIER_ERROR',
+        message: refund?.ok
+          ? (noStock ? 'No numbers available for this service/country right now. Your wallet was refunded.' : 'Purchase failed. Your balance was restored.')
+          : 'The supplier rejected the purchase, but your wallet refund is pending. Do not retry yet.'
       });
     }
 
-    // What the supplier actually charged us (USD). A live charge above the
-    // customer sale price must be cancelled and verified before refunding.
     const paidUsd = vsNum(j.price ?? j.cost ?? j.price_usd ?? (j.order && (j.order.price ?? j.order.cost ?? j.order.price_usd)));
     const costUsd = paidUsd > 0 ? paidUsd : (unitCostUsd || null);
     const actualCostNgn = paidUsd > 0 ? paidUsd * vsRate() : 0;
@@ -2866,17 +2941,13 @@ async function vsHandleOrder(req, res) {
       try {
         const fix = { supplier_price: paidUsd, updated_at: new Date().toISOString() };
         if (svc.price_source !== 'manual' && svc.price_source !== 'admin') {
-          fix.price = salePriceFromUsd(paidUsd);
-          fix.price_source = 'system';
+          fix.price = salePriceFromUsd(paidUsd); fix.price_source = 'system';
         } else if (belowActualCost) {
-          // Keep admin's chosen price intact, but stop further sales at a known loss.
           fix.is_available = false;
         }
         await supabase.from('number_services').update(fix)
           .eq('source', VS_SOURCE).eq('country_id', Number(country_id)).eq('service_id', serviceId);
-      } catch (e) {
-        console.error('[vsms order] supplier cost catalogue update failed:', e?.message || e);
-      }
+      } catch (e) { console.error('[vsms order] supplier cost catalogue update failed:', e?.message || e); }
     }
 
     if (belowActualCost) {
@@ -2895,37 +2966,31 @@ async function vsHandleOrder(req, res) {
             status: 'refunded', code: null, time_left: null, refunded: true,
             notes: 'Supplier actual cost exceeded sale price; supplier cancellation confirmed; exact wallet debit refunded.'
           };
-          const { error: cancelledInsertError } = await supabase.from('number_orders').insert(cancelledRow);
-          if (cancelledInsertError) console.error('[vsms order] cancelled order history insert failed:', cancelledInsertError.message, { orderId });
-          const { error: refundTxError } = await supabase.from('transactions').insert({
-            user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS', title: serviceName,
-            subtitle: 'Refunded: supplier price changed; activation cancelled',
-            amount: `₦${price.toLocaleString()}`, amount_ngn: debit.ngn_debited, amount_usd: debit.usd_debited,
-            external_reference: String(walletDebitId), status: 'refunded', notes: 'VirtualSMS supplier cancellation confirmed.'
-          });
-          if (refundTxError) console.error('[vsms order] cancelled purchase refund transaction insert failed:', refundTxError.message, { orderId, walletDebitId });
+          const { error: cancelledInsertError } = await supabase.from('number_orders').update({
+            ...cancelledRow, order_id: String(orderId)
+          }).eq('id', pendingOrderRow.id);
+          if (cancelledInsertError) console.error('[vsms order] cancelled order history update failed:', cancelledInsertError.message, { orderId });
+          const { error: refundTxError } = await supabase.from('transactions').update({
+            status: 'refunded', subtitle: 'Refunded: supplier price changed; activation cancelled',
+            notes: 'VirtualSMS supplier cancellation confirmed.'
+          }).eq('user_id', user_id).eq('category', 'MJ SMS').eq('type', 'purchase').eq('external_reference', String(walletDebitId));
+          if (refundTxError) console.error('[vsms order] cancelled purchase refund transaction update failed:', refundTxError.message, { orderId, walletDebitId });
           return res.status(409).json({
-            success: false, code: 'SUPPLIER_PRICE_CHANGED_CANCELLED',
+            success: false, code: 'SUPPLIER_PRICE_CHANGED_CANCELLED', refunded: true,
             message: 'The supplier price changed after checkout. The activation was cancelled and your wallet was refunded. Please refresh before trying again.'
           });
         }
         console.error('[vsms order] supplier cancelled but wallet refund failed; reconciliation required:', refund.error || refund.message, { orderId, walletDebitId });
-        const pendingRow = {
-          source: VS_SOURCE, user_id, customer_id: customerId, order_id: String(orderId), idempotency_key: idem,
-          country_id: Number(country_id), country_name: countryName, service_id: serviceId, service_name: serviceName,
-          phone_number: phone, price, wallet_debit_id: walletDebitId, supplier_price: paidUsd, currency: 'NGN',
-          status: 'refund_pending', code: null, time_left: null, refunded: false,
+        await supabase.from('number_orders').update({
+          order_id: String(orderId), phone_number: phone, supplier_price: paidUsd,
+          status: 'refund_pending', refunded: false,
           notes: 'Supplier cancellation confirmed; exact wallet refund failed and requires reconciliation.'
-        };
-        const { error: pendingInsertError } = await supabase.from('number_orders').insert(pendingRow);
-        if (pendingInsertError) console.error('[vsms order] refund-pending order persistence failed:', pendingInsertError.message, { orderId });
+        }).eq('id', pendingOrderRow.id);
         return res.status(503).json({
-          success: false, code: 'REFUND_RECONCILIATION_REQUIRED',
+          success: false, code: 'REFUND_RECONCILIATION_REQUIRED', reconciliation_required: true,
           message: 'The supplier activation was cancelled, but your wallet refund needs reconciliation. Do not purchase again yet. Contact support with reference ' + String(orderId)
         });
       }
-      // Do not refund an activation that the supplier has not confirmed cancelled.
-      // Keep the paid order accessible and mark it for admin reconciliation.
       console.error('[vsms order] cancellation unconfirmed; debit retained for live activation:', cancellation.reason, { orderId, walletDebitId });
     }
 
@@ -2936,31 +3001,65 @@ async function vsHandleOrder(req, res) {
       status: 'waiting_for_code', code: null, time_left: null, refunded: false,
       notes: belowActualCost ? 'Supplier actual cost exceeded sale price; cancellation was not confirmed. Activation retained and flagged for reconciliation.' : null
     };
-    let { error: insErr } = await supabase.from('number_orders').insert(row);
-    if (insErr) { await new Promise((r2) => setTimeout(r2, 400)); ({ error: insErr } = await supabase.from('number_orders').insert(row)); }
-    if (insErr) console.error('[vsms order] number_orders insert failed after charge:', insErr.message, { orderId, user_id });
+    let orderUpdate = await supabase.from('number_orders').update(row).eq('id', pendingOrderRow.id).select('id');
+    if (orderUpdate.error || !orderUpdate.data?.length) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      orderUpdate = await supabase.from('number_orders').update(row).eq('id', pendingOrderRow.id).select('id');
+    }
+    if (orderUpdate.error || !orderUpdate.data?.length) {
+      await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrderRow.id);
+      return res.status(200).json({ success: true, reconciliation_required: true,
+        message: 'Your number was activated and your wallet was charged. Order history is being reconciled. Do not purchase again.',
+        data: { order_id: String(orderId), number: phone, status: 'waiting_for_code', service_name: serviceName,
+          country_name: countryName, price, new_balance: newBalance, new_balance_usd: newBalanceUsd,
+          wallet_debit_id: walletDebitId, created_at: new Date().toISOString() }
+      });
+    }
 
-    try {
-      await supabase.from('transactions').insert({
+    const { data: txRows, error: txUpdateError } = await supabase.from('transactions').update({
+      subtitle: (countryName || '') + ' · waiting for SMS', notes: 'sms_order:' + String(orderId), supplier_order: j
+    }).eq('user_id', user_id).eq('category', 'MJ SMS').eq('type', 'purchase')
+      .eq('external_reference', String(walletDebitId)).select('id');
+    if (txUpdateError || !txRows?.length) {
+      const { error: txInsertError } = await supabase.from('transactions').insert({
         user_id, customer_id: customerId, type: 'purchase', category: 'MJ SMS',
         title: countryName ? (serviceName + ' · ' + countryName) : serviceName,
         subtitle: (countryName || '') + ' · waiting for SMS',
-        amount: `₦${price.toLocaleString()}`, amount_ngn: debit.ngn_debited,
-        amount_usd: debit.usd_debited, external_reference: String(walletDebitId),
-        status: 'pending',
-        notes: 'sms_order:' + String(orderId),
-        supplier_order: j
+        amount: `₦${price.toLocaleString()}`, amount_ngn: Number(debit.ngn_debited || 0),
+        amount_usd: Number(debit.usd_debited || 0), external_reference: String(walletDebitId),
+        status: 'pending', notes: 'sms_order:' + String(orderId), supplier_order: j
       });
-    } catch (_) { /* optional */ }
+      if (txInsertError) {
+        await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrderRow.id);
+        return res.status(200).json({ success: true, reconciliation_required: true,
+          message: 'Your number was activated and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
+          data: { order_id: String(orderId), number: phone, status: 'waiting_for_code', service_name: serviceName,
+            country_name: countryName, price, new_balance: newBalance, new_balance_usd: newBalanceUsd,
+            wallet_debit_id: walletDebitId, created_at: new Date().toISOString() }
+        });
+      }
+    }
 
     return res.status(200).json({ success: true, message: 'Number purchased successfully', data: {
       order_id: String(orderId), number: phone, status: 'waiting_for_code', service_name: serviceName,
-      country_name: countryName, price, new_balance: newBalance, new_balance_usd: newBalanceUsd, wallet_debit_id: walletDebitId, created_at: new Date().toISOString()
+      country_name: countryName, price, new_balance: newBalance, new_balance_usd: newBalanceUsd,
+      wallet_debit_id: walletDebitId, created_at: new Date().toISOString()
     } });
   } catch (err) {
     console.error('vsms order error:', err);
-    if (deducted) { try { const refund = await refundWalletDebit(supabase, user_id, walletDebitId); if (!refund.ok) throw new Error(refund.error || refund.message); } catch (e) { console.error('CRITICAL vsms exact refund failed', e); } }
-    return res.status(500).json({ success: false, message: deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.' });
+    if (deducted && !preserveDebitForReconciliation) {
+      try {
+        const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
+        if (!refund.ok) throw new Error(refund.error || refund.message);
+      } catch (e) { console.error('CRITICAL vsms exact refund failed', e); }
+    }
+    return res.status(500).json({
+      success: false,
+      reconciliation_required: preserveDebitForReconciliation,
+      message: preserveDebitForReconciliation
+        ? 'The supplier result is being reconciled. Your wallet debit is being held. Do not purchase again yet.'
+        : (deducted ? 'Something went wrong. Your balance has been restored.' : 'Something went wrong. Please try again.')
+    });
   }
 }
 
