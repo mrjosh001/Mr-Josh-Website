@@ -70,6 +70,16 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 .spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* rental actions menu */
+.rent-actions{position:relative;margin-left:auto;flex-shrink:0}
+.rent-more{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card-2);color:var(--text);display:grid;place-items:center;font-size:16px;cursor:pointer}
+.rent-more:focus-visible,.rent-menu-item:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.rent-menu{position:absolute;right:0;top:44px;z-index:80;min-width:220px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);display:none}
+.rent-menu.open{display:block}
+.rent-menu-item{width:100%;display:flex;align-items:center;gap:11px;padding:12px;border:0;border-radius:10px;background:transparent;color:var(--text);font:inherit;font-size:13px;font-weight:700;text-align:left;cursor:pointer}
+.rent-menu-item:active{background:var(--card-2)}
+.rent-menu-item i{width:18px;text-align:center;color:var(--muted)}
+
 /* cancel window */
 .cw{padding:12px 14px;border-radius:14px;background:var(--warn-soft);border:1px solid var(--warn-line);font-size:12px;font-weight:600;color:var(--text-2);line-height:1.45}
 .cw b{color:var(--warn)}
@@ -211,6 +221,18 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     clearTimeout(t._tm);
     t._tm = setTimeout(function(){ t.classList.remove('on'); }, 3200);
   }
+  function toggleRentMenu(){
+    var menu=document.getElementById('rentMenu'), btn=document.getElementById('btnRentMore');
+    if(!menu||!btn) return;
+    var open=!menu.classList.contains('open');
+    menu.classList.toggle('open',open); btn.setAttribute('aria-expanded',open?'true':'false');
+  }
+  function closeRentMenu(){
+    var menu=document.getElementById('rentMenu'), btn=document.getElementById('btnRentMore');
+    if(menu) menu.classList.remove('open');
+    if(btn) btn.setAttribute('aria-expanded','false');
+  }
+  document.addEventListener('click',function(e){ if(!e.target.closest('.rent-actions')) closeRentMenu(); });
   function showModal(id){ var el=document.getElementById(id); if(el) el.classList.add('on'); }
   function hideModal(id){ var el=document.getElementById(id); if(el) el.classList.remove('on'); }
   function rentCountryLabel(r){
@@ -386,7 +408,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         '<div class="n3-card hero">'+
           '<div class="n3-lab">Your number</div>'+
           '<div class="numrow">'+(dial?'<span class="dial-code">'+dial+'</span>':'')+'<div class="national-num">'+esc(national)+'</div>'+
-            '<button type="button" class="copy-icon" id="btnCopy" aria-label="Copy number"><i class="fa-regular fa-copy"></i></button></div>'+
+            '<button type="button" class="copy-icon" id="btnCopy" aria-label="Copy number"><i class="fa-regular fa-copy"></i></button>'+
+            (active && !rent.transfer_used ? '<div class="rent-actions"><button type="button" class="rent-more" id="btnRentMore" aria-label="More rental actions" aria-haspopup="true" aria-expanded="false"><i class="fa-solid fa-ellipsis-vertical"></i></button><div class="rent-menu" id="rentMenu" role="menu"><button type="button" class="rent-menu-item" id="btnTransfer" role="menuitem"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transfer to another user</span></button></div></div>' : '')+
+          '</div>'+
           '<div class="chips"><span class="chip">'+esc(name)+'</span>'+(country?'<span class="chip ac">'+esc(country)+'</span>':'')+'</div>'+
           '<div class="timerow"><span class="n3-lab">Time left</span><span class="n3-time" id="cdVal">'+(active?formatLeft(till?till-Date.now():0):'Ended')+'</span></div>'+
           '<div class="n3-track" id="cdTrack" aria-hidden="true" style="'+(active&&startMs&&till>startMs?'':'display:none')+'"><div class="n3-bar" id="cdBar"></div></div>'+
@@ -397,7 +421,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           '<button type="button" class="n3-btn n3-ghost" id="btnRefresh" style="'+(active?'':'grid-column:1/-1')+'"><i class="fa-solid fa-rotate"></i> Refresh inbox</button>'+
           (active?'<button type="button" class="n3-btn n3-primary" id="btnRenew"><i class="fa-solid fa-calendar-plus"></i> Renew</button>':'')+
         '</div>'+
-        (active?'<button type="button" class="n3-btn n3-ghost" id="btnTransfer" style="width:100%;margin-top:8px"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer number</button>':'')+
+
         cancelHtml+
         (active?'<div class="n3-tip"><b>Tip:</b> use a VPN from the same country as this number when verifying. New messages show up below on their own.</div>':'')+
         '<div class="inbox-head"><h2>Inbox</h2><div><span class="pill" id="msgCount">0 messages</span> '+(active?'<span class="pill live">Live</span>':'')+'</div></div>'+
@@ -418,7 +442,9 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     };
     var rn=document.getElementById('btnRenew'); if(rn) rn.onclick=openRenew;
     var bc=document.getElementById('btnCancel'); if(bc) bc.onclick=openCancel;
-    var bt=document.getElementById('btnTransfer'); if(bt) bt.onclick=openTransfer;
+    var bt=document.getElementById('btnTransfer'); if(bt) bt.onclick=function(){ closeRentMenu(); openTransfer(); };
+    var more=document.getElementById('btnRentMore');
+    if(more) more.onclick=function(e){ e.stopPropagation(); toggleRentMenu(); };
 
     if(cdTimer) clearInterval(cdTimer);
     function tick(){
@@ -644,7 +670,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var m=document.getElementById(id);
     m.addEventListener('click',function(e){ if(e.target===m) hideModal(id); });
   });
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ hideModal('cancelModal'); hideModal('renewModal'); hideModal('transferModal'); } });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ closeRentMenu(); hideModal('cancelModal'); hideModal('renewModal'); hideModal('transferModal'); } });
   document.addEventListener('visibilitychange',function(){ if(!document.hidden && rent && isActive()) loadMessages(); });
 
   async function loadDetail(){
