@@ -699,10 +699,30 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var area=rent.area_code||rent.country_name||'';
     var mobile=String(rent.phone_number||'').replace(/\D/g,'');
     if(mobile.length>10 && mobile.charAt(0)==='1') mobile=mobile.slice(1);
-    var j=await api('rent_renew',{ method:'POST', body:{ order_id: rent.order_id || orderId, area_code:area, mobile_number:mobile, time:renewMonths }});
-    renewBusy=false; btn.disabled=false; btn.textContent=prev;
+    var signature=String(rent.order_id||orderId)+'|'+String(renewMonths);
+    var storeKey='mj_smsbus_renew_'+String(rent.order_id||orderId);
+    var stored=null;
+    try{stored=JSON.parse(sessionStorage.getItem(storeKey)||'null');}catch(e){}
+    if(stored&&stored.id&&stored.signature!==signature){
+      renewBusy=false;btn.disabled=false;btn.textContent=prev;
+      toast('A previous renewal is still being reconciled. Do not renew again yet.','err');return;
+    }
+    var requestId=stored&&stored.id?stored.id:((window.crypto&&crypto.randomUUID)?crypto.randomUUID():('sbrn-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)));
+    try{sessionStorage.setItem(storeKey,JSON.stringify({id:requestId,signature:signature}));}catch(e){}
+    var j;
+    try{
+      j=await api('rent_renew',{method:'POST',body:{order_id:rent.order_id||orderId,area_code:area,mobile_number:mobile,time:renewMonths,request_id:requestId}});
+    }catch(e){
+      renewBusy=false;btn.disabled=false;btn.textContent=prev;
+      toast('Renewal result is not confirmed. Do not submit another renewal yet.','err');return;
+    }
+    renewBusy=false;btn.disabled=false;btn.textContent=prev;
+    if(!j.success){
+      if(!j.reconciliation_required){try{sessionStorage.removeItem(storeKey);}catch(e){}}
+      toast(j.message||'Renew failed','err');return;
+    }
+    try{sessionStorage.removeItem(storeKey);}catch(e){}
     hideModal('renewModal');
-    if(!j.success){ toast(j.message||'Renew failed','err'); return; }
     toast('Renewed successfully','ok');
     await loadDetail();
   }
