@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
-import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
@@ -416,6 +416,8 @@ async function handleOrder(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+  let supplierAccepted = false;
+  let supplierOutcomeUnknown = false;
   let walletDebitId = null;
   let debitResult = null;
     if (external_order_id) {
@@ -598,6 +600,7 @@ async function handleOrder(req, res) {
 
     // 4. Call Sujan Department
     const orderRef = external_order_id || `MJ-SJ-${String(user_id).slice(0, 8)}-${Date.now()}`;
+    supplierOutcomeUnknown = true;
     const supplierRes = await fetch(`${BASE}/reseller/v1/orders`, {
       method: 'POST',
       headers: {
@@ -612,6 +615,11 @@ async function handleOrder(req, res) {
 
     // 5. Supplier failed → refund
     if (!supplierRes.ok || orderData.success === false) {
+      // Supplier explicitly rejected the order. This is the only post-request
+      // outcome that is considered safe for an automatic refund.
+      if (supplierRes.status >= 400 && supplierRes.status < 500 && orderData.success === false) {
+        supplierOutcomeUnknown = false;
+      }
       const refund = await refundWallet(user_id, walletDebitId);
 
       await supabase.from('transactions').insert({
@@ -650,6 +658,10 @@ async function handleOrder(req, res) {
       });
     }
 
+    // Supplier has confirmed fulfilment. Never auto-refund after this point.
+    supplierAccepted = true;
+    supplierOutcomeUnknown = false;
+
     // 6. Success → save orders
     const items = extractItems(orderData);
     const supplierOrderId = orderData.data?.order_id || orderData.order_id || orderRef;
@@ -665,13 +677,18 @@ async function handleOrder(req, res) {
 
     // ONE row for the full qty — numbered logs under one order_id
     const formatHint = product.display_description || product.description || productName || '';
-    const combinedCreds =
-      formatMultiLogCredentials(items, formatHint) ||
-      (items[0]
-        ? formatCredentials(items[0].details, formatHint) || items[0].details
-        : null) ||
-      detailsText ||
-      null;
+    // Format each credential independently. Do not call the broken packed
+    // multi-log formatter; preserve raw supplier text if a formatter fails.
+    const formattedItems = (items || []).map((item) => {
+      const raw = String(item.details || '').trim();
+      let formatted = raw;
+      try { formatted = formatCredentials(raw, formatHint) || raw; }
+      catch (formatError) {
+        console.error('[sujan order] individual credential formatting failed; raw preserved', formatError?.message || formatError);
+      }
+      return { ...item, formattedDetails: formatted };
+    }).filter((item) => item.formattedDetails);
+    const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\\n\\n') || detailsText || null;
     const combinedRaw = joinRawLogDetails(items) || detailsText || null;
     const insertErr = await insertLogOrder({
       order_id: String(orderRef),
@@ -691,7 +708,10 @@ async function handleOrder(req, res) {
       guide_url: 'https://t.me/mj_hub_tg'
     });
     if (insertErr) {
-      console.error('[sujan order] FAILED to save order row:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+      console.error('[sujan order] supplier fulfilled but order persistence failed:', insertErr.message, {
+        order_id: String(orderRef), supplier_order_id: String(supplierOrderId), wallet_debit_id: String(walletDebitId)
+      });
+      throw new Error('Supplier fulfilled the order, but MJ HUB could not save the credentials. Reconciliation required.');
     }
 
     await supabase.from('transactions').insert({
@@ -750,10 +770,7 @@ async function handleOrder(req, res) {
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: (items || []).map((i) => ({
-          details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
-          ref: i.ref
-        })),
+        items: formattedItems.map((i) => ({ details: i.formattedDetails, ref: i.ref })),
         login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
@@ -767,7 +784,7 @@ async function handleOrder(req, res) {
   } catch (err) {
     console.error('sujan order error:', err);
 
-    if (deducted) {
+    if (deducted && !supplierAccepted && !supplierOutcomeUnknown) {
       try {
         const refund = await refundWallet(user_id, walletDebitId);
 
@@ -790,11 +807,16 @@ async function handleOrder(req, res) {
       }
     }
 
-    return res.status(500).json({
+    return res.status(supplierAccepted || supplierOutcomeUnknown ? 202 : 500).json({
       success: false,
-      message: deducted
-        ? 'Something went wrong. Your balance has been refunded.'
-        : 'Something went wrong. Please try again.'
+      pending: supplierAccepted || supplierOutcomeUnknown,
+      message: supplierAccepted
+        ? 'The supplier fulfilled your order, but MJ HUB is reconciling delivery. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '. Your balance has not been refunded.'
+        : supplierOutcomeUnknown
+          ? 'The supplier response could not be confirmed. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '. Your balance has not been refunded yet.'
+          : deducted
+            ? 'Something went wrong. Your balance has been refunded.'
+            : 'Something went wrong. Please try again.'
     });
   }
 }
