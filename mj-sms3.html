@@ -930,6 +930,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           external_order_id: idemKey || window.__mjSms3BuyId || undefined
         }
       });
+      if(j && j.reconciliation_required){
+        throw new Error(j.message || 'Your purchase is being reconciled. Do not retry yet.');
+      }
       const oid = j && j.data && j.data.order_id;
       if(!oid) throw new Error((j && j.message) || 'Purchase failed — no order id returned. Try again.');
       const num = (j.data && (j.data.number || j.data.phone_number)) || '';
