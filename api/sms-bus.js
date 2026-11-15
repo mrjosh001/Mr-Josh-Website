@@ -1443,6 +1443,66 @@ function smsBusRentTransferState(row) {
   const canCancel = active && !hasSms && !!cancelEndsAt && Date.now() < cancelEndsAt;
   return { active, expiryMs, inboxCount: inbox.length, hasSms, cancelEndsAt, canCancel };
 }
+ 
+async function refreshSmsBusRentInbox(row) {
+  let areaCode = String(row.country_name || '').toUpperCase().trim();
+  const reverse = { CANADA:'CA', 'UNITED STATES':'US', USA:'US', 'UNITED KINGDOM':'GB', UK:'GB' };
+  if (areaCode.length > 3) areaCode = reverse[areaCode] || (String(row.service_name || '').match(/\\b([A-Z]{2})\\b/) || [])[1] || areaCode.slice(0,2);
+  let mobile = String(row.phone_number || '').replace(/\\D/g, '');
+  if (mobile.length > 10 && mobile.startsWith('1')) mobile = mobile.slice(1);
+  if (!areaCode || !mobile) return { ok: false, message: 'Could not verify the rental inbox. Try again.' };
+
+  let bus;
+  try {
+    bus = await smsbusGet(RENT_BASE, '/v1/rent/get/sms', { area_code: areaCode, mobile_number: mobile });
+  } catch (e) {
+    console.warn('[smsbus rent transfer] inbox verification failed', e?.message || e);
+    return { ok: false, message: 'Could not verify the latest inbox messages. No transfer was made. Try again.' };
+  }
+  const raw = bus && bus.data || {};
+  const noMessages = Number(raw.code) === 50101 || /no sms|no message|empty inbox/i.test(String(raw.message || raw.msg || ''));
+  if (!busOk(raw) && !noMessages) {
+    console.warn('[smsbus rent transfer] supplier inbox check not confirmed', raw.code || bus?.http);
+    return { ok: false, message: 'The latest inbox could not be verified. No transfer was made. Try again shortly.' };
+  }
+
+  const incoming = [];
+  if (busOk(raw) && raw.data) {
+    const d = raw.data;
+    if (Array.isArray(d)) {
+      d.forEach(m => incoming.push({
+        body: m.content || m.body || m.text || m.message || '',
+        code: m.code || '',
+        received_at: m.receive_at || m.received_at || m.time || null,
+        from: m.from || m.sender || ''
+      }));
+    } else if (typeof d === 'object') {
+      const body = d.content || d.body || d.text || d.message || '';
+      if (body) incoming.push({
+        body, code: d.code || '',
+        received_at: d.receive_at || d.received_at || null,
+        from: d.from || d.sender || ''
+      });
+    } else if (typeof d === 'string' && d.trim()) {
+      incoming.push({ body: d, code: '', received_at: null, from: '' });
+    }
+  }
+
+  const messages = mergeRentInbox(parseRentInboxNotes(row.notes), incoming);
+  const patch = { notes: packRentInboxNotes(messages, row.notes) };
+  const name = String(row.service_name || '');
+  if (messages.length && !/sms\s*received/i.test(name)) {
+    patch.service_name = (name || 'Rental') + ' · SMS received';
+  }
+  const { error } = await supabase.from('number_orders').update(patch)
+    .eq('id', row.id).eq('user_id', row.user_id);
+  if (error) {
+    console.error('[smsbus rent transfer] inbox history persistence failed', error.message);
+    return { ok: false, message: 'The inbox history could not be secured for transfer. No transfer was made.' };
+  }
+  return { ok: true, row: { ...row, ...patch }, messages };
+}
+
 
 async function smsbusGet(base, path, params = {}) {
   if (!TOKEN) throw new Error('SMSBUS_API_TOKEN is not configured');
@@ -3335,21 +3395,24 @@ export default async function handler(req, res) {
         return json(res, 400, { success: false, message: 'Rental and recipient account are required.' });
       }
 
-      const { data: row, error: rowErr } = await supabase.from('number_orders').select('*')
+      let { data: row, error: rowErr } = await supabase.from('number_orders').select('*')
         .eq('user_id', auth.userId).eq('source', 'smsbus_rent')
         .eq('order_id', order_id).maybeSingle();
       if (rowErr || !row) return json(res, 404, { success: false, message: 'Rental not found or no longer belongs to you.' });
-
-      const state = smsBusRentTransferState(row);
-      if (!state.active) {
-        return json(res, 400, { success: false, message: 'Only active, non-refunded SMS-BUS rentals can be transferred.' });
-      }
 
       const { data: operationLock } = await supabase.from('smsbus_rent_operation_locks')
         .select('operation, expires_at').eq('rental_order_id', row.id)
         .gt('expires_at', new Date().toISOString()).maybeSingle();
       if (operationLock) {
         return json(res, 409, { success: false, message: 'A cancellation or renewal is currently processing. Try again shortly.' });
+      }
+
+      const inboxRefresh = await refreshSmsBusRentInbox(row);
+      if (!inboxRefresh.ok) return json(res, 503, { success: false, message: inboxRefresh.message });
+      row = inboxRefresh.row;
+      const state = smsBusRentTransferState(row);
+      if (!state.active) {
+        return json(res, 400, { success: false, message: 'Only active, non-refunded SMS-BUS rentals can be transferred.' });
       }
 
       const found = await findSmsBusRentRecipient(recipientInput, auth.userId);
