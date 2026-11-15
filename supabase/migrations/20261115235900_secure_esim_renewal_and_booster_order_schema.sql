@@ -65,8 +65,8 @@ begin
 end;
 $function$;
 
-REVOKE ALL ON FUNCTION public.create_esim_renewal_wallet_order(uuid,uuid,text,text,numeric) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.create_esim_renewal_wallet_order(uuid,uuid,text,text,numeric) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.create_esim_renewal_wallet_order(uuid,uuid,text,text,numeric) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_esim_renewal_wallet_order(uuid,uuid,text,text,numeric) TO service_role;
 
 -- Remove unauthenticated and authenticated access to the account-existence oracle.
 REVOKE ALL ON FUNCTION public.email_registered(text) FROM PUBLIC, anon, authenticated;
