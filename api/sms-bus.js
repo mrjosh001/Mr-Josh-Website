@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import { applyMarkup } from '../lib/pricing.js';
+import { applyMarkup, saleCoversCost } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
 import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
@@ -232,6 +232,51 @@ async function rentAdminMonthlyOverrides() {
   } catch (_) {
     return {};
   }
+}
+
+/**
+ * Resolve a rental quote exclusively from the live SMS-BUS catalogue.
+ * Browser-supplied quoted_usd / quoted_price_ngn are never supplier-cost inputs.
+ * Fail closed when the supplier price is missing or the configured sell price
+ * would put MJ HUB below its authoritative wallet FX cost.
+ */
+async function resolveSmsBusRentQuote(areaCode, months) {
+  const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
+  if (!busOk(areasRes.data)) {
+    return { ok: false, code: 'SUPPLIER_PRICE_UNAVAILABLE', message: 'The current supplier price could not be verified. No charge was made.' };
+  }
+  const raw = areasRes.data.data;
+  const list = Array.isArray(raw) ? raw : Object.values(raw || {});
+  const hit = list.find((a) => String(a?.area_code || '').toUpperCase() === areaCode);
+  if (!hit) {
+    return { ok: false, code: 'AREA_UNAVAILABLE', message: 'This rental area is not currently available. Refresh and try again.' };
+  }
+  const unitCents = Number(hit.unit_price);
+  const unitUsd = unitCents / 100;
+  const minMonth = Math.max(1, Math.floor(Number(hit.min_month) || 1));
+  if (!Number.isFinite(unitCents) || unitCents <= 0 || !Number.isFinite(unitUsd)) {
+    return { ok: false, code: 'SUPPLIER_PRICE_UNAVAILABLE', message: 'The current supplier price could not be verified. No charge was made.' };
+  }
+  if (!Number.isInteger(months) || months < minMonth || months > 24) {
+    return { ok: false, code: 'INVALID_RENTAL_DURATION', message: `Choose a rental duration between ${minMonth} and 24 months.` };
+  }
+  const areaTitle = hit.area_title || hit.area_name || '';
+  const adminMap = await rentAdminMonthlyOverrides();
+  const adminMonthly = Number(adminMap[areaCode] || 0);
+  const defaultMonthly = rentDefaultMonthlyNgn(areaCode, areaTitle);
+  const monthlyNgn = adminMonthly > 0
+    ? adminMonthly
+    : (defaultMonthly > 0 ? defaultMonthly : applyMarkup(unitUsd));
+  const price = Math.round(monthlyNgn * months);
+  const supplierUsd = unitUsd * months;
+  if (!(price > 0) || !saleCoversCost(price, supplierUsd, WALLET_USD_RATE)) {
+    return {
+      ok: false,
+      code: 'PRICE_UNDER_COST',
+      message: 'This rental is temporarily unavailable because its configured price is below the current supplier cost. No charge was made.'
+    };
+  }
+  return { ok: true, areaTitle, unitUsd, supplierUsd, minMonth, price, supplierArea: hit };
 }
 
 const TOKEN = process.env.SMSBUS_API_TOKEN || process.env.SMS_BUS_TOKEN || '';
@@ -3210,36 +3255,22 @@ export default async function handler(req, res) {
         .single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
 
-      // Monthly sell price: admin override > country default > supplier markup
-      let unitUsd = Number(body.quoted_usd || 0);
-      let areaTitle = '';
-      try {
-        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
-        if (busOk(areasRes.data)) {
-          const list = Array.isArray(areasRes.data.data)
-            ? areasRes.data.data
-            : Object.values(areasRes.data.data || {});
-          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
-          if (hit) {
-            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
-            areaTitle = hit.area_title || hit.area_name || '';
-          }
-        }
-      } catch (_) {}
-      if (!unitUsd) unitUsd = 3.5;
-      const supplierUsd = unitUsd * time;
-      const adminMap = await rentAdminMonthlyOverrides();
-      const adminMonthly = adminMap[area_code];
-      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
-      let monthlyNgn;
-      if (adminMonthly > 0) monthlyNgn = adminMonthly;
-      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
-      else monthlyNgn = applyMarkup(unitUsd);
-      // Prefer client quoted total if it matches our monthly * months (prevents UI mismatch)
-      const expected = Math.round(monthlyNgn * time);
+      const quote = await resolveSmsBusRentQuote(area_code, time);
+      if (!quote.ok) return json(res, 409, {
+        success: false, code: quote.code, message: quote.message
+      });
+      const { areaTitle, supplierUsd, price: expected } = quote;
+      // The browser may submit its displayed total only as a small rounding
+      // tolerance. It can never alter supplier cost or materially reduce price.
       let price = expected;
       const quoted = Number(body.quoted_price_ngn || 0);
       if (quoted > 0 && Math.abs(quoted - expected) <= 50) price = Math.round(quoted);
+      if (!saleCoversCost(price, supplierUsd, WALLET_USD_RATE)) {
+        return json(res, 409, {
+          success: false, code: 'PRICE_UNDER_COST',
+          message: 'This rental price is no longer valid. Refresh and try again. No charge was made.'
+        });
+      }
       const debit = await debitWallet(supabase, auth.userId, price);
       if (!debit.ok) return json(res, 402, {
         success: false, message: debit.message || 'Insufficient combined wallet balance.',
@@ -3778,31 +3809,11 @@ export default async function handler(req, res) {
         .select('balance, customer_id')
         .eq('id', auth.userId)
         .single();
-      let unitUsd = Number(body.quoted_usd || 0);
-      let areaTitle = '';
-      try {
-        const areasRes = await smsbusGet(RENT_BASE, '/v1/rent/list/area');
-        if (busOk(areasRes.data)) {
-          const list = Array.isArray(areasRes.data.data)
-            ? areasRes.data.data
-            : Object.values(areasRes.data.data || {});
-          const hit = list.find((a) => String(a.area_code).toUpperCase() === area_code);
-          if (hit) {
-            if (!unitUsd) unitUsd = Number(hit.unit_price || 0) / 100;
-            areaTitle = hit.area_title || hit.area_name || '';
-          }
-        }
-      } catch (_) {}
-      if (!unitUsd) unitUsd = 3.5;
-      const supplierUsd = unitUsd * time;
-      const adminMap = await rentAdminMonthlyOverrides();
-      const adminMonthly = adminMap[area_code];
-      const defaultMonthly = rentDefaultMonthlyNgn(area_code, areaTitle);
-      let monthlyNgn;
-      if (adminMonthly > 0) monthlyNgn = adminMonthly;
-      else if (defaultMonthly > 0) monthlyNgn = defaultMonthly;
-      else monthlyNgn = applyMarkup(unitUsd);
-      const price = Math.round(monthlyNgn * time);
+      const quote = await resolveSmsBusRentQuote(area_code, time);
+      if (!quote.ok) return json(res, 409, {
+        success: false, code: quote.code, message: quote.message
+      });
+      const { supplierUsd, price } = quote;
       const debit = await debitWallet(supabase, auth.userId, price);
       if (!debit.ok) return json(res, 402, {
         success: false, message: debit.message || 'Insufficient combined wallet balance.',
