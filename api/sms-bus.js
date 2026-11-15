@@ -2566,7 +2566,9 @@ export default async function handler(req, res) {
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         const explicitNoStock = /no numbers?|out of stock|stock unavailable|not available/i.test(msg);
-        const explicitReject = !retryUncertain && (explicitNoStock || /balance not enough|invalid token|bad token|unauthorized/i.test(msg));
+        const supplierHttpStatus = Number(bus.http || 0);
+        const explicitHttpReject = supplierHttpStatus >= 400 && supplierHttpStatus < 500 && ![408, 425, 429].includes(supplierHttpStatus);
+        const explicitReject = !retryUncertain && (explicitNoStock || explicitHttpReject || /balance not enough|invalid token|bad token|unauthorized/i.test(msg));
         if (!explicitReject) {
           await supabase.from('number_orders').update({
             status: 'reconciliation_required',
@@ -3448,7 +3450,9 @@ export default async function handler(req, res) {
 
       if (!busOk(bus.data) || !bus.data?.data) {
         const supplierMessage = String(bus.data?.message || bus.data?.error || '');
-        const explicitReject = /no number|out of stock|not available|area not found|invalid area|invalid duration|unsupported duration/i.test(supplierMessage);
+        const supplierHttpStatus = Number(bus.http || 0);
+        const explicitHttpReject = supplierHttpStatus >= 400 && supplierHttpStatus < 500 && ![408, 425, 429].includes(supplierHttpStatus);
+        const explicitReject = explicitHttpReject || /no number|out of stock|not available|area not found|invalid area|invalid duration|unsupported duration/i.test(supplierMessage);
         if (!explicitReject) {
           await supabase.from('number_orders').update({
             status: 'reconciliation_required',
@@ -4055,7 +4059,9 @@ export default async function handler(req, res) {
       }
       if (!busOk(bus.data) || !bus.data?.data) {
         const supplierMessage = String(bus.data?.message || bus.data?.error || '');
-        const explicitReject = /not active|expired|not found|invalid area|invalid duration|renewal not available|cannot renew/i.test(supplierMessage);
+        const supplierHttpStatus = Number(bus.http || 0);
+        const explicitHttpReject = supplierHttpStatus >= 400 && supplierHttpStatus < 500 && ![408, 425, 429].includes(supplierHttpStatus);
+        const explicitReject = explicitHttpReject || /not active|expired|not found|invalid area|invalid duration|renewal not available|cannot renew/i.test(supplierMessage);
         if (!explicitReject) {
           await supabase.from('transactions').update({
             subtitle: 'Renewal outcome unconfirmed — supplier reconciliation required',
@@ -4465,8 +4471,9 @@ export default async function handler(req, res) {
         }
         if (!g.ok || !g.data?.success || !g.data?.data) {
           const supplierMessage = String(g.data?.message || g.data?.error || '');
-          const ambiguous = !!g.uncertain || Number(g.status || 0) === 0 || Number(g.status || 0) >= 500 ||
-            (!g.data && !supplierMessage);
+          const supplierHttpStatus = Number(g.status || 0);
+          const ambiguous = !!g.uncertain || supplierHttpStatus === 0 || supplierHttpStatus >= 500 ||
+            [408, 425, 429].includes(supplierHttpStatus) || (!g.data && !supplierMessage);
           if (ambiguous) {
             await supabase.from('number_orders').update({
               status: 'reconciliation_required',
@@ -4730,7 +4737,14 @@ export default async function handler(req, res) {
           external_reference: pendingRef, notes: 'gotsms_multi_request:' + requestId
         };
         const { error: pendingTxError } = await supabase.from('transactions').insert(pendingTx);
-        if (pendingTxError) console.error('[gotsms_rent_multi] pending transaction insert failed:', pendingTxError.message);
+        if (pendingTxError) {
+          console.error('[gotsms_rent_multi] pending transaction insert failed:', pendingTxError.message);
+          const rf = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+          await supabase.from('number_orders').update({status:rf?.ok?'refunded':'refund_pending',refunded:!!rf?.ok,
+            notes:'Supplier request was not sent because the pending transaction could not be recorded.'}).eq('id',pendingOrder.id);
+          return json(res,rf?.ok?500:503,{success:false,refunded:!!rf?.ok,reconciliation_required:!rf?.ok,
+            message:rf?.ok?'The supplier was not contacted. Your wallet was refunded.':'The supplier was not contacted, but your wallet refund needs reconciliation. Do not retry yet.'});
+        }
 
         const payload = { plan_id };
         if (areaCode) payload.area_code = areaCode;
@@ -4738,7 +4752,8 @@ export default async function handler(req, res) {
 
         const g1 = await gotsmsFetch('/api/rents', { method: 'POST', body: payload });
         if (!g1.ok || !g1.data?.success || !g1.data?.data) {
-          const ambiguous = !!g1.uncertain || Number(g1.status || 0) >= 500;
+          const g1Status = Number(g1.status || 0);
+          const ambiguous = !!g1.uncertain || g1Status === 0 || g1Status >= 500 || [408,425,429].includes(g1Status);
           if (ambiguous) {
             await supabase.from('number_orders').update({
               status: 'reconciliation_required',
