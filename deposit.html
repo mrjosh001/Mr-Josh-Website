@@ -956,8 +956,8 @@ function closeVaLegalNameModal() {
 }
 function confirmVaLegalName() {
   const input = document.getElementById('vaLegalFullName');
-  const name = String(input?.value || '').trim().replace(/\\s+/g, ' ');
-  const valid = /^[\\p{L}][\\p{L}\\p{M}'’.-]*(?:\\s+[\\p{L}][\\p{L}\\p{M}'’.-]*)+$/u;
+  const name = String(input?.value || '').trim().replace(/\s+/g, ' ');
+  const valid = /^[\p{L}][\p{L}\p{M}'’.-]*(?:\s+[\p{L}][\p{L}\p{M}'’.-]*)+$/u;
   if (name.length < 5 || name.length > 80 || !valid.test(name)) {
     toast('Enter your full legal name, including at least your first and last name.');
     input?.focus();
