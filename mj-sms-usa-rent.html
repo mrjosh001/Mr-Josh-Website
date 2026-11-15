@@ -1201,6 +1201,22 @@ async function doRent(){
       j=await api('rent_multi',{method:'POST',body:body});
     }else if(qty>1){
       body.quantity=qty;
+      var bulkSignature=String(selectedPlan.id)+'|'+String(qty)+'|'+String(body.area_code||'')+'|'+String(body.cellular_carrier_id||'');
+      var bulkStored=null;
+      try{bulkStored=JSON.parse(sessionStorage.getItem('mj_gotsms_bulk_request')||'null');}catch(e){}
+      if(bulkStored&&bulkStored.id&&bulkStored.signature!==bulkSignature){
+        unlockFail();
+        var bulkPendingMsg='A previous bulk rental is still being reconciled. Do not start another bulk purchase yet.';
+        if(errEl)errEl.textContent=bulkPendingMsg;
+        showRentToast(bulkPendingMsg,false);
+        return;
+      }
+      if(bulkStored&&bulkStored.id&&bulkStored.signature===bulkSignature){
+        body.request_id=bulkStored.id;
+      }else{
+        body.request_id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('mjgb-'+Date.now()+'-'+Math.random().toString(36).slice(2));
+        try{sessionStorage.setItem('mj_gotsms_bulk_request',JSON.stringify({id:body.request_id,signature:bulkSignature}));}catch(e){}
+      }
       j=await api('rent_bulk',{method:'POST',body:body});
     }else{
       j=await api('rent',{method:'POST',body:body});
@@ -1226,6 +1242,9 @@ async function doRent(){
 
     if(multiMode && body.request_id && j && !j.reconciliation_required){
       try{sessionStorage.removeItem('mj_gotsms_multi_request');}catch(e){}
+    }
+    if(!multiMode && qty>1 && body.request_id && j && !j.reconciliation_required){
+      try{sessionStorage.removeItem('mj_gotsms_bulk_request');}catch(e){}
     }
 
     if(selectedPlan.source==='virtualsms_rent' && j && !j.success && j.code==='PRICE_UPDATED'){
