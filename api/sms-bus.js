@@ -5222,8 +5222,12 @@ export default async function handler(req, res) {
         if (rented < quantity) {
           const unusedIds = pendingOrders.slice(rented).map(row => row.id);
           await supabase.from('number_orders').update({ status: 'refunded', refunded: true }).in('id', unusedIds);
-          await supabase.from('transactions').update({ status: 'failed', subtitle: 'Unused bulk rental unit refunded' })
-            .like('notes', requestNote + '%');
+          for (const unusedDebit of walletDebits.slice(rented)) {
+            await supabase.from('transactions').update({ status: 'failed', subtitle: 'Unused bulk rental unit refunded' })
+              .eq('user_id', auth.userId)
+              .eq('external_reference', String(unusedDebit.wallet_debit_id))
+              .like('notes', requestNote + '%');
+          }
         }
         // Enable auto-renew on each rented number if requested
         const wantRenewBulk = body.auto_renew === true || body.auto_renew === 1 || body.auto_renew === '1' || body.auto_renew === 'true';
