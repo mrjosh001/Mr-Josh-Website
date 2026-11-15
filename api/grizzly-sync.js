@@ -419,7 +419,13 @@ async function syncOneCountry(apiKey, country, usdToNgn, counters, serviceNames)
     counters.servicesSeen += 1;
 
     const supplierPriceUsd = Number(info?.price ?? 0);
-    const availableQty = Number(info?.count ?? 0);
+    const rawAvailableQty = Number(info?.count ?? 0);
+    // number_services.available_quantity is PostgreSQL INTEGER. Some supplier
+    // responses exceed its 32-bit range; clamp oversized stock counts instead
+    // of failing the entire row update (price + availability included).
+    const availableQty = Number.isFinite(rawAvailableQty)
+      ? Math.min(2147483647, Math.max(0, Math.floor(rawAvailableQty)))
+      : 0;
     const providersRaw =
       info?.providers && typeof info.providers === 'object' ? info.providers : null;
 
