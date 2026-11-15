@@ -539,15 +539,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(badge){ badge.textContent = active ? 'Active' : (rent.refunded ? 'Cancelled' : 'Ended'); badge.className='otp-tag'+(active?'':' ended'); }
 
     var cancelHtml='';
-    if(active && hasSms){
-      cancelHtml='<div class="locked" id="cancelSlot">Cancel unavailable — a message was already received on this number.</div>';
-    } else if(canCancel && endsAt){
+    // Keep the cancellation warning and eligibility timer as the only explanation.
+    // Once an SMS arrives or the 20-minute window expires, remove the cancellation UI entirely.
+    if(canCancel && endsAt){
       cancelHtml='<div id="cancelSlot"><div class="cw" id="cwBox"><div><b>Cancel &amp; refund</b> is open for a limited time</div><div class="cw-time" id="cwTime">—</div><div>Only if no SMS arrives. After the timer ends, cancel closes for good.</div></div>'+
         '<button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel" style="margin-top:8px"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button></div>';
     } else if(canCancel){
       cancelHtml='<div id="cancelSlot"><button type="button" class="n3-btn n3-danger n3-sm" id="btnCancel"><i class="fa-solid fa-ban"></i> Cancel &amp; refund</button></div>';
-    } else if(active && !hasSms){
-      cancelHtml='<div class="locked" id="cancelSlot">Cancel window closed (20 minutes after purchase). This number can no longer be cancelled or refunded.</div>';
     }
 
     main.innerHTML =
