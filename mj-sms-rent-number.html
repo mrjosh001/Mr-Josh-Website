@@ -825,14 +825,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var recipient=document.getElementById('trRecipient').value.trim();
     var password=document.getElementById('trPassword').value;
     if(!recipient || !password){ toast('Enter your password to confirm the transfer','err'); return; }
-    if(!transferCaptchaToken){ toast('Complete the security verification before confirming the transfer.','err'); return; }
+    // Read directly from the active Turnstile widget at submit time as well as
+    // the callback cache, so a valid widget response cannot be lost in local state.
+    var captchaToken=transferCaptchaToken;
+    if(!captchaToken && window.turnstile && transferCaptchaWidget!==null){
+      try{ captchaToken=window.turnstile.getResponse(transferCaptchaWidget)||''; }catch(e){}
+    }
+    if(!captchaToken){ toast('Complete the security verification before confirming the transfer.','err'); return; }
     transferBusy=true;
     var btn=document.getElementById('trConfirm');
     var prev=btn.textContent; btn.disabled=true; btn.textContent='Verifying…';
     var j;
     try{
       btn.textContent='Verifying password…';
-      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient,password:password,captcha_token:transferCaptchaToken}});
+      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient,password:password,captcha_token:captchaToken}});
       resetTransferCaptcha();
     }catch(authErr){
       resetTransferCaptcha();
