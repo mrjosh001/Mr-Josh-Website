@@ -3612,73 +3612,29 @@ export default async function handler(req, res) {
         return json(res, 400, { success: false, message, provider_ok: false });
       }
 
-      // Claim order as refunded once (idempotent)
-      const { data: claimed, error: claimErr } = await supabase
-        .from('number_orders')
-        .update({ status: 'refunded', refunded: true })
-        .eq('id', row.id)
-        .eq('user_id', auth.userId)
-        .or('refunded.is.null,refunded.eq.false')
-        .select('id, price')
-        .maybeSingle();
-
-      if (claimErr) {
-        console.error('[rent_cancel] order refund trigger failed', claimErr.message);
+      // SMS-BUS has its own atomic refund path. The shared
+      // mj_refund_number_order_wallet_once() trigger is deliberately bypassed
+      // for this source by the migration's trigger predicate.
+      const { data: refundResult, error: refundError } = await supabase.rpc(
+        'smsbus_rent_refund_current_owner',
+        { p_rental_order_id: row.id, p_current_owner_user_id: auth.userId }
+      );
+      const refundData = Array.isArray(refundResult) ? refundResult[0] : refundResult;
+      if (refundError || !refundData || refundData.success !== true) {
+        console.error('[rent_cancel] standalone SMS-BUS refund failed', refundError?.message || refundData?.message);
         return json(res, 500, {
           success: false,
-          message: 'The supplier cancelled the rental, but the wallet refund needs support review. Contact support with your order ID.'
-        });
-      }
-      if (!claimed) {
-        return json(res, 200, {
-          success: true,
-          message: 'This rental has already been cancelled or refunded.',
-          already: true
+          message: 'The supplier cancelled the rental, but the SMS-BUS wallet refund needs support review. Contact support with your order ID.'
         });
       }
 
+      const refund = {
+        ok: true,
+        already: refundData.already === true,
+        ngn_restored: Number(refundData.ngn_restored || 0),
+        usd_restored: Number(refundData.usd_restored || 0)
+      };
       const refundAmount = Math.round(Number(row.price) || 0);
-      const { data: transferState } = await supabase.from('smsbus_rent_transfers')
-        .select('original_payer_user_id').eq('rental_order_id', row.id)
-        .order('transferred_at', { ascending: false }).limit(1).maybeSingle();
-      const transferredRefund = !!(transferState && transferState.original_payer_user_id !== auth.userId);
-      let refund;
-      if (transferredRefund) {
-        const { data: credit, error: creditError } = await supabase.from('smsbus_rent_refund_credits')
-          .select('beneficiary_user_id, amount_ngn, amount_usd')
-          .eq('rental_order_id', row.id).maybeSingle();
-        refund = (!creditError && credit && credit.beneficiary_user_id === auth.userId)
-          ? { ok: true, ngn_restored: Number(credit.amount_ngn || 0), usd_restored: Number(credit.amount_usd || 0) }
-          : { ok: false, error: creditError?.message || 'Transferred-owner refund ledger entry missing.' };
-      } else {
-        refund = refundAmount > 0
-          ? await refundWalletDebit(supabase, auth.userId, row.wallet_debit_id)
-          : { ok: true, ngn_restored: 0, usd_restored: 0 };
-      }
-      if (!refund.ok) {
-        console.error('[rent_cancel] exact wallet refund failed', refund.error || refund.message);
-        return json(res, 500, {
-          success: false,
-          message: 'The supplier cancelled the rental, but wallet credit needs support review. Contact support with your order ID.'
-        });
-      }
-      if (!transferredRefund) {
-        try {
-          const { data: profile } = await supabase.from('profiles')
-            .select('customer_id').eq('id', auth.userId).maybeSingle();
-          await supabase.from('transactions').insert({
-            user_id: auth.userId, customer_id: profile?.customer_id,
-            type: 'refund', category: 'MJ SMS',
-            title: 'Rental cancelled — balance restored',
-            subtitle: String(row.phone_number || order_id),
-            amount: `₦${Number(refund.ngn_restored || 0).toLocaleString()}`,
-            amount_ngn: refund.ngn_restored || 0,
-            amount_usd: refund.usd_restored || 0,
-            status: 'completed',
-            external_reference: 'smsbus-rent-refund:' + row.id
-          });
-        } catch (_) {}
-      }
 
       const refundLabel = [
         Number(refund.ngn_restored || 0) > 0 ? '₦' + Number(refund.ngn_restored).toLocaleString() : '',
