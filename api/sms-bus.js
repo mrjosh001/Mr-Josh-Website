@@ -3088,43 +3088,57 @@ export default async function handler(req, res) {
     }
 
     if (method === 'POST' && action === 'reuse') {
-      // SMS-Bus: reuse same mobile for same country/project within ~20 min of a successful SMS.
-      // GET /api/control/reuse?country_id&project_id&mobile_number
+      // A reuse is a new paid supplier request. Persist the debit and request
+      // before supplier I/O; never refund an ambiguous network outcome.
       const auth = await requireAuth(req);
       if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
       const body = await readBody(req);
       const country_id = body.country_id;
       const project_id = body.project_id || body.service_id;
-      let mobile_number = String(body.mobile_number || body.phone_number || '').replace(/\D/g, '');
+      const mobile_number = String(body.mobile_number || body.phone_number || '').replace(/\D/g, '');
       const countryNameHint = body.country_name || '';
       const serviceNameHint = body.service_name || '';
+      const requestId = String(body.request_id || '').trim().slice(0, 120) ||
+        ('smsbus-reuse-' + Date.now() + '-' + crypto.randomUUID());
+      const requestKey = 'smsbus-reuse-' + requestId;
+      const pendingRef = 'PENDING-SMSBUS-REUSE-' + requestId;
       if (!country_id || !project_id || !mobile_number) {
-        return json(res, 400, {
-          success: false,
-          message: 'country, service and number are required to reuse'
-        });
+        return json(res, 400, { success: false, message: 'country, service and number are required to reuse' });
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, balance, balance_usd, customer_id')
-        .eq('id', auth.userId)
-        .single();
+      const { data: prior } = await supabase.from('number_orders')
+        .select('id,order_id,phone_number,service_name,price,status,refunded,code')
+        .eq('source', 'smsbus').eq('user_id', auth.userId).eq('idempotency_key', requestKey).maybeSingle();
+      if (prior) {
+        if (prior.refunded || String(prior.status || '').toLowerCase() === 'refunded') {
+          return json(res, 409, { success: false, refunded: true, code: 'PREVIOUS_ATTEMPT_REFUNDED',
+            message: 'This reuse attempt was refunded. Start a new reuse request.' });
+        }
+        if (String(prior.order_id || '').startsWith('PENDING-') ||
+            ['processing','reconciliation_required','refund_pending'].includes(String(prior.status || '').toLowerCase())) {
+          return json(res, 503, { success: false, refunded: false, reconciliation_required: true,
+            message: 'Your reuse request is still being verified. Do not submit another request. Reference ' + requestId });
+        }
+        return json(res, 200, { success: true, replayed: true, data: {
+          order_id: prior.order_id, number: prior.phone_number, phone_number: prior.phone_number,
+          price: Number(prior.price || 0), service_name: prior.service_name, source: 'smsbus',
+          status: prior.status, wallet_debit_id: prior.wallet_debit_id
+        }});
+      }
+
+      const { data: profile } = await supabase.from('profiles')
+        .select('id,balance,balance_usd,customer_id').eq('id', auth.userId).single();
       if (!profile) return json(res, 400, { success: false, message: 'Profile not found' });
 
-      // Selling price: prefer DB catalog, else supplier + markup (same as order)
       let costUsd = 0.3;
       let serviceName = serviceNameHint || 'SMS';
       let countryName = countryNameHint || String(country_id);
       let price = 0;
       try {
-        const { data: dbSvc } = await supabase
-          .from('number_services')
-          .select('price, supplier_price, service_name, country_name')
-          .eq('source', 'smsbus')
-          .eq('country_id', String(country_id))
-          .eq('service_id', String(project_id))
-          .maybeSingle();
+        const { data: dbSvc } = await supabase.from('number_services')
+          .select('price,supplier_price,service_name,country_name')
+          .eq('source', 'smsbus').eq('country_id', String(country_id))
+          .eq('service_id', String(project_id)).maybeSingle();
         if (dbSvc && Number(dbSvc.price) > 0) {
           price = Number(dbSvc.price);
           costUsd = Number(dbSvc.supplier_price) || costUsd;
@@ -3134,13 +3148,9 @@ export default async function handler(req, res) {
       } catch (_) {}
       if (!(price > 0)) {
         try {
-          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', {
-            country_id: String(country_id)
-          });
+          const { data: priceData } = await smsbusGet(OTP_BASE, '/list/prices', { country_id: String(country_id) });
           if (busOk(priceData)) {
-            const hit = Object.values(priceData.data || {}).find(
-              (r) => String(r.project_id) === String(project_id)
-            );
+            const hit = Object.values(priceData.data || {}).find(r => String(r.project_id) === String(project_id));
             if (hit) {
               costUsd = Number(hit.cost || costUsd);
               serviceName = hit.title || serviceName;
@@ -3150,132 +3160,179 @@ export default async function handler(req, res) {
         } catch (_) {}
       }
       if (!(price > 0)) price = applyMarkup(costUsd);
-
-      {
-        const guard = assertSmsSaleCoversCost(price, costUsd);
-        if (!guard.ok) {
-          return json(res, 409, { success: false, code: guard.code || 'PRICE_UNDER_COST', message: guard.message });
-        }
-      }
+      const guard = assertSmsSaleCoversCost(price, costUsd);
+      if (!guard.ok) return json(res, 409, { success: false, code: guard.code || 'PRICE_UNDER_COST', message: guard.message });
 
       const debit = await debitWallet(supabase, auth.userId, price);
       if (!debit.ok) return json(res, 402, {
         success: false, message: debit.message || 'Insufficient combined wallet balance.',
         required: price, balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd
       });
-      const newBalance = debit.balance_ngn;
+
+      const pendingOrder = {
+        source: 'smsbus', user_id: auth.userId, customer_id: profile.customer_id != null ? String(profile.customer_id) : null,
+        order_id: pendingRef, idempotency_key: requestKey, country_id: String(country_id),
+        country_name: countryName, service_id: String(project_id), service_name: serviceName + ' · reuse processing',
+        phone_number: mobile_number, price, wallet_debit_id: debit.wallet_debit_id, supplier_price: costUsd,
+        currency: 'NGN', status: 'processing', refunded: false, is_reusable: true,
+        notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'pending' })
+      };
+      const { data: pendingRow, error: pendingOrderError } = await supabase.from('number_orders')
+        .insert(pendingOrder).select('id').single();
+      if (pendingOrderError || !pendingRow) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        return json(res, refund?.ok ? 500 : 503, { success: false, refunded: !!refund?.ok,
+          reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'The supplier was not contacted. Your wallet was refunded.' :
+            'The supplier was not contacted, but your wallet refund needs reconciliation. Do not retry.' });
+      }
+
+      const pendingTx = {
+        user_id: auth.userId, customer_id: profile.customer_id || null, type: 'purchase', category: 'MJ SMS',
+        title: serviceName, subtitle: countryName + ' · reuse status checking — do not retry',
+        amount: '₦' + price.toLocaleString(), amount_ngn: Number(debit.ngn_debited || 0),
+        amount_usd: Number(debit.usd_debited || 0), external_reference: String(debit.wallet_debit_id),
+        status: 'pending', notes: 'smsbus_reuse_request:' + requestId
+      };
+      let pendingTxResult = await supabase.from('transactions').insert(pendingTx);
+      if (pendingTxResult.error) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        pendingTxResult = await supabase.from('transactions').insert(pendingTx);
+      }
+      if (pendingTxResult.error) {
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'not_sent',
+            reason: 'pending_transaction_not_saved' })
+        }).eq('id', pendingRow.id);
+        return json(res, refund?.ok ? 500 : 503, { success: false, refunded: !!refund?.ok,
+          reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'The supplier was not contacted. Your wallet was refunded.' :
+            'The supplier was not contacted, but your wallet refund needs reconciliation. Do not retry.' });
+      }
 
       let bus;
       try {
         bus = await smsbusGet(OTP_BASE, '/reuse', {
-          country_id: String(country_id),
-          project_id: String(project_id),
-          mobile_number
+          country_id: String(country_id), project_id: String(project_id), mobile_number
         });
-      } catch (e) {
-        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        return json(res, 502, { success: false, message: 'Could not reach the SMS server. Try again or contact support.' });
+      } catch (supplierError) {
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'unknown_after_network_error',
+            error: String(supplierError?.message || supplierError).slice(0, 300) })
+        }).eq('id', pendingRow.id);
+        await supabase.from('transactions').update({
+          subtitle: 'Reuse outcome unknown — supplier reconciliation required',
+          notes: 'smsbus_reuse_request:' + requestId + ' · outcome_unknown'
+        }).eq('user_id', auth.userId).eq('external_reference', String(debit.wallet_debit_id));
+        return json(res, 503, { success: false, refunded: false, reconciliation_required: true,
+          code: 'SUPPLIER_RESULT_UNCONFIRMED',
+          message: 'The supplier response was not received. Your wallet debit is being held while we verify the reuse. Do not retry yet. Reference ' + requestId });
       }
 
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
-        await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
-        const code = bus.data?.code;
-        const msg = String(bus.data?.message || '');
+        const code = Number(bus.data?.code || 0);
+        const msg = String(bus.data?.message || bus.data?.error || '');
+        const httpStatus = Number(bus.http || 0);
+        const explicitHttpReject = httpStatus >= 400 && httpStatus < 500 && ![408,425,429].includes(httpStatus);
+        const explicitCodeReject = [50107,50108,50109].includes(code);
+        const explicitTextReject = /expired|cannot be reused|reuse window ended|invalid country|invalid project|not found|not reusable/i.test(msg);
+        if (!explicitHttpReject && !explicitCodeReject && !explicitTextReject) {
+          await supabase.from('number_orders').update({
+            status: 'reconciliation_required',
+            notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'unconfirmed_response',
+              supplier_http_status: httpStatus, supplier_code: code || null, supplier_message: msg.slice(0, 300) })
+          }).eq('id', pendingRow.id);
+          await supabase.from('transactions').update({
+            subtitle: 'Reuse outcome unconfirmed — supplier reconciliation required',
+            notes: 'smsbus_reuse_request:' + requestId + ' · outcome_unknown'
+          }).eq('user_id', auth.userId).eq('external_reference', String(debit.wallet_debit_id));
+          return json(res, 503, { success: false, refunded: false, reconciliation_required: true,
+            code: 'SUPPLIER_RESULT_UNCONFIRMED',
+            message: 'The supplier could not confirm whether the number was reused. Your wallet debit is being held while we verify it. Do not retry yet. Reference ' + requestId });
+        }
+
+        const refund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+        await supabase.from('number_orders').update({
+          status: refund?.ok ? 'refunded' : 'refund_pending', refunded: !!refund?.ok,
+          notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'rejected',
+            supplier_http_status: httpStatus, supplier_code: code || null, supplier_message: msg.slice(0, 300) })
+        }).eq('id', pendingRow.id);
+        await supabase.from('transactions').update({
+          status: refund?.ok ? 'refunded' : 'pending',
+          subtitle: refund?.ok ? 'Reuse rejected — wallet refunded' : 'Reuse rejected — wallet refund pending',
+          notes: 'smsbus_reuse_request:' + requestId + ' · supplier_rejected'
+        }).eq('user_id', auth.userId).eq('external_reference', String(debit.wallet_debit_id));
         if (code === 50109 || /expired/i.test(msg)) {
-          return json(res, 400, {
-            success: false,
-            message: 'Reuse window ended. Buy a new number, or contact support if you need help.'
-          });
+          return json(res, refund?.ok ? 400 : 503, { success: false, refunded: !!refund?.ok,
+            reconciliation_required: !refund?.ok,
+            message: refund?.ok ? 'Reuse window ended. Your wallet was refunded. Buy a new number.' :
+              'Reuse failed and your wallet refund is pending. Do not retry yet.' });
         }
-        if (code === 50107 || code === 50108 || /cannot be reused/i.test(msg)) {
-          return json(res, 400, {
-            success: false,
-            message: 'This number cannot be reused right now. Contact support if you need help.'
-          });
-        }
-        return json(res, 400, {
-          success: false,
-          message: 'This number cannot be reused right now. Try a new number or contact support.'
-        });
+        return json(res, refund?.ok ? 400 : 503, { success: false, refunded: !!refund?.ok,
+          reconciliation_required: !refund?.ok,
+          message: refund?.ok ? 'This number cannot be reused. Your wallet was refunded.' :
+            'Reuse failed and your wallet refund is pending. Do not retry yet.' });
       }
 
       const dNum = bus.data.data || {};
-      const requestId = String(dNum.request_id || '');
+      const supplierRequestId = String(dNum.request_id || '');
       const phone = String(dNum.number || dNum.phone || mobile_number).replace(/\D/g, '') || mobile_number;
-
-      const row = {
-        source: 'smsbus',
-        user_id: auth.userId,
-        customer_id: profile.customer_id != null ? String(profile.customer_id) : null,
-        order_id: requestId,
-        country_id: String(country_id),
-        country_name: countryName,
-        service_id: String(project_id),
-        service_name: serviceName,
-        phone_number: phone,
-        price,
-        wallet_debit_id: debit.wallet_debit_id,
-        currency: 'NGN',
-        status: 'waiting_for_code',
-        code: null,
-        refunded: false,
-        is_reusable: true
+      const finalOrder = {
+        order_id: supplierRequestId, idempotency_key: requestKey, phone_number: phone,
+        service_name: serviceName, country_name: countryName, service_id: String(project_id),
+        country_id: String(country_id), price, supplier_price: costUsd, currency: 'NGN',
+        status: 'waiting_for_code', code: null, refunded: false, is_reusable: true,
+        notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'confirmed' })
       };
-      let { error: insertErr } = await supabase.from('number_orders').insert(row);
-      if (insertErr) {
-        const slim = {
-          source: 'smsbus',
-          user_id: auth.userId,
-          order_id: requestId,
-          phone_number: phone,
-          service_name: serviceName,
-          country_name: countryName,
-          service_id: String(project_id),
-          country_id: String(country_id),
-          price,
-          wallet_debit_id: debit.wallet_debit_id,
-          status: 'waiting_for_code'
-        };
-        ({ error: insertErr } = await supabase.from('number_orders').insert(slim));
+      let orderUpdate = await supabase.from('number_orders').update(finalOrder)
+        .eq('id', pendingRow.id).select('id').maybeSingle();
+      if (orderUpdate.error || !orderUpdate.data) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        orderUpdate = await supabase.from('number_orders').update(finalOrder)
+          .eq('id', pendingRow.id).select('id').maybeSingle();
       }
-      if (insertErr) {
-        console.error('[sms-bus reuse] insert failed', insertErr.message);
+      if (orderUpdate.error || !orderUpdate.data) {
+        await supabase.from('number_orders').update({
+          order_id: supplierRequestId, phone_number: phone, status: 'reconciliation_required',
+          notes: JSON.stringify({ request_id: requestId, reuse: true, supplier_outcome: 'accepted_order_persistence_failed',
+            supplier_request_id: supplierRequestId })
+        }).eq('id', pendingRow.id);
+        return json(res, 200, { success: true, reconciliation_required: true,
+          message: 'The number was reused successfully. Order history is being reconciled. Do not purchase again.',
+          data: { order_id: supplierRequestId, number: phone, phone_number: phone, price,
+            service_name: serviceName, country_name: countryName, source: 'smsbus', status: 'waiting_for_code' } });
       }
 
-      try {
-        await supabase.from('transactions').insert({
-          user_id: auth.userId,
-          customer_id: profile.customer_id,
-          type: 'purchase',
-          category: 'MJ SMS',
-          title: serviceName,
-          subtitle: `${countryName} · reuse · waiting for SMS`,
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: debit.ngn_debited,
-          amount_usd: debit.usd_debited,
-          external_reference: String(debit.wallet_debit_id),
-          status: 'pending',
-          notes: `order_id:${requestId}`
-        });
-      } catch (_) {}
+      let txUpdate = await supabase.from('transactions').update({
+        title: serviceName, subtitle: countryName + ' · reuse · waiting for SMS', status: 'pending',
+        notes: 'order_id:' + supplierRequestId + ' · smsbus_reuse_request:' + requestId,
+        supplier_order: { provider: 'smsbus', order_id: supplierRequestId, request_id: requestId, reuse: true }
+      }).eq('user_id', auth.userId).eq('external_reference', String(debit.wallet_debit_id)).select('id').maybeSingle();
+      if (txUpdate.error || !txUpdate.data) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        txUpdate = await supabase.from('transactions').update({
+          title: serviceName, subtitle: countryName + ' · reuse · waiting for SMS', status: 'pending',
+          notes: 'order_id:' + supplierRequestId + ' · smsbus_reuse_request:' + requestId,
+          supplier_order: { provider: 'smsbus', order_id: supplierRequestId, request_id: requestId, reuse: true }
+        }).eq('user_id', auth.userId).eq('external_reference', String(debit.wallet_debit_id)).select('id').maybeSingle();
+      }
+      if (txUpdate.error || !txUpdate.data) {
+        await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingRow.id);
+        return json(res, 200, { success: true, reconciliation_required: true,
+          message: 'The number was reused successfully. Transaction history is being reconciled. Do not purchase again.',
+          data: { order_id: supplierRequestId, number: phone, phone_number: phone, price,
+            service_name: serviceName, country_name: countryName, source: 'smsbus', status: 'waiting_for_code' } });
+      }
 
       return json(res, 200, {
-        success: true,
-        message: 'Number reused successfully',
-        data: {
-          order_id: requestId,
-          number: phone,
-          phone_number: phone,
-          price,
-          new_balance: newBalance,
-          new_balance_usd: debit.balance_usd,
-          wallet_debit_id: debit.wallet_debit_id,
-          service_name: serviceName,
-          country_name: countryName,
-          source: 'smsbus',
-          status: 'waiting_for_code',
-          created_at: new Date().toISOString()
-        }
+        success: true, message: 'Number reused successfully',
+        data: { order_id: supplierRequestId, number: phone, phone_number: phone, price,
+          new_balance: debit.balance_ngn, new_balance_usd: debit.balance_usd,
+          wallet_debit_id: debit.wallet_debit_id, service_name: serviceName, country_name: countryName,
+          source: 'smsbus', status: 'waiting_for_code', created_at: new Date().toISOString() }
       });
     }
 
