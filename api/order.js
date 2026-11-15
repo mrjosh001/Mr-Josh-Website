@@ -17,7 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
-import { formatCredentials, formatMultiLogCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore, requireAdminOrCron } from '../lib/secure.js';
@@ -1578,11 +1578,14 @@ export default async function handler(req, res) {
     // Numbered 1. 2. 3. … inside login_credentials so My Orders / admin stay tidy
     // and the DB does not grow one row per unit.
     const formatHint = product.display_description || product.description || '';
-    const combinedCreds =
-      formatMultiLogCredentials(items, formatHint) ||
-      (items[0]
-        ? formatCredentials(items[0].details, formatHint) || String(items[0].details || '').trim()
-        : null);
+    const formattedItems = (items || []).map((item) => {
+      const raw = String(item.details || '').trim();
+      let formatted = raw;
+      try { formatted = formatCredentials(raw, formatHint) || raw; }
+      catch (formatError) { console.error('[order] credential formatting failed; raw preserved', formatError?.message || formatError); }
+      return { ...item, formattedDetails: formatted };
+    }).filter((item) => item.formattedDetails);
+    const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\\n\\n') || detailsText || null;
     const combinedRaw = joinRawLogDetails(items) || detailsText || null;
     const supplierRefs = items
       .map((it) => it.product_detail_id || it.id || it.serial)
@@ -1640,10 +1643,7 @@ export default async function handler(req, res) {
     // -------------------------------------------------
     // 7. Return product to customer
     // -------------------------------------------------
-    const formattedItems = (items || []).map((i) => ({
-      details: formatCredentials(i.details, formatHint) || String(i.details || '').trim(),
-      serial: i.serial || i.product_detail_id || i.id || null
-    }));
+    const responseItems = formattedItems.map((i) => ({ details: i.formattedDetails, serial: i.serial || i.product_detail_id || i.id || null }));
     
     if (typeof couponQuote !== 'undefined' && couponQuote && couponQuote.ok && couponQuote.coupon) {
       try {
@@ -1676,7 +1676,7 @@ export default async function handler(req, res) {
       success: true,
       message: 'Order fulfilled successfully',
       data: {
-        items: formattedItems.length ? formattedItems : (orderData.data?.items || []),
+        items: responseItems.length ? responseItems : (orderData.data?.items || []),
         login_credentials: combinedCreds || null,
         total_amount: total,
         new_balance: newBalance,
