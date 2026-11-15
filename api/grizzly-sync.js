@@ -3065,7 +3065,7 @@ async function vsHandleOrder(req, res) {
 
 async function vsFindOrder(orderId, userId) {
   const q = supabase.from('number_orders')
-    .select('id, user_id, order_id, status, phone_number, created_at, service_name, country_name, price, refunded, customer_id, code, source')
+    .select('id, user_id, order_id, status, phone_number, created_at, service_name, country_name, price, refunded, customer_id, code, source, wallet_debit_id')
     .eq('source', VS_SOURCE).eq('order_id', String(orderId));
   if (userId) q.eq('user_id', userId);
   const { data } = await q.maybeSingle();
@@ -3092,7 +3092,7 @@ async function vsMarkCompleted(order, code) {
       await supabase.from('transactions')
         .update({ status: 'completed', subtitle: `${order.country_name || ''} · code received`.trim() })
         .eq('user_id', order.user_id).eq('category', 'MJ SMS').eq('type', 'purchase').eq('status', 'pending')
-        .eq('amount_ngn', Number(order.price || 0));
+        .eq('external_reference', String(order.wallet_debit_id || ''));
     } catch (_) { /* cosmetic */ }
   }
   return !!data;
@@ -3110,8 +3110,10 @@ async function vsResolveOrder(order, { allowExpire = true } = {}) {
     return { kind: 'error', http: r.status };
   }
   if (allowExpire && age >= EXPIRY_MS) {
-    try { await vsReq('/customer/cancel/' + encodeURIComponent(order.order_id), { method: 'POST' }); } catch (_) { /* best effort */ }
-    return { kind: 'expired' };
+    const cancellation = await vsCancelAndConfirm(order.order_id);
+    if (cancellation.confirmed) return { kind: 'expired', supplier_status: cancellation.status };
+    // Never refund an activation unless the supplier confirms cancellation.
+    return { kind: 'waiting', reconciliation_required: true, cancel_reason: cancellation.reason };
   }
   return { kind: 'waiting' };
 }
