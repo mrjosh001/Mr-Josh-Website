@@ -5101,7 +5101,7 @@ export default async function handler(req, res) {
           service_name: String(plan?.service?.name || 'USA rental') + ' · processing',
           phone_number: null, price: unitNgn, wallet_debit_id: unitDebit.wallet_debit_id,
           supplier_price: unitUsd, currency: 'NGN', status: 'processing', refunded: false,
-          notes: JSON.stringify({ request_id: requestId, request_kind: 'bulk', unit: index + 1, supplier_outcome: 'pending' })
+          notes: JSON.stringify({ request_id: requestId, request_key: requestNote, request_kind: 'bulk', unit: index + 1, supplier_outcome: 'pending' })
         }));
         const { data: pendingOrders, error: pendingOrderError } = await supabase.from('number_orders')
           .insert(pendingRows).select('id');
@@ -5205,7 +5205,7 @@ export default async function handler(req, res) {
             service_id: String(rent.service?.id || plan?.service?.id || service_id || 'gotsms'),
             phone_number: rent.phone || null, status: rent.status || 'active',
             code: rent.active_till ? String(rent.active_till) : null,
-            notes: JSON.stringify({ request_id: requestId, request_kind: 'bulk', supplier_rent_id: rent.id })
+            notes: JSON.stringify({ request_id: requestId, request_key: requestNote, request_kind: 'bulk', supplier_rent_id: rent.id })
           }).eq('id', pendingOrderId);
           if (finalizeOrderError) {
             await supabase.from('number_orders').update({ status: 'reconciliation_required' }).in('id', pendingOrders.map(row => row.id));
