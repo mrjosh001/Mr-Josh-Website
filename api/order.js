@@ -18,6 +18,7 @@ import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
+import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore, requireAdminOrCron } from '../lib/secure.js';
@@ -1373,6 +1374,7 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+  let supplierAccepted = false;
   let walletDebitId = null;
   let newBalance = 0;
   let newBalanceUsd = 0;
@@ -1475,6 +1477,10 @@ export default async function handler(req, res) {
     originalBalanceUsd = Number(profile.balance_usd || 0);
     customerId = profile.customer_id;
 
+    const cooldown = await claimLogPurchaseCooldown(supabase, user_id, product_key, 10);
+    if (cooldown.unavailable) return res.status(503).json({ success: false, message: 'Purchase protection is temporarily unavailable. Please try again shortly.' });
+    if (cooldown.blocked) return res.status(429).json({ success: false, code: 'DUPLICATE_PURCHASE_COOLDOWN', message: 'You just submitted this product. Wait 10 seconds before trying again.' });
+
     // The database atomically allocates NGN first and USD for the remainder.
     const debit = await debitWallet(supabase, user_id, total);
     if (!debit.ok) {
@@ -1564,10 +1570,13 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------
-    // 6. Supplier succeeded → save everything
+    // 6. Supplier succeeded → save everything. From this point onward, never refund for local errors.
     // -------------------------------------------------
+    supplierAccepted = true;
     const items = orderData.data?.items || [];
-    const detailsText = items.map(i => i.details).join('\n\n');
+    const detailsText = items.map(i => i.details).filter(Boolean).join('\n\n');
+    const rawSupplierPayload = joinRawLogDetails(items) || (items.length ? detailsText : JSON.stringify(orderData.data || orderData));
+    const reviewRequired = !items.length || !detailsText;
 
     // Whatever the product's own description is (if it has one) is stored on
     // every order for that product. If the product has no description, this
@@ -1586,7 +1595,7 @@ export default async function handler(req, res) {
       return { ...item, formattedDetails: formatted };
     }).filter((item) => item.formattedDetails);
     const combinedCreds = formattedItems.map((item) => item.formattedDetails).join('\\n\\n') || detailsText || null;
-    const combinedRaw = joinRawLogDetails(items) || detailsText || null;
+    const combinedRaw = rawSupplierPayload || detailsText || null;
     const supplierRefs = items
       .map((it) => it.product_detail_id || it.id || it.serial)
       .filter(Boolean)
@@ -1605,13 +1614,15 @@ export default async function handler(req, res) {
       amount: total,
       wallet_debit_id: walletDebitId,
       status: 'completed',
-      login_credentials: combinedCreds,
+      description: reviewRequired ? [orderDescription, 'ADMIN REVIEW REQUIRED: supplier confirmed success but returned no usable credential items.'].filter(Boolean).join('\n') : orderDescription,
+      login_credentials: reviewRequired ? 'Purchase completed. Delivery is pending admin review. Do not purchase again.' : combinedCreds,
       login_credentials_raw: combinedRaw,
       supplier_ref: supplierRefs || orderRef,
       guide_url: 'https://t.me/mj_hub_tg'
     });
     if (insertErr) {
-      console.error('[order] insert failed', insertErr.message, { order_id: orderRef, qty: items.length });
+      console.error('[order] supplier accepted purchase but order insert failed; reconciliation required', insertErr.message, { order_id: orderRef, qty: items.length, walletDebitId });
+      return res.status(202).json({ success: true, pending: true, reconciliation_required: true, message: 'Your supplier purchase succeeded. MJ HUB is recovering the order record. Do not purchase again.', order_id: orderRef, wallet_debit_id: walletDebitId });
     }
 
     // Save money movement in transactions → Log Orders tab
@@ -1672,6 +1683,10 @@ export default async function handler(req, res) {
         type: 'admin_sale'
       });
     } catch (_) {}
+    if (reviewRequired) {
+      try { await sendPushToAdmins(supabase, { title: 'Log purchase needs review', body: productName + ' supplier purchase succeeded but returned no usable items. Ref: ' + orderRef, url: '/admin.html', type: 'admin_review' }); } catch (_) {}
+      return res.status(200).json({ success: true, completed: true, delivery_pending_review: true, message: 'Your purchase was successful. Delivery is being checked by MJ HUB. Do not purchase again.', order_id: orderRef, wallet_debit_id: walletDebitId, total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd });
+    }
     return res.status(200).json({
       success: true,
       message: 'Order fulfilled successfully',
@@ -1690,8 +1705,8 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('Order handler error:', err);
 
-    // Safety net: refund if we already debited
-    if (deducted) {
+    // A confirmed supplier purchase must never be refunded because local formatting, display, or persistence failed.
+    if (deducted && !supplierAccepted) {
       try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
@@ -1718,7 +1733,9 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: deducted
+      message: supplierAccepted
+        ? 'The supplier purchase succeeded, but MJ HUB is reconciling delivery. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '.'
+        : deducted
         ? 'Something went wrong. Your balance has been refunded.'
         : 'Something went wrong. Please try again.'
     });
