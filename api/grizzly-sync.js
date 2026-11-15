@@ -911,12 +911,12 @@ async function handleOrder(req, res) {
           type: 'purchase',
           category: 'MJ SMS',
           title: serviceName,
-          subtitle: `Failed: ${humanizeGrizzlyError(failureReason) || 'Unavailable'}`,
+          subtitle: `Refunded: ${humanizeGrizzlyError(failureReason) || 'Unavailable'} · wallet restored`,
           amount: `₦${price.toLocaleString()}`,
           amount_ngn: debit.ngn_debited,
           amount_usd: debit.usd_debited,
           external_reference: String(walletDebitId),
-          status: 'failed',
+          status: 'refunded',
           notes: rawText.slice(0, 500)
         });
       } catch (_) {}
