@@ -2514,6 +2514,7 @@ export default async function handler(req, res) {
         });
       }
 
+      let retryUncertain = false;
       if (!busOk(bus.data) || !bus.data?.data?.request_id) {
         let code = bus.data?.code;
         let msg = String(bus.data?.message || '');
@@ -2531,7 +2532,8 @@ export default async function handler(req, res) {
               msg = String(retry.data?.message || msg);
             }
           } catch (retryErr) {
-            console.warn('[sms-bus order] bounded stock retry failed:', retryErr?.message || retryErr);
+            retryUncertain = true;
+            console.warn('[sms-bus order] bounded stock retry outcome is uncertain:', retryErr?.message || retryErr);
           }
         }
       }
@@ -2540,7 +2542,7 @@ export default async function handler(req, res) {
         const code = bus.data?.code;
         const msg = String(bus.data?.message || '');
         const explicitNoStock = /no numbers?|out of stock|stock unavailable|not available/i.test(msg);
-        const explicitReject = explicitNoStock || /balance not enough|invalid token|bad token|unauthorized/i.test(msg);
+        const explicitReject = !retryUncertain && (explicitNoStock || /balance not enough|invalid token|bad token|unauthorized/i.test(msg));
         if (!explicitReject) {
           await supabase.from('number_orders').update({
             status: 'reconciliation_required',
@@ -2602,81 +2604,40 @@ export default async function handler(req, res) {
           phone,
           columns: Object.keys(row)
         });
-        // CRITICAL: supplier already issued a number. Do NOT cancel yet and do NOT
-        // block the number page — return success so the client can open the waiting
-        // screen. Persist a soft recovery row via raw SQL-like minimal retry once more.
-        const emergency = {
-          user_id: auth.userId,
-          order_id: String(requestId),
-          idempotency_key: `smsbus-${requestId}`,
-          phone_number: phone || null,
-          service_name: serviceName || 'SMS',
-          country_name: countryName || null,
-          price,
-          wallet_debit_id: debit.wallet_debit_id,
-          status: 'waiting_for_code',
-          source: 'smsbus',
-          is_reusable: !!wantReuse
-        };
-        const { error: emErr } = await supabase.from('number_orders').insert(emergency);
-        if (emErr) {
-          console.error('[sms-bus order] emergency insert also failed:', emErr.message);
-          // Still send user to number page with supplier ids — check API can use request_id
-        }
-        try {
-          await supabase.from('transactions').insert({
-            user_id: auth.userId,
-            customer_id: profile.customer_id,
-            type: 'purchase',
-            category: 'MJ SMS',
-            title: serviceName,
-            subtitle: `OTP · ${phone || requestId}`,
-            amount: `₦${price.toLocaleString()}`,
-            amount_ngn: debit.ngn_debited,
-            amount_usd: debit.usd_debited,
-            external_reference: String(debit.wallet_debit_id),
-            status: 'pending',
-            notes: `order_id:${requestId}`
-          });
-        } catch (_) {}
-
+        // The supplier already issued a number. Keep the debit and pending
+        // transaction; the durable pending row is the recovery anchor.
+        await supabase.from('number_orders').update({
+          status: 'reconciliation_required',
+          notes: JSON.stringify({ supplier_outcome: 'activation_received_but_order_persistence_failed', request_id: requestId, phone })
+        }).eq('id', pendingOrder.id);
         return json(res, 200, {
-        success: true,
-        data: {
-            order_id: requestId,
-            number: phone,
-            phone_number: phone,
-            price,
-            new_balance: newBalance,
-            new_balance_usd: debit.balance_usd,
-            wallet_debit_id: debit.wallet_debit_id,
-            service_name: serviceName,
-            country_name: countryName,
-            source: 'smsbus',
-            status: 'waiting_for_code',
-            warning: emErr
-              ? 'Number ready. Open the waiting page to get your code.'
-              : null
+          success: true, reconciliation_required: true,
+          message: 'Your number was activated and your wallet was charged. Order history is being reconciled. Do not purchase again.',
+          data: {
+            order_id: requestId, number: phone, phone_number: phone, price,
+            new_balance: newBalance, new_balance_usd: debit.balance_usd,
+            wallet_debit_id: debit.wallet_debit_id, service_name: serviceName,
+            country_name: countryName, source: 'smsbus', status: 'waiting_for_code'
           }
         });
       }
 
-      try {
-        await supabase.from('transactions').insert({
-          user_id: auth.userId,
-          customer_id: profile.customer_id,
-          type: 'purchase',
-          category: 'MJ SMS',
-          title: serviceName,
-          subtitle: `OTP · ${phone || requestId}`,
-          amount: `₦${price.toLocaleString()}`,
-          amount_ngn: debit.ngn_debited,
-          amount_usd: debit.usd_debited,
-          external_reference: String(debit.wallet_debit_id),
-          status: 'pending', // pending until SMS code arrives
-          notes: `order_id:${requestId}`
+      const { error: txUpdateError } = await supabase.from('transactions').update({
+        subtitle: `OTP · ${phone || requestId}`, notes: `order_id:${requestId}`,
+        supplier_order: { provider: 'smsbus', request_id: requestId, country_id, project_id }
+      }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+        .eq('external_reference', String(debit.wallet_debit_id));
+      if (txUpdateError) {
+        console.error('[sms-bus order] transaction update failed after activation:', txUpdateError.message);
+        await supabase.from('number_orders').update({ status: 'reconciliation_required' }).eq('id', pendingOrder.id);
+        return json(res, 200, {
+          success: true, reconciliation_required: true,
+          message: 'Your number was activated and your wallet was charged. Transaction history is being reconciled. Do not purchase again.',
+          data: { order_id: requestId, number: phone, phone_number: phone, price, new_balance: newBalance,
+            new_balance_usd: debit.balance_usd, wallet_debit_id: debit.wallet_debit_id,
+            service_name: serviceName, country_name: countryName, source: 'smsbus', status: 'waiting_for_code' }
         });
-      } catch (_) {}
+      }
 
       return json(res, 200, {
         success: true,
