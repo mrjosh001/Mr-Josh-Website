@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import { applyMarkup, saleCoversCost } from '../lib/pricing.js';
+import { applyMarkup, saleCoversCost, profitFloorNgn } from '../lib/pricing.js';
 import { sendPushToUser } from '../lib/push.js';
 import { handleMjMails } from '../lib/mj-mails.js';
 import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
@@ -2370,11 +2370,31 @@ export default async function handler(req, res) {
         }
         if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
       } catch (_) {}
-      if (!(price > 0) || !saleCoversCost(price, costUsd, WALLET_USD_RATE)) {
+      if (!(costUsd > 0) || !Number.isFinite(costUsd)) {
+        await supabase.from('number_services').update({ is_available: false, updated_at: new Date().toISOString() })
+          .eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
         return json(res, 409, {
-          success: false,
-          code: 'PRICE_UNDER_COST',
-          message: 'This SMS service is temporarily unavailable because its selling price is below the current supplier cost. No charge was made.'
+          success: false, code: 'SUPPLIER_PRICE_UNAVAILABLE',
+          message: 'This SMS service is temporarily unavailable because its supplier cost could not be verified. No charge was made.'
+        });
+      }
+      if (!(price > 0) || !saleCoversCost(price, costUsd, WALLET_USD_RATE)) {
+        if (svc.price_source !== 'manual' && svc.price_source !== 'admin') {
+          const correctedPrice = profitFloorNgn(costUsd, WALLET_USD_RATE);
+          await supabase.from('number_services').update({
+            price: correctedPrice, price_source: 'system', updated_at: new Date().toISOString()
+          }).eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
+          return json(res, 409, {
+            success: false, code: 'PRICE_UPDATED',
+            message: 'Supplier pricing changed. Review the updated price and try again.',
+            data: { price_ngn: correctedPrice }
+          });
+        }
+        await supabase.from('number_services').update({ is_available: false, updated_at: new Date().toISOString() })
+          .eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
+        return json(res, 409, {
+          success: false, code: 'PRICE_UNDER_COST',
+          message: 'This SMS service is temporarily unavailable because its admin selling price is below supplier cost. No charge was made.'
         });
       }
       // The database RPC is authoritative: it atomically allocates NGN, USD,
