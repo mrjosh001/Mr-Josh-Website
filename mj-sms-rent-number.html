@@ -668,14 +668,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var prev=btn.textContent; btn.disabled=true; btn.textContent='Verifying…';
     var j;
     try{
-      var sessionResult=await sb.auth.getSession();
-      var currentSession=sessionResult&&sessionResult.data&&sessionResult.data.session;
-      var accountEmail=currentSession&&currentSession.user&&currentSession.user.email;
-      if(!accountEmail) throw new Error('Could not verify your signed-in account. Please sign in again.');
-      var verified=await sb.auth.signInWithPassword({email:accountEmail,password:password});
-      if(verified.error) throw new Error('Password incorrect. Please try again.');
-      btn.textContent='Transferring…';
-      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient}});
+      btn.textContent='Verifying password…';
+      j=await api('rent_transfer',{method:'POST',body:{order_id:orderId,recipient:recipient,password:password}});
     }catch(authErr){
       transferBusy=false; btn.disabled=false; btn.textContent=prev;
       toast(authErr.message||'Could not verify your password','err');
