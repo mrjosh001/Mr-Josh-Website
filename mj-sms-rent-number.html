@@ -721,7 +721,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(!j.reconciliation_required){try{sessionStorage.removeItem(storeKey);}catch(e){}}
       toast(j.message||'Renew failed','err');return;
     }
-    try{sessionStorage.removeItem(storeKey);}catch(e){}
+    if(!j.reconciliation_required){try{sessionStorage.removeItem(storeKey);}catch(e){}}
     hideModal('renewModal');
     toast('Renewed successfully','ok');
     await loadDetail();
