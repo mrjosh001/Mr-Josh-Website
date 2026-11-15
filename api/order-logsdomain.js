@@ -4,6 +4,7 @@ import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '../lib/secure.js';
 import { formatCredentials } from '../lib/formatCredentials.js';
+import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 
 /**
  * /api/order-logsdomain
@@ -410,6 +411,7 @@ export default async function handler(req, res) {
   let productName = '';
   let customerId = null;
   let deducted = false;
+  let supplierAccepted = false;
   let walletDebitId = null;
   let debitResult = null;
 
@@ -458,6 +460,9 @@ export default async function handler(req, res) {
     customerId = profile.customer_id;
 
     if (!(total > 0)) return res.status(400).json({ success: false, message: 'This product has no price set yet' });
+    const cooldown = await claimLogPurchaseCooldown(supabase, user_id, product_key, 10);
+    if (cooldown.unavailable) return res.status(503).json({ success: false, message: 'Purchase protection is temporarily unavailable. Please try again shortly.' });
+    if (cooldown.blocked) return res.status(429).json({ success: false, code: 'DUPLICATE_PURCHASE_COOLDOWN', message: 'You just submitted this product. Wait 10 seconds before trying again.' });
     debitResult = await debitWallet(supabase, user_id, total);
     if (!debitResult.ok) {
       return res.status(402).json({
@@ -528,10 +533,14 @@ export default async function handler(req, res) {
       });
     }
 
+    // Supplier confirmed success. No later local error may trigger a wallet refund.
+    supplierAccepted = true;
     // 6. Success → save orders
-    const items = orderData.data?.items || [];
+    const items = Array.isArray(orderData.data?.items) ? orderData.data.items : [];
     const supplierOrderId = orderData.data?.order_id || orderRef;
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
+    const reviewRequired = !items.length || !detailsText;
+    const rawSupplierPayload = items.length ? JSON.stringify(items) : JSON.stringify(orderData.data || orderData);
 
     // Traceability for the "wrong product delivered" class of bug: log exactly
     // which category_id we asked Logs Domain for, against which local product
@@ -563,8 +572,8 @@ export default async function handler(req, res) {
           amount: product.price,
           wallet_debit_id: itemIndex === 0 ? walletDebitId : null,
           status: 'completed',
-          login_credentials: formatCredentials(rawDetails, productName) || rawDetails,
-          login_credentials_raw: rawDetails || null,
+          login_credentials: (() => { try { return formatCredentials(rawDetails, productName) || rawDetails; } catch (e) { console.error('[order-logsdomain] formatter failed; raw preserved', e?.message || e); return rawDetails; } })(),
+          login_credentials_raw: rawDetails || rawSupplierPayload || null,
           supplier_ref: String(item.serial || ''),
           guide_url: 'https://t.me/mj_hub_tg'
         };
@@ -587,12 +596,12 @@ export default async function handler(req, res) {
         product_code: product_key,
         product_name: productName,
         product_type: 'log',
-        description: JSON.stringify(orderData.data || {}),
+        description: [JSON.stringify(orderData.data || {}), 'ADMIN REVIEW REQUIRED: supplier confirmed success but returned no usable credential items.'].join('\n'),
         quantity: qty,
         amount: total,
         wallet_debit_id: walletDebitId,
         status: 'completed',
-        login_credentials: formatCredentials(rawDetails, productName) || rawDetails || 'Delivered — see order for details',
+        login_credentials: (() => { try { return formatCredentials(rawDetails, productName) || rawDetails || 'Purchase completed. Delivery is pending admin review.'; } catch (e) { console.error('[order-logsdomain] formatter failed; raw preserved', e?.message || e); return rawDetails || 'Purchase completed. Delivery is pending admin review.'; } })(),
         login_credentials_raw: rawDetails || null,
         guide_url: 'https://t.me/mj_hub_tg'
       };
@@ -674,7 +683,7 @@ return res.status(200).json({
   } catch (err) {
     console.error('order-logsdomain error:', err);
 
-    if (deducted) {
+    if (deducted && !supplierAccepted) {
       try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
@@ -696,9 +705,12 @@ return res.status(200).json({
       }
     }
 
-    return res.status(500).json({
+    return res.status(supplierAccepted ? 202 : 500).json({
       success: false,
-      message: deducted
+      pending: supplierAccepted,
+      message: supplierAccepted
+        ? 'The supplier purchase succeeded, but MJ HUB is reconciling delivery. Do not purchase again. Contact support with reference ' + String(walletDebitId || 'pending') + '.'
+        : deducted
         ? 'Something went wrong. Your balance has been refunded.'
         : 'Something went wrong. Please try again.'
     });
