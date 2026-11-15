@@ -1399,6 +1399,51 @@ async function requireAuth(req) {
   return { ok: true, userId: user.id };
 }
 
+
+async function findSmsBusRentRecipient(identifier, senderUserId) {
+  let lookup = String(identifier || '').trim();
+  if (lookup.startsWith('@')) lookup = lookup.slice(1);
+  if (!lookup || lookup.length > 254 || /[%*]/.test(lookup)) {
+    return { ok: false, message: 'Enter a valid MJ HUB username or registered email.' };
+  }
+  const isEmail = lookup.includes('@');
+  if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lookup)) {
+    return { ok: false, message: 'Enter a valid registered email address.' };
+  }
+  if (!isEmail && !/^[A-Za-z0-9_.-]{3,32}$/.test(lookup)) {
+    return { ok: false, message: 'Enter a valid MJ HUB username.' };
+  }
+  let query = supabase.from('profiles')
+    .select('id, username, full_name, customer_id, is_banned, banned_until')
+    .limit(2);
+  query = isEmail ? query.eq('email', lookup.toLowerCase()) : query.eq('username', lookup.toLowerCase());
+  const { data, error } = await query;
+  if (error) {
+    console.error('[smsbus rent transfer] recipient lookup failed', error.message);
+    return { ok: false, message: 'Could not verify that MJ HUB account. Try again.' };
+  }
+  const matches = data || [];
+  if (matches.length !== 1) return { ok: false, message: 'No matching MJ HUB account was found.' };
+  const recipient = matches[0];
+  if (recipient.id === senderUserId) return { ok: false, message: 'You cannot transfer a rental to your own account.' };
+  if (recipient.is_banned || (recipient.banned_until && Date.parse(recipient.banned_until) > Date.now())) {
+    return { ok: false, message: 'This account cannot receive rental transfers.' };
+  }
+  return { ok: true, recipient };
+}
+
+function smsBusRentTransferState(row) {
+  const status = String(row && row.status || '').toLowerCase();
+  const expiryMs = Date.parse(String(row && row.code || '')) || 0;
+  const terminal = !!(row && row.refunded) || ['refunded','cancelled','canceled','expired'].includes(status);
+  const active = !terminal && (!expiryMs || expiryMs > Date.now());
+  const inbox = parseRentInboxNotes(row && row.notes);
+  const hasSms = /sms\s*received/i.test(String(row && row.service_name || '')) || inbox.length > 0;
+  const cancelEndsAt = row && row.created_at ? Date.parse(row.created_at) + 20 * 60 * 1000 : 0;
+  const canCancel = active && !hasSms && !!cancelEndsAt && Date.now() < cancelEndsAt;
+  return { active, expiryMs, inboxCount: inbox.length, hasSms, cancelEndsAt, canCancel };
+}
+
 async function smsbusGet(base, path, params = {}) {
   if (!TOKEN) throw new Error('SMSBUS_API_TOKEN is not configured');
   const q = new URLSearchParams({ token: TOKEN, ...params });
@@ -3253,7 +3298,10 @@ export default async function handler(req, res) {
           if (messages.length && !/sms\s*received/i.test(name)) {
             patch.service_name = (name || 'Rental') + ' · SMS received';
           }
-          await supabase.from('number_orders').update(patch).eq('id', orderRow.id);
+          await supabase.from('number_orders').update(patch).eq('id', orderRow.id).eq('user_id', auth.userId);
+          const { data: stillOwned } = await supabase.from('number_orders').select('id')
+            .eq('id', orderRow.id).eq('user_id', auth.userId).maybeSingle();
+          if (!stillOwned) return json(res, 404, { success: false, message: 'Rental not found or no longer belongs to you.' });
           orderRow.notes = packed;
         } catch (persistErr) {
           console.warn('[rent_sms] inbox persist', persistErr && persistErr.message ? persistErr.message : persistErr);
@@ -3273,6 +3321,100 @@ export default async function handler(req, res) {
           status: orderRow.status,
           price: orderRow.price
         } : null
+      });
+    }
+
+    // SMS-BUS rental transfer preview and immediate ownership transfer.
+    if (method === 'POST' && (action === 'rent_transfer_preview' || action === 'rent_transfer')) {
+      const auth = await requireAuth(req);
+      if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
+      const body = await readBody(req);
+      const order_id = String(body.order_id || '').trim();
+      const recipientInput = String(body.recipient || body.recipient_identifier || '').trim();
+      if (!order_id || !recipientInput) {
+        return json(res, 400, { success: false, message: 'Rental and recipient account are required.' });
+      }
+
+      const { data: row, error: rowErr } = await supabase.from('number_orders').select('*')
+        .eq('user_id', auth.userId).eq('source', 'smsbus_rent')
+        .eq('order_id', order_id).maybeSingle();
+      if (rowErr || !row) return json(res, 404, { success: false, message: 'Rental not found or no longer belongs to you.' });
+
+      const state = smsBusRentTransferState(row);
+      if (!state.active) {
+        return json(res, 400, { success: false, message: 'Only active, non-refunded SMS-BUS rentals can be transferred.' });
+      }
+
+      const { data: operationLock } = await supabase.from('smsbus_rent_operation_locks')
+        .select('operation, expires_at').eq('rental_order_id', row.id)
+        .gt('expires_at', new Date().toISOString()).maybeSingle();
+      if (operationLock) {
+        return json(res, 409, { success: false, message: 'A cancellation or renewal is currently processing. Try again shortly.' });
+      }
+
+      const found = await findSmsBusRentRecipient(recipientInput, auth.userId);
+      if (!found.ok) return json(res, 400, { success: false, message: found.message });
+      const recipient = found.recipient;
+
+      if (action === 'rent_transfer_preview') {
+        return json(res, 200, {
+          success: true,
+          data: {
+            recipient: { username: recipient.username || '', full_name: recipient.full_name || '' },
+            rental: {
+              order_id: row.order_id,
+              phone_number: row.phone_number,
+              service_name: row.service_name,
+              country_name: row.country_name,
+              price: Number(row.price || 0),
+              expires_at: row.code || null,
+              time_left_ms: state.expiryMs ? Math.max(0, state.expiryMs - Date.now()) : null,
+              inbox_count: state.inboxCount,
+              has_sms: state.hasSms,
+              cancellation_available: state.canCancel,
+              cancellation_message: state.canCancel
+                ? 'Cancellation remains available under the original 20-minute rule.'
+                : (state.hasSms ? 'Cancellation is unavailable because an SMS has been received.'
+                  : 'The original cancellation window has closed or is otherwise unavailable.')
+            }
+          }
+        });
+      }
+
+      const { data: transferResult, error: transferError } = await supabase.rpc('smsbus_rent_transfer_ownership', {
+        p_rental_order_id: row.id,
+        p_from_user_id: auth.userId,
+        p_to_user_id: recipient.id,
+        p_recipient_customer_id: recipient.customer_id || null
+      });
+      const result = Array.isArray(transferResult) ? transferResult[0] : transferResult;
+      if (transferError || !result || result.success !== true) {
+        console.error('[smsbus rent transfer] ownership update failed', transferError?.message || result?.message);
+        return json(res, 409, {
+          success: false,
+          message: result?.message || 'The transfer could not be completed. No ownership change was made.'
+        });
+      }
+
+      await notifyUserPush(
+        recipient.id,
+        'Rental number transferred to you',
+        String(row.phone_number || 'An SMS-BUS rental') + ' is now available in your rental history.',
+        '/mj-sms-history.html?view=rent',
+        'sms_rent_transfer'
+      );
+      await notifyUserPush(
+        auth.userId,
+        'Rental number transferred',
+        String(row.phone_number || 'Your SMS-BUS rental') + ' has been transferred. Your access has ended.',
+        '/mj-sms-history.html?view=rent',
+        'sms_rent_transfer'
+      );
+
+      return json(res, 200, {
+        success: true,
+        message: 'Rental transferred successfully. The recipient now has full ownership and access.',
+        data: { order_id: row.order_id, phone_number: row.phone_number, recipient: recipient.username || recipient.full_name || 'MJ HUB user' }
       });
     }
 
@@ -3322,6 +3464,15 @@ export default async function handler(req, res) {
         .eq('order_id', order_id)
         .maybeSingle();
       if (rowErr || !row) return json(res, 404, { success: false, message: 'Rental not found' });
+      const cancelLockToken = crypto.randomUUID();
+      const { data: cancelLockResult, error: cancelLockError } = await supabase.rpc('smsbus_rent_begin_operation', {
+        p_rental_order_id: row.id, p_user_id: auth.userId, p_operation: 'cancel', p_lock_token: cancelLockToken
+      });
+      const cancelLock = Array.isArray(cancelLockResult) ? cancelLockResult[0] : cancelLockResult;
+      if (cancelLockError || !cancelLock || cancelLock.success !== true) {
+        return json(res, 409, { success: false, message: cancelLock?.message || 'Another rental operation is processing. Try again shortly.' });
+      }
+      try {
       if (row.refunded === true || ['refunded', 'cancelled', 'canceled'].includes(String(row.status || '').toLowerCase())) {
         return json(res, 400, { success: false, message: 'This rental was already cancelled' });
       }
@@ -3408,52 +3559,87 @@ export default async function handler(req, res) {
         .select('id, price')
         .maybeSingle();
 
-      if (claimErr || !claimed) {
-        // Provider already cancelled — do not double-credit if already claimed
+      if (claimErr) {
+        console.error('[rent_cancel] order refund trigger failed', claimErr.message);
+        return json(res, 500, {
+          success: false,
+          message: 'The supplier cancelled the rental, but the wallet refund needs support review. Contact support with your order ID.'
+        });
+      }
+      if (!claimed) {
         return json(res, 200, {
           success: true,
-          message: 'Rental cancelled. If a refund was due it is already on your wallet.',
+          message: 'This rental has already been cancelled or refunded.',
           already: true
         });
       }
 
       const refundAmount = Math.round(Number(row.price) || 0);
-      const refund = refundAmount > 0
-        ? await refundWalletDebit(supabase, auth.userId, row.wallet_debit_id)
-        : { ok: true };
+      const { data: transferState } = await supabase.from('smsbus_rent_transfers')
+        .select('original_payer_user_id').eq('rental_order_id', row.id)
+        .order('transferred_at', { ascending: false }).limit(1).maybeSingle();
+      const transferredRefund = !!(transferState && transferState.original_payer_user_id !== auth.userId);
+      let refund;
+      if (transferredRefund) {
+        const { data: credit, error: creditError } = await supabase.from('smsbus_rent_refund_credits')
+          .select('beneficiary_user_id, amount_ngn, amount_usd')
+          .eq('rental_order_id', row.id).maybeSingle();
+        refund = (!creditError && credit && credit.beneficiary_user_id === auth.userId)
+          ? { ok: true, ngn_restored: Number(credit.amount_ngn || 0), usd_restored: Number(credit.amount_usd || 0) }
+          : { ok: false, error: creditError?.message || 'Transferred-owner refund ledger entry missing.' };
+      } else {
+        refund = refundAmount > 0
+          ? await refundWalletDebit(supabase, auth.userId, row.wallet_debit_id)
+          : { ok: true, ngn_restored: 0, usd_restored: 0 };
+      }
       if (!refund.ok) {
         console.error('[rent_cancel] exact wallet refund failed', refund.error || refund.message);
         return json(res, 500, {
           success: false,
-          message: 'Rental was cancelled but wallet credit needs support review. Contact support with your order ID.'
+          message: 'The supplier cancelled the rental, but wallet credit needs support review. Contact support with your order ID.'
         });
       }
-      try {
-        const { data: profile } = await supabase.from('profiles')
-          .select('customer_id').eq('id', auth.userId).maybeSingle();
-        await supabase.from('transactions').insert({
-          user_id: auth.userId, customer_id: profile?.customer_id,
-          type: 'refund', category: 'MJ SMS',
-          title: 'Rental cancelled — balance restored',
-          subtitle: String(row.phone_number || order_id),
-          amount: `₦${refundAmount.toLocaleString()}`,
-          amount_ngn: refund.ngn_restored || refundAmount,
-          status: 'completed'
-        });
-      } catch (_) {}
+      if (!transferredRefund) {
+        try {
+          const { data: profile } = await supabase.from('profiles')
+            .select('customer_id').eq('id', auth.userId).maybeSingle();
+          await supabase.from('transactions').insert({
+            user_id: auth.userId, customer_id: profile?.customer_id,
+            type: 'refund', category: 'MJ SMS',
+            title: 'Rental cancelled — balance restored',
+            subtitle: String(row.phone_number || order_id),
+            amount: `₦${Number(refund.ngn_restored || 0).toLocaleString()}`,
+            amount_ngn: refund.ngn_restored || 0,
+            amount_usd: refund.usd_restored || 0,
+            status: 'completed',
+            external_reference: 'smsbus-rent-refund:' + row.id
+          });
+        } catch (_) {}
+      }
 
+      const refundLabel = [
+        Number(refund.ngn_restored || 0) > 0 ? '₦' + Number(refund.ngn_restored).toLocaleString() : '',
+        Number(refund.usd_restored || 0) > 0 ? '$' + Number(refund.usd_restored).toFixed(2) : ''
+      ].filter(Boolean).join(' + ') || 'the eligible amount';
       await notifyUserPush(
         auth.userId,
         'Rental cancelled — refunded',
-        '₦' + Number(refundAmount || 0).toLocaleString() + ' returned to your wallet.',
+        refundLabel + ' returned to your wallet.',
         '/sms-history.html',
         'sms_refund'
       );
       return json(res, 200, {
         success: true,
-        message: 'Rental cancelled. ₦' + refundAmount.toLocaleString() + ' returned to your wallet.',
-        refunded: refundAmount
+        message: 'Rental cancelled. ' + refundLabel + ' returned to your wallet.',
+        refunded: refundAmount,
+        refunded_ngn: Number(refund.ngn_restored || 0),
+        refunded_usd: Number(refund.usd_restored || 0)
       });
+      } finally {
+        await supabase.rpc('smsbus_rent_release_operation', {
+          p_rental_order_id: row.id, p_user_id: auth.userId, p_lock_token: cancelLockToken
+        }).catch(() => {});
+      }
     }
 
     if (method === 'POST' && action === 'rent_renew') {
