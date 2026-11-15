@@ -1497,7 +1497,9 @@ function openPurchaseModal(s){
   document.getElementById('psStock').textContent = (s.available_quantity ?? '—') + ' available';
   document.getElementById('psCountry').innerHTML = '<span class="flag">'+countryFlag(currentCountry.country_name)+'</span>'+escapeHtml(currentCountry.country_name);
   document.getElementById('psTotal').textContent = money(s.price);
-  window.__mjSmsBuyId = null;
+  var server1Source=(activeService&&activeService.source)||(currentCountry&&currentCountry.source)||'grizzlysms';
+  window.__mjSmsBuyStorageKey='mj_server1_order_'+String(server1Source)+'_'+String(currentCountry.country_id)+'_'+String(s.service_id);
+  try{window.__mjSmsBuyId=sessionStorage.getItem(window.__mjSmsBuyStorageKey)||null;}catch(e){window.__mjSmsBuyId=null;}
   document.getElementById('purchaseModal').classList.add('active');
 }
 function closePurchaseModal(){
@@ -1539,7 +1541,8 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
   const price = parseFloat(activeService.price) || 0;
   // Stable id for this confirmation attempt (reused if network retries)
   if(!window.__mjSmsBuyId){
-    window.__mjSmsBuyId = 'MJ-GZ-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+    window.__mjSmsBuyId = 'MJ-S1-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+    try{if(window.__mjSmsBuyStorageKey)sessionStorage.setItem(window.__mjSmsBuyStorageKey,window.__mjSmsBuyId);}catch(e){}
   }
   const externalOrderId = window.__mjSmsBuyId;
 
@@ -1594,21 +1597,23 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       })())
     });
     const data = await res.json();
-    if(!res.ok || !data.success){
-      showToast(data.message || 'Purchase failed. Please try again.', 'error');
-      window.__mjSmsBuyId = null;
+    if(!res.ok || !data.success || data.reconciliation_required){
+      showToast(data.message || 'Purchase is being reconciled. Do not retry yet.', 'error');
+      if(!data.reconciliation_required){
+        window.__mjSmsBuyId = null;
+        try{if(window.__mjSmsBuyStorageKey)sessionStorage.removeItem(window.__mjSmsBuyStorageKey);}catch(e){}
+      }
       isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
       return;
     }
-    // Success: keep locked and navigate — do not re-enable (prevents second buy)
+    try{if(window.__mjSmsBuyStorageKey)sessionStorage.removeItem(window.__mjSmsBuyStorageKey);}catch(e){}
     showToast('Number purchased! Redirecting…', 'success');
     const oid = data.data && data.data.order_id;
     setTimeout(() => {
       window.location.href = 'mj-sms-number.html?order_id=' + encodeURIComponent(oid);
     }, 500);
   }catch(err){
-    showToast('Network error: ' + (err.message || err), 'error');
-    window.__mjSmsBuyId = null;
+    showToast('Network error. The supplier result may still be pending. Do not retry yet.', 'error');
     isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
   }
 });
