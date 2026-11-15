@@ -2380,7 +2380,7 @@ export default async function handler(req, res) {
           const correctedPrice = profitFloorNgn(costUsd, WALLET_USD_RATE);
           await supabase.from('number_services').update({
             price: correctedPrice, price_source: 'system', updated_at: new Date().toISOString()
-          }).eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
+          }).eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(project_id));
           return json(res, 409, {
             success: false, code: 'PRICE_UPDATED',
             message: 'Supplier pricing changed. Review the updated price and try again.',
@@ -2388,7 +2388,7 @@ export default async function handler(req, res) {
           });
         }
         await supabase.from('number_services').update({ is_available: false, updated_at: new Date().toISOString() })
-          .eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(service_id));
+          .eq('source', 'smsbus').eq('country_id', Number(country_id)).eq('service_id', String(project_id));
         return json(res, 409, {
           success: false, code: 'PRICE_UNDER_COST',
           message: 'This SMS service is temporarily unavailable because its admin selling price is below supplier cost. No charge was made.'
