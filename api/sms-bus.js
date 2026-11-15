@@ -2326,6 +2326,16 @@ export default async function handler(req, res) {
           countryName = hit.title || countryName;
         }
       }
+      // A missing live supplier price is not a valid quote. Never substitute a
+      // guessed/default cost for a real supplier purchase.
+      if (!(costUsd > 0) || !Number.isFinite(costUsd)) {
+        return json(res, 409, {
+          success: false,
+          code: 'SUPPLIER_PRICE_UNAVAILABLE',
+          message: 'The current supplier price could not be verified. No charge was made. Refresh and try again.'
+        });
+      }
+
       // Better names
       try {
         const [cRes, pRes] = await Promise.all([
@@ -2342,8 +2352,9 @@ export default async function handler(req, res) {
         }
       } catch (_) {}
 
-      // Prefer admin-controlled selling price from DB (never reset by sync)
-      let price = applyMarkup(costUsd || 0.5);
+      // Prefer admin-controlled selling price from DB, but never sell below the
+      // live supplier cost converted at the atomic wallet FX rate.
+      let price = applyMarkup(costUsd);
       try {
         const { data: dbSvc } = await supabase
           .from('number_services')
@@ -2357,6 +2368,13 @@ export default async function handler(req, res) {
         }
         if (dbSvc && Number(dbSvc.price) > 0) price = Number(dbSvc.price);
       } catch (_) {}
+      if (!(price > 0) || !saleCoversCost(price, costUsd, WALLET_USD_RATE)) {
+        return json(res, 409, {
+          success: false,
+          code: 'PRICE_UNDER_COST',
+          message: 'This SMS service is temporarily unavailable because its selling price is below the current supplier cost. No charge was made.'
+        });
+      }
       // The database RPC is authoritative: it atomically allocates NGN, USD,
       // or both. A NGN-only precheck incorrectly rejected users with USD funds.
       const bal = Number(profile.balance) || 0;
