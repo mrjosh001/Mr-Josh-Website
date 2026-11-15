@@ -235,7 +235,11 @@ document.getElementById('rentBtn').onclick = async function() {
     document.getElementById('err').textContent = j.message || 'Could not complete rental';
     return;
   }
-  if (!j.reconciliation_required) { try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {} }
+  if (j.reconciliation_required) {
+    document.getElementById('err').textContent = j.message || 'Your rental is active but its history is being reconciled. Do not purchase again.';
+    return;
+  }
+  try { sessionStorage.removeItem('mj_smsbus_rent_request'); } catch(e) {}
   var oid = (j.data && (j.data.order_id || j.data.id)) || '';
   var num = (j.data && j.data.number) || '';
   document.getElementById('ok').textContent =
