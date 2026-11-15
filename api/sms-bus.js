@@ -4396,9 +4396,16 @@ export default async function handler(req, res) {
                 areaCode: areaCode || null, walletDebitId: debit.wallet_debit_id
               });
               await supabase.from('number_orders').update({
-                notes: gotsmsSerializeNotes({ linked_rent_ids: [String(rentId)], multi: true,
-                  services: [primaryName], inbox: [], wh_ids: [] }) +
-                  '\\nMULTI_PACK_REVIEW: second service attachment failed or could not be verified; supplier refund not yet confirmed.'
+                notes: JSON.stringify({
+                  linked_rent_ids: [String(rentId)], multi: true, services: [primaryName],
+                  inbox: [], wh_ids: [],
+                  multi_pack_review: {
+                    second_service_id: String(secondId),
+                    attachment_status: detail.ok && Array.isArray(detailServices) ? 'not_attached' : 'unverified',
+                    supplier_refund_status: 'not_confirmed',
+                    updated_at: new Date().toISOString()
+                  }
+                })
               }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
               await gotsmsRecordPurchaseTx({
                 userId: auth.userId, customerId: debit.customer_id, rent,
