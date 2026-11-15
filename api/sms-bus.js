@@ -4364,17 +4364,91 @@ export default async function handler(req, res) {
         const rentId = rent.id || rent.rent_id;
         const phone = rent.phone || rent.phone_number || '';
         const secondId = serviceIds[1];
-        const g2 = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`, {
+        let g2 = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`, {
           method: 'POST',
           body: { service_id: secondId }
         });
         if (!g2.ok || !g2.data?.success) {
-          try { await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id); } catch (_) {}
-          try { await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/refund`, { method: 'POST', body: {} }); } catch (_) {}
-          return json(res, g2.status || 400, {
-            success: false,
-            message: gotsmsSafeMsg(g2.data?.message, 'Could not attach the second service. You were not charged.')
-          });
+          // The attach request may have succeeded even if its response was lost.
+          // Read the supplier rental before deciding whether to cancel/refund.
+          const detail = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}`);
+          const detailRent = detail.data?.data || detail.data?.rent || detail.data;
+          const detailServices = Array.isArray(detailRent?.services) ? detailRent.services
+            : (Array.isArray(detailRent?.service_ids) ? detailRent.service_ids : null);
+          const secondAttached = Array.isArray(detailServices) && detailServices.some((x) =>
+            String(x?.id ?? x?.service_id ?? x) === String(secondId)
+          );
+          if (secondAttached) {
+            g2 = { ok: true, status: 200, data: { success: true, data: { service: { name: (body.service_names && body.service_names[1]) || 'Service 2' } } } };
+          } else {
+            const primaryName = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\\s*·.*$/,'').trim();
+            const primaryOrderName = detail.ok && Array.isArray(detailServices)
+              ? primaryName + ' · Multi-pack attachment failed'
+              : primaryName + ' · Multi-pack verification pending';
+            let savedOrderId = null;
+            try {
+              savedOrderId = await gotsmsSaveOrder({
+                userId: auth.userId, customerId: debit.customer_id, rentId, phone,
+                serviceName: primaryOrderName, serviceId: String(serviceIds[0] || ''),
+                priceNgn: price, supplierUsd: packUsd, status: 'active',
+                activeTill: rent.active_till || rent.expires_at || null,
+                planLabel: 'Multi-pack', carrierName: body.carrier_name || null,
+                areaCode: areaCode || null, walletDebitId: debit.wallet_debit_id
+              });
+              await supabase.from('number_orders').update({
+                notes: gotsmsSerializeNotes({ linked_rent_ids: [String(rentId)], multi: true,
+                  services: [primaryName], inbox: [], wh_ids: [] }) +
+                  '\\nMULTI_PACK_REVIEW: second service attachment failed or could not be verified; supplier refund not yet confirmed.'
+              }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
+              await gotsmsRecordPurchaseTx({
+                userId: auth.userId, customerId: debit.customer_id, rent,
+                priceNgn: price, orderId: savedOrderId || rentId,
+                title: 'USA multi-pack · ' + primaryName,
+                subtitle: phone || 'Second service attachment under review',
+                walletDebitId: debit.wallet_debit_id
+              });
+            } catch (saveErr) {
+              console.error('[gotsms_rent_multi] partial rental persistence failed:', saveErr?.message || saveErr);
+            }
+
+            if (detail.ok && Array.isArray(detailServices)) {
+              // Supplier confirms the second service is absent. Cancel/refund supplier first.
+              const supplierRefund = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/refund`, { method: 'POST', body: {} });
+              if (supplierRefund.ok && supplierRefund.data?.success) {
+                const walletRefund = await refundWalletDebit(supabase, auth.userId, debit.wallet_debit_id);
+                if (walletRefund.ok) {
+                  await supabase.from('number_orders').update({ status: 'refunded', refunded: true })
+                    .eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
+                  await supabase.from('transactions').update({
+                    status: 'refunded', subtitle: 'Multi-pack incomplete — supplier rental refunded'
+                  }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+                    .eq('external_reference', String(rentId));
+                  return json(res, 409, {
+                    success: false, refunded: true,
+                    message: 'The second service could not be attached. The supplier rental was refunded and your wallet was restored. Please try again.'
+                  });
+                }
+                await supabase.from('number_orders').update({
+                  status: 'refund_pending', refunded: false
+                }).eq('user_id', auth.userId).eq('idempotency_key', 'gotsms-' + rentId);
+                return json(res, 503, {
+                  success: false, refunded: false, reconciliation_required: true,
+                  message: 'The supplier cancelled the rental, but your wallet refund is still being reconciled. Do not purchase again yet.'
+                });
+              }
+            }
+
+            // No confirmed supplier refund: keep the rental and the debit. Never
+            // credit the customer while GotSMS may still be charging MJ HUB.
+            return json(res, 207, {
+              success: true, partial: true, reconciliation_required: true,
+              message: detail.ok
+                ? 'The first service is active. The second service could not be attached, and the supplier refund was not confirmed. Your payment remains in place while we review it.'
+                : 'The first service is active. We could not verify the second service attachment or supplier refund. Your purchase is being reviewed. Do not purchase again.',
+              data: { id: rentId, rent_id: rentId, number: phone, phone, services: [primaryName],
+                price_ngn: price, status: 'active', partial: true, wallet_debit_id: debit.wallet_debit_id }
+            });
+          }
         }
 
         const name1 = String(rent.service?.name || (body.service_names && body.service_names[0]) || 'Service 1').replace(/\s*·.*$/,'').trim();
