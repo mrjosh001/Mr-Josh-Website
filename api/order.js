@@ -1325,6 +1325,15 @@ export default async function handler(req, res) {
   if (action === 'support_upload') {
     return handleSupportUpload(req, res, auth.user);
   }
+  if (action === 'profile_identity_status') {
+    const { data: virtualAccountRows, error: virtualAccountError } = await supabase
+      .from('virtual_accounts').select('user_id').eq('user_id', user_id).limit(1);
+    if (virtualAccountError) {
+      console.error('[order profile_identity_status]', virtualAccountError.message);
+      return res.status(500).json({ success: false, message: 'Could not verify Virtual Account status' });
+    }
+    return res.status(200).json({ success: true, has_virtual_account: Array.isArray(virtualAccountRows) && virtualAccountRows.length > 0 });
+  }
   if (action === 'update_profile') {
     return handleUpdateProfile(req, res, auth.user);
   }
