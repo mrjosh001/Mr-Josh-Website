@@ -1387,7 +1387,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="panel" id="usaRentVirtualPanel" style="margin-top:16px;display:none;">
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-   <div><div class="panel-title">VirtualSMS Platform Rental</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">USA catalogue · Supplier-verified availability at checkout</div></div>
+   <div><div class="panel-title">VirtualSMS Platform Rental</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Global supplier catalogue · Supplier-verified availability at checkout</div></div>
    <span class="badge badge-on">Direct API purchase</span>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px;">
@@ -1412,11 +1412,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   </div>
   <p id="vsRentSyncProgress" style="color:var(--primary,#3b82f6);font-size:12px;font-weight:700;margin:0 0 12px;min-height:16px;"></p>
   <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
-   <input type="search" id="vsRentSearch" placeholder="Search VirtualSMS service…" oninput="filterVirtualSmsRentPlans()" style="flex:1;min-width:160px;" />
+   <input type="search" id="vsRentSearch" placeholder="Search country or VirtualSMS service…" oninput="filterVirtualSmsRentPlans()" style="flex:1;min-width:160px;" />
   </div>
   <div class="desktop-only desktop-table table-wrap">
    <table><thead><tr><th>Service</th><th>Duration</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Visibility</th><th>Action</th></tr></thead>
-   <tbody id="vsRentTableBody"><tr><td colspan="7" class="empty-state">Click Sync VirtualSMS to import USA Platform Rental plans.</td></tr></tbody></table>
+   <tbody id="vsRentTableBody"><tr><td colspan="7" class="empty-state">Click Sync VirtualSMS to import all supplier-supported Platform Rental countries and plans.</td></tr></tbody></table>
   </div>
   <div id="vsRentMobileCards" class="mobile-only mobile-cards"></div>
  </div>
@@ -3319,13 +3319,27 @@ function filterVirtualSmsRentPlans(){
 }
 async function syncVirtualSmsRentals(){
  const btn=document.getElementById('btnSyncVsRent'),p=document.getElementById('vsRentSyncProgress');
- setBtnBusy(btn,true,'Syncing…');if(p)p.textContent='Loading the supplier service catalogue and syncing 1, 3 and 7 day plans…';
+ setBtnBusy(btn,true,'Syncing…');
+ let offset=0,total=0,plans=0,inserted=0,updated=0,available=0,errors=[],countries=0,round=0;
  try{
-  const h=await authHeaders(),res=await fetch('/api/sms-bus?action=vsrent_sync',{method:'POST',headers:h||{}});
-  const d=await res.json();if(!res.ok||!d.success)throw new Error(d.message||'VirtualSMS sync failed');
-  var seen=Number(d.plans_seen||0);
-  if(p)p.textContent=d.message+' · Plans '+seen+' · New '+d.inserted+' · Updated '+d.updated+(d.errors?.length?' · '+d.errors.join(' | '):'');
-  showAdminToast(d.message||'VirtualSMS sync finished',d.errors?.length?'error':'success');await loadVirtualSmsRentPlans();
+  const h=await authHeaders();
+  do{
+   round++;
+   if(p)p.textContent='Discovering VirtualSMS countries and syncing catalogue… Batch '+round+(total?' of '+total+' countries':'');
+   const res=await fetch('/api/sms-bus?action=vsrent_sync',{method:'POST',headers:Object.assign({},h||{}, {'Content-Type':'application/json'}),body:JSON.stringify({country_offset:offset,country_limit:1})});
+   const d=await res.json();
+   if(!res.ok||!d.success)throw new Error(d.message||'VirtualSMS sync failed');
+   total=Number(d.total_countries||total);plans+=Number(d.plans_seen||0);inserted+=Number(d.inserted||0);
+   updated+=Number(d.updated||0);available+=Number(d.available_plans||0);countries+=Number(d.countries_synced||0);
+   errors=errors.concat(d.errors||[]);
+   offset=Number(d.next_country_offset||total);
+   if(p)p.textContent='Synced '+Math.min(offset,total)+' / '+total+' supplier countries · '+plans+' plans found';
+   if(d.done)break;
+   if(round>250)throw new Error('Sync paused for safety after 250 country batches. Run Sync again to continue.');
+  }while(offset<total);
+  if(p)p.textContent='Global VirtualSMS sync finished · '+countries+' countries · '+plans+' plans · '+inserted+' new · '+updated+' updated'+(errors.length?' · '+errors.length+' warnings':'');
+  showAdminToast('VirtualSMS sync finished · '+countries+' countries'+(errors.length?' with warnings':''),errors.length?'error':'success');
+  await loadVirtualSmsRentPlans();
  }catch(e){if(p)p.textContent=e.message||'Sync failed';showAdminToast(e.message||'Sync failed','error');}
  finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS');}
 }
