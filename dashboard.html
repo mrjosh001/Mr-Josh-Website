@@ -7062,7 +7062,8 @@ window.openProfileSettings = async function() {
         if (!supabaseClient || !currentUserId) throw new Error('Session unavailable');
         const { data: sessionData } = await supabaseClient.auth.getSession();
         const profileAccessToken = sessionData?.session?.access_token || '';
-        const verifiedAuthEmail = String(sessionData?.session?.user?.email || '').trim();
+        const { data: verifiedUserData } = await supabaseClient.auth.getUser();
+        const verifiedAuthEmail = String(verifiedUserData?.user?.email || sessionData?.session?.user?.email || '').trim();
         if (emailInput && verifiedAuthEmail) {
             emailInput.value = verifiedAuthEmail;
             userData.email = verifiedAuthEmail;
