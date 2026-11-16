@@ -31,7 +31,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const MIN = 1000;
+const MIN = 500;
 const MAX = 500000;
 /** Minimum crypto deposit in NGN (about $3.45 at 1450) */
 const CRYPTO_MIN_NGN = 5000;
@@ -112,19 +112,18 @@ function extractAmount(data) {
 
 
 /**
- * VA deposits: user wallet gets net after 1% payment processing fee.
- * - Sent 1010 (uplifted from 1000) → credit 1000
- * - Sent 1000 (no uplift) → credit 990 (1000 minus 1%)
+ * VA deposits: user wallet gets net after 1.5% payment processing fee.
+ * - The customer sends the selected wallet credit plus a 1.5% fee.
  */
 function netDepositFromGross(gross) {
   const g = Math.round(Number(gross) || 0);
   if (g <= 0) return 0;
-  const rate = 0.01;
-  // Prefer inverse of UI formula: desired + ceil(desired * 0.01) === gross
+  const rate = 0.015;
+  // Prefer inverse of UI formula: desired + ceil(desired * 0.015) === gross
   for (let d = g; d >= Math.max(1, g - Math.ceil(g * 0.05) - 5); d--) {
     if (d + Math.ceil(d * rate) === g) return d;
   }
-  // Paid exact desired with no uplift — still withhold 1%
+  // Paid exact desired with no uplift — still withhold 1.5%
   return Math.max(1, Math.round(g / (1 + rate)));
 }
 
@@ -1054,7 +1053,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     return res.status(200).json({ message: 'ignored_status' });
   }
 
-  const VA_MIN = 1000;
+  const VA_MIN = 500;
   const VA_MAX = 700000;
 
   reference = extractReference(data);
@@ -1151,7 +1150,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
 
   // --- Resolve how much to credit ---
   // Checkout: full amount user selected (PocketFi charges the customer).
-  // VA: only after account_number match + paid webhook; net 1%; bind to pending va-session when present.
+  // VA: only after account_number match + paid webhook; net 1.5%; bind to pending va-session when present.
   let creditNet = creditAmount;
   try {
     const { data: intentByRef } = await supabase
@@ -1186,7 +1185,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
 
       const net = netDepositFromGross(creditAmount);
       creditNet = net > 0 ? net : 0;
-      if (creditNet < Math.floor(VA_MIN * 0.99)) {
+      if (creditNet < VA_MIN) {
         return res.status(200).json({ message: 'net_too_small' });
       }
 
@@ -1205,7 +1204,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
       for (const s of sessions || []) {
         const want = Math.round(Number(s.amount) || 0);
         // Match net credit OR gross they were told to send
-        const grossWant = want + Math.ceil(want * 0.01);
+        const grossWant = want + Math.ceil(want * 0.015);
         if (Math.abs(want - creditNet) <= 2 || Math.abs(grossWant - creditAmount) <= 2) {
           bound = s;
           creditNet = want; // exact amount they chose on the site
@@ -1917,8 +1916,8 @@ async function handleVaBegin(req, res) {
   } catch (_) {}
 
   const desired = Math.round(Number(body.amount) || 0);
-  if (desired < 1000 || desired > 700000) {
-    return res.status(400).json({ success: false, message: 'Amount must be between ₦1,000 and ₦700,000' });
+  if (desired < 500 || desired > 700000) {
+    return res.status(400).json({ success: false, message: 'Amount must be between ₦500 and ₦700,000' });
   }
 
   const { data: va } = await supabase
@@ -1930,7 +1929,7 @@ async function handleVaBegin(req, res) {
     return res.status(400).json({ success: false, message: 'Generate your permanent account first' });
   }
 
-  const gross = desired + Math.ceil(desired * 0.01);
+  const gross = desired + Math.ceil(desired * 0.015);
   const sessionId = `va-${user.id.slice(0, 8)}-${Date.now()}-${desired}`;
 
   // Expire older pending VA sessions for this user (keep table clean)
