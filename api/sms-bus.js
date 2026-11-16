@@ -1685,35 +1685,16 @@ async function claimAndRefundSmsBusOrder(order, userId, opts = {}) {
 
   const refundAmount = Number(order.price != null ? order.price : claimed.price) || 0;
 
-  // DOUBLE-REFUND FIX: the wallet credit is performed exactly once by the database
-  // trigger trg_mj_refund_number_order_wallet (mj_refund_number_order_wallet_once),
-  // which fires when the claim above flips number_orders.refunded false -> true and
-  // restores the exact NGN/USD split of the linked wallet_debits row.
-  // Do NOT call credit_balance() or update profiles.balance here: credit_balance()
-  // matches ANY unrefunded debit of the same amount from the last 30 minutes, so it
-  // could credit a second time against a stale debit from an earlier failed attempt.
+  // The number_orders update above fires trg_mj_refund_number_order_wallet.
+  // That trigger performs the exact-debit wallet restoration, debit marker,
+  // order state and transaction reconciliation in ONE database transaction.
+  // Do not write another refund transaction or heuristically update a recent
+  // transaction here: doing so can create duplicate/conflicting ledger rows.
   let newBalance = null;
   if (refundAmount > 0) {
-    const { data: profile } = await supabase.from('profiles').select('customer_id, balance').eq('id', userId).maybeSingle();
+    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
     if (profile) newBalance = Number(profile.balance || 0);
-    try {
-      await supabase.from('transactions').insert({
-        user_id: userId,
-        customer_id: (profile && profile.customer_id) || order.customer_id,
-        type: 'refund',
-        category: 'MJ SMS',
-        title: /expir/i.test(String(subtitle || '')) ? 'SMS expired' : 'SMS canceled',
-        subtitle: subtitle,
-        amount: `₦${refundAmount.toLocaleString()}`,
-        amount_ngn: refundAmount,
-        status: 'refunded',
-        external_reference: order.order_id || null
-      });
-    } catch (_) {}
   }
-  try {
-    await markTxStatus(userId, order.order_id, order.phone_number, 'cancelled');
-  } catch (_) {}
   try {
     await notifyUserPush(
       userId,
