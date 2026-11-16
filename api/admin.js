@@ -709,7 +709,7 @@ async function userUpdate(body) {
 
   const { data: existing, error: fetchErr } = await supabase
     .from('profiles')
-    .select('balance, customer_id')
+    .select('balance, customer_id, email, full_name, username, phone_number, is_admin')
     .eq('id', user_id)
     .single();
   if (fetchErr || !existing) return { status: 404, body: { success: false, message: 'Customer not found' } };
@@ -718,10 +718,14 @@ async function userUpdate(body) {
   const newBalance = Number(balance);
   const amountAdded = newBalance - prevBalance;
 
+  const nextEmail = String(email || '').trim().toLowerCase();
+  if (nextEmail && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(nextEmail)) {
+    return { status: 400, body: { success: false, message: 'Enter a valid customer email address' } };
+  }
   const payload = {
     full_name: full_name ?? null,
     username: username ?? null,
-    email: email || null,
+    email: nextEmail || null,
     phone_number: phone_number || null,
     balance: newBalance,
     is_admin: !!is_admin
@@ -730,8 +734,32 @@ async function userUpdate(body) {
     payload.balance_usd = Number(balance_usd);
   }
 
+  // Only the main-admin endpoint reaches this function. Keep Supabase Auth
+  // email and the public profile email in sync when customer care corrects it.
+  const { data: authUserResult, error: authFetchError } = await supabase.auth.admin.getUserById(user_id);
+  if (authFetchError || !authUserResult?.user) {
+    return { status: 500, body: { success: false, message: 'Could not verify the customer login account: ' + (authFetchError?.message || 'User not found') } };
+  }
+  const authEmail = String(authUserResult.user.email || '').trim().toLowerCase();
+  const emailChanged = !!nextEmail && nextEmail !== authEmail;
+  if (emailChanged) {
+    const { error: authEmailError } = await supabase.auth.admin.updateUserById(user_id, {
+      email: nextEmail,
+      email_confirm: true
+    });
+    if (authEmailError) {
+      return { status: 409, body: { success: false, message: 'Customer email could not be updated in Supabase Auth: ' + authEmailError.message } };
+    }
+  }
+
   const { error: updateErr } = await supabase.from('profiles').update(payload).eq('id', user_id);
-  if (updateErr) return { status: 500, body: { success: false, message: 'Profile update failed: ' + updateErr.message } };
+  if (updateErr) {
+    if (emailChanged) {
+      const { error: rollbackError } = await supabase.auth.admin.updateUserById(user_id, { email: authEmail, email_confirm: true });
+      if (rollbackError) console.error('[admin userUpdate] Auth email rollback failed', rollbackError);
+    }
+    return { status: 500, body: { success: false, message: 'Profile update failed: ' + updateErr.message } };
+  }
 
   let depositRecorded = false;
   if (amountAdded > 0) {
