@@ -3836,7 +3836,18 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                 <div class="form-group">
                     <label>Email</label>
                     <input type="email" id="profileEmailInput" readonly aria-readonly="true" disabled style="background:var(--input-disabled-bg,rgba(127,127,127,.12));color:var(--text-muted);border-color:var(--border-color);cursor:not-allowed;opacity:1;">
-                    <small style="display:block;margin-top:6px;color:var(--muted);font-size:12px;"><i class="fa-solid fa-lock"></i> Email changes are handled by MJ HUB customer care.</small>
+                    <button type="button" id="changeEmailToggleBtn" onclick="toggleEmailChangePanel(true)" style="margin-top:9px;padding:9px 13px;border:1px solid var(--border-color);border-radius:10px;background:var(--card-bg,transparent);color:var(--text-color);font-size:12px;font-weight:750;cursor:pointer;">Change email</button>
+                    <small style="display:block;margin-top:6px;color:var(--muted);font-size:12px;"><i class="fa-solid fa-lock"></i> Your login email is protected. Changes require verification.</small>
+                    <div id="emailChangePanel" style="display:none;margin-top:12px;padding:14px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg,rgba(127,127,127,.05));">
+                        <div style="font-size:13px;font-weight:750;margin-bottom:5px;">Change login email</div>
+                        <small id="emailChangeHelp" style="display:block;color:var(--muted);font-size:12px;margin-bottom:10px;">Enter the new email address. We’ll first verify your current account.</small>
+                        <input type="email" id="newEmailInput" autocomplete="email" inputmode="email" placeholder="New email address" style="width:100%;margin-bottom:9px;">
+                        <input type="text" id="emailChangeNonceInput" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Verification code sent to your current email" style="display:none;width:100%;margin-bottom:9px;">
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" id="emailChangeContinueBtn" onclick="startEmailChangeVerification()" class="btn-sm-primary" style="flex:1;padding:10px;">Continue</button>
+                            <button type="button" onclick="toggleEmailChangePanel(false)" style="padding:10px 13px;border:1px solid var(--border-color);border-radius:10px;background:transparent;color:var(--text-color);font-weight:700;">Cancel</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Phone</label>
@@ -7064,7 +7075,7 @@ window.openProfileSettings = async function() {
             nameInput.style.color = hasVirtualAccount ? 'var(--text-muted)' : '';
         }
         if (lockNote) lockNote.innerHTML = hasVirtualAccount
-            ? '<i class="fa-solid fa-lock"></i> Locked because your Virtual Account has been created. Contact customer care for corrections.'
+            ? '<i class="fa-solid fa-lock"></i> Name editing is temporarily unavailable. Contact customer care if a correction is needed.'
             : 'You can edit this name until your Virtual Account is created.';
         window.__mjVirtualAccountNameLocked = hasVirtualAccount;
     } catch (e) {
@@ -7074,6 +7085,74 @@ window.openProfileSettings = async function() {
     }
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
 };
+window.toggleEmailChangePanel = function(show) {
+    const panel = document.getElementById('emailChangePanel');
+    const toggle = document.getElementById('changeEmailToggleBtn');
+    if (panel) panel.style.display = show ? 'block' : 'none';
+    if (toggle) toggle.style.display = show ? 'none' : 'inline-flex';
+    if (!show) {
+        const email = document.getElementById('newEmailInput');
+        const nonce = document.getElementById('emailChangeNonceInput');
+        const help = document.getElementById('emailChangeHelp');
+        const btn = document.getElementById('emailChangeContinueBtn');
+        if (email) { email.disabled = false; email.value = ''; }
+        if (nonce) { nonce.style.display = 'none'; nonce.disabled = false; nonce.value = ''; }
+        if (help) help.textContent = 'Enter the new email address. We’ll first verify your current account.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Continue'; btn.onclick = window.startEmailChangeVerification; }
+        window.__mjEmailChangePending = null;
+    }
+};
+window.startEmailChangeVerification = async function() {
+    const emailInput = document.getElementById('newEmailInput');
+    const nonceInput = document.getElementById('emailChangeNonceInput');
+    const help = document.getElementById('emailChangeHelp');
+    const btn = document.getElementById('emailChangeContinueBtn');
+    const newEmail = String(emailInput?.value || '').trim().toLowerCase();
+    const currentEmail = String(document.getElementById('profileEmailInput')?.value || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return showToast('Enter a valid email address.', 'error');
+    if (newEmail === currentEmail) return showToast('Enter an email different from your current one.', 'error');
+    if (!supabaseClient || !currentUserId) return showToast('Please sign in again.', 'error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending code…'; }
+    try {
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+        if (sessionError || !sessionData?.session?.access_token) throw new Error('Your session has expired. Please sign in again.');
+        const { error } = await supabaseClient.auth.reauthenticate();
+        if (error) throw error;
+        window.__mjEmailChangePending = newEmail;
+        if (emailInput) emailInput.disabled = true;
+        if (nonceInput) nonceInput.style.display = 'block';
+        if (help) help.textContent = 'A one-time verification code has been sent to your current email. Enter it below to authorize the change.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify and request change'; btn.onclick = window.confirmEmailChange; }
+        showToast('Verification code sent to your current email.', 'success');
+    } catch (err) {
+        console.error('[profile email change] reauthentication failed', err);
+        if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
+        showToast(err.message || 'Could not start email change.', 'error');
+    }
+};
+window.confirmEmailChange = async function() {
+    const nonceInput = document.getElementById('emailChangeNonceInput');
+    const btn = document.getElementById('emailChangeContinueBtn');
+    const nonce = String(nonceInput?.value || '').trim();
+    const newEmail = window.__mjEmailChangePending;
+    if (!newEmail) return showToast('Start the email change again.', 'error');
+    if (!nonce || !/^[0-9]{6,12}$/.test(nonce)) return showToast('Enter the verification code sent to your current email.', 'error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    try {
+        const { error } = await supabaseClient.auth.updateUser({ email: newEmail, nonce: nonce });
+        if (error) throw error;
+        if (btn) { btn.disabled = true; btn.textContent = 'Request sent'; }
+        const help = document.getElementById('emailChangeHelp');
+        if (help) help.textContent = 'Supabase has sent confirmation instructions. Your login email changes only after the required email confirmation is completed.';
+        if (nonceInput) nonceInput.disabled = true;
+        showToast('Email change requested. Check your inboxes to complete verification.', 'success');
+    } catch (err) {
+        console.error('[profile email change] updateUser failed', err);
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify and request change'; }
+        showToast(err.message || 'Could not request email change.', 'error');
+    }
+};
+
 window.closeProfileSettings = function() {
     const main = document.getElementById('profileMainView');
     const settings = document.getElementById('profileSettingsView');
