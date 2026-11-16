@@ -1171,7 +1171,7 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
     } else if (viaVa) {
       // STRICT VA rules:
       // 1) account_number already matched this user
-      // 2) gross amount in 1000–700000
+      // 2) gross amount is within the allowed 500–700000 range (checked above)
       // 3) webhook looks paid + has reference
       // 4) prefer pending va-session for this user with matching desired/net amount (last 45 min)
       if (!accountNumber) {
@@ -1185,7 +1185,9 @@ async function handleWebhook(req, res, raw, secret, publicKey) {
 
       const net = netDepositFromGross(creditAmount);
       creditNet = net > 0 ? net : 0;
-      if (creditNet < VA_MIN) {
+      // Minimum applies to the gross transfer, not the post-fee wallet credit.
+      // Example: ₦500 received → ₦493 credited after the 1.5% fee.
+      if (!(creditNet > 0)) {
         return res.status(200).json({ message: 'net_too_small' });
       }
 
