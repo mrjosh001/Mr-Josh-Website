@@ -301,7 +301,7 @@ document.addEventListener('click', function(e){
       </div>
       <div class="form-group" style="margin-bottom:8px;">
         <label>Enter amount (NGN)</label>
-        <input type="number" class="amount-field" id="vaAmountInput" min="1000" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
+        <input type="number" class="amount-field" id="vaAmountInput" min="500" max="700000" step="100" placeholder="₦0.00" inputmode="numeric" oninput="onVaAmountInput()">
       </div>
       <div id="cryptoCoinGroup" style="display:none;">
         <div class="usd-card">
@@ -317,6 +317,7 @@ document.addEventListener('click', function(e){
         <div class="crypto-note"><i class="fa-solid fa-circle-info"></i><span>Pick your coin and network on the next page, then send the exact amount to the one-time address. Don't reuse that address for later deposits.</span></div>
       </div>
       <div class="chips" id="vaChips">
+        <button type="button" class="chip" data-amt="500" onclick="pickVaAmount(500)">₦500<small></small></button>
         <button type="button" class="chip" data-amt="1000" onclick="pickVaAmount(1000)">₦1,000<small></small></button>
         <button type="button" class="chip" data-amt="2000" onclick="pickVaAmount(2000)">₦2,000<small></small></button>
         <button type="button" class="chip" data-amt="5000" onclick="pickVaAmount(5000)">₦5,000<small></small></button>
@@ -324,7 +325,7 @@ document.addEventListener('click', function(e){
         <button type="button" class="chip" data-amt="20000" onclick="pickVaAmount(20000)">₦20,000<small></small></button>
         <button type="button" class="chip" data-amt="50000" onclick="pickVaAmount(50000)">₦50,000<small></small></button>
       </div>
-      <p class="fee-line" id="vaFeeLine">Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies</p>
+      <p class="fee-line" id="vaFeeLine">Min ₦500 · Max ₦700,000 · A 1.5% bank transfer processing fee applies</p>
       <button type="button" class="btn" id="vaContinueBtn" onclick="continueFromAmount()">Continue</button>
     </div>
 
@@ -432,13 +433,14 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 const DEPOSIT_USD_RATE = 1450;
-const MIN = 1000;
+const MIN = 500;
 const MAX = 500000;
-const VA_MIN = 1000;
+const VA_MIN = 500;
 const CRYPTO_MIN = 5000; /* ₦5,000 floor (about $3.45), above the supplier's $3 minimum */
 function usdFor(ngn) { return Math.round((Number(ngn || 0) / DEPOSIT_USD_RATE) * 100) / 100; }
 const VA_MAX = 700000;
-const VA_FEE_RATE = 0.01;
+const VA_FEE_RATE = 0.015;
+const CRYPTO_FEE_RATE = 0.01;
 const ADMIN_WA = '2347026502927';
 
 let depositWallet = 'ngn';
@@ -676,7 +678,7 @@ function onVaAmountInput() {
   const chipBox = document.getElementById('vaChips');
   if (chipBox) chipBox.classList.toggle('crypto', isCrypto);
   if (isCrypto) {
-    const fee = raw > 0 ? Math.ceil(raw * VA_FEE_RATE) : 0;
+    const fee = raw > 0 ? Math.ceil(raw * CRYPTO_FEE_RATE) : 0;
     const pay = raw > 0 ? raw + fee : 0;
     const set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
     set('cryptoUsdAmount', fmtUsd(usdFor(pay)));
@@ -693,9 +695,9 @@ function onVaAmountInput() {
   } else {
     const exact = calcExactToSend(raw);
     if (raw >= VA_MIN) {
-      line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1% payment processing fee. Your wallet receives ' + fmtNgn(raw) + '.';
+      line.textContent = 'Send ' + fmtNgn(exact) + '. Includes a 1.5% bank transfer processing fee. Your wallet receives ' + fmtNgn(raw) + '.';
     } else {
-      line.textContent = 'Min ₦1,000 · Max ₦700,000 · A 1% payment processing fee applies';
+      line.textContent = 'Min ₦500 · Max ₦700,000 · A 1.5% bank transfer processing fee applies';
     }
     if (btn && !btn.disabled) btn.innerHTML = 'Continue';
   }
@@ -1113,7 +1115,7 @@ function messageAdminForDeposit() {
     return toast('Customer ID not loaded yet. Wait a moment and try again.');
   }
   const toSend = calcExactToSend(amount);
-  const msg = 'Good day Admin, I want to fund my Wallet.\n\nHere are my details:\n\nCustomer ID: ' + cid + '\nWallet credit: ₦' + amount.toLocaleString() + '\nAmount to send (incl. 1% fee): ₦' + toSend.toLocaleString();
+  const msg = 'Good day Admin, I want to fund my Wallet.\n\nHere are my details:\n\nCustomer ID: ' + cid + '\nWallet credit: ₦' + amount.toLocaleString() + '\nAmount to send (incl. 1.5% fee): ₦' + toSend.toLocaleString();
   window.open('https://wa.me/' + ADMIN_WA + '?text=' + encodeURIComponent(msg), '_blank');
   toast('Opening WhatsApp…');
 }
