@@ -1369,7 +1369,7 @@ async function handleCheck(req, res) {
     const { data: existing, error: findErr } = await supabase
       .from('number_orders')
       .select(
-        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id, source'
+        'id, status, phone_number, created_at, service_name, country_name, price, order_id, refunded, customer_id, source, wallet_debit_id'
       )
       .in('source', ['grizzlysms', 'virtualsms'])
       .eq('order_id', String(order_id))
