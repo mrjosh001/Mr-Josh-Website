@@ -3825,7 +3825,8 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
             <div class="content-card">
                 <div class="form-group">
                     <label>Full Name</label>
-                    <input type="text" id="profileNameInput" placeholder="e.g. Josh">
+                    <input type="text" id="profileNameInput" placeholder="e.g. Josh" readonly aria-readonly="true" style="background:var(--input-disabled-bg,rgba(127,127,127,.12));color:var(--text-muted);border-color:var(--border-color);cursor:not-allowed;">
+                    <small id="profileNameLockNote" style="display:block;margin-top:6px;color:var(--muted);font-size:12px;"><i class="fa-solid fa-lock"></i> Checking account status…</small>
                 </div>
                 <div class="form-group">
                     <label>Username</label>
@@ -3834,7 +3835,8 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
                 </div>
                 <div class="form-group">
                     <label>Email</label>
-                    <input type="email" id="profileEmailInput" readonly>
+                    <input type="email" id="profileEmailInput" readonly aria-readonly="true" disabled style="background:var(--input-disabled-bg,rgba(127,127,127,.12));color:var(--text-muted);border-color:var(--border-color);cursor:not-allowed;opacity:1;">
+                    <small style="display:block;margin-top:6px;color:var(--muted);font-size:12px;"><i class="fa-solid fa-lock"></i> Email changes are handled by MJ HUB customer care.</small>
                 </div>
                 <div class="form-group">
                     <label>Phone</label>
@@ -7031,12 +7033,45 @@ window.copyApiKeyRef = function() {
     }
 };
 
-window.openProfileSettings = function() {
+window.openProfileSettings = async function() {
     const main = document.getElementById('profileMainView');
     const settings = document.getElementById('profileSettingsView');
     document.querySelectorAll('.profile-subview').forEach(el => el.classList.remove('active'));
     if (main) main.style.display = 'none';
     if (settings) settings.style.display = 'block';
+    const emailInput = document.getElementById('profileEmailInput');
+    if (emailInput) emailInput.value = userData.email || window.__mjUserEmail || '';
+    const nameInput = document.getElementById('profileNameInput');
+    const lockNote = document.getElementById('profileNameLockNote');
+    // Fail closed while checking: a name must never briefly become editable
+    // for an account that already has a Virtual Account.
+    if (nameInput) { nameInput.readOnly = true; nameInput.style.opacity = '.72'; }
+    if (lockNote) lockNote.innerHTML = '<i class="fa-solid fa-lock"></i> Checking account status…';
+    try {
+        if (!supabaseClient || !currentUserId) throw new Error('Session unavailable');
+        const { data, error } = await supabaseClient
+            .from('virtual_accounts')
+            .select('user_id')
+            .eq('user_id', currentUserId)
+            .limit(1);
+        if (error) throw error;
+        const hasVirtualAccount = Array.isArray(data) && data.length > 0;
+        if (nameInput) {
+            nameInput.readOnly = hasVirtualAccount;
+            nameInput.style.opacity = hasVirtualAccount ? '.72' : '1';
+            nameInput.style.cursor = hasVirtualAccount ? 'not-allowed' : 'text';
+            nameInput.style.background = hasVirtualAccount ? 'var(--input-disabled-bg,rgba(127,127,127,.12))' : '';
+            nameInput.style.color = hasVirtualAccount ? 'var(--text-muted)' : '';
+        }
+        if (lockNote) lockNote.innerHTML = hasVirtualAccount
+            ? '<i class="fa-solid fa-lock"></i> Locked because your Virtual Account has been created. Contact customer care for corrections.'
+            : 'You can edit this name until your Virtual Account is created.';
+        window.__mjVirtualAccountNameLocked = hasVirtualAccount;
+    } catch (e) {
+        console.warn('[profile] Could not verify Virtual Account status; keeping name locked', e);
+        if (lockNote) lockNote.innerHTML = '<i class="fa-solid fa-lock"></i> Name editing is temporarily unavailable. Contact customer care if a correction is needed.';
+        window.__mjVirtualAccountNameLocked = true;
+    }
     try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
 };
 window.closeProfileSettings = function() {
@@ -7156,7 +7191,8 @@ window.saveProfileSettingsData = async function() {
         // 1) Always update auth user_metadata (works even if profiles RLS is strict)
         const { error: authErr } = await supabaseClient.auth.updateUser({
             data: {
-                full_name: name,
+                // The authoritative full name is saved through the server profile
+                // endpoint, which checks Virtual Account lock status.
                 username: username,
                 phone: phone,
                 phone_number: phone,
