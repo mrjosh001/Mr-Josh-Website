@@ -1558,20 +1558,8 @@ export default async function handler(req, res) {
         notes: JSON.stringify(orderData)
       });
 
-      // Record refund → Deposits tab
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: customerId,
-        type: 'deposit',
-        category: 'deposit',
-        title: 'Automatic Refund',
-        subtitle: 'Order failed at supplier – balance restored',
-        amount: `₦${total.toLocaleString()}`,
-        amount_ngn: refund.ngn_restored,
-        amount_usd: refund.usd_restored,
-        external_reference: String(walletDebitId),
-        status: 'refunded'
-      });
+
+        // Exact-debit RPC records the refund transaction atomically.
 
       return res.status(400).json({
         success: false,
@@ -1722,20 +1710,8 @@ export default async function handler(req, res) {
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
         deducted = false;
 
-        await supabase.from('transactions').insert({
-          user_id,
-          customer_id: customerId,
-          type: 'deposit',
-          category: 'deposit',
-          title: 'Automatic Refund',
-          subtitle: `System error – ${err.message}`,
-          amount: `₦${total.toLocaleString()}`,
-          amount_ngn: refund.ngn_restored,
-          amount_usd: refund.usd_restored,
-          external_reference: String(walletDebitId),
-          status: 'refunded',
-          notes: err.message
-        });
+
+        // Exact-debit RPC records the refund transaction atomically.
       } catch (refundErr) {
         console.error('CRITICAL: Auto-refund failed', refundErr);
       }

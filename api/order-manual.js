@@ -390,19 +390,8 @@ export default async function handler(req, res) {
         external_reference: String(walletDebitId),
         status: 'failed'
       });
-      await supabase.from('transactions').insert({
-        user_id,
-        customer_id: customerId,
-        type: 'refund',
-        category: productName,
-        title: 'Automatic Refund',
-        subtitle: 'Not enough stock available – balance restored',
-        amount: `₦${total.toLocaleString()}`,
-        amount_ngn: refund.ngn_restored,
-        amount_usd: refund.usd_restored,
-        external_reference: String(walletDebitId),
-        status: 'refunded'
-      });
+
+        // Exact-debit RPC records the refund transaction atomically.
       try {
         await sendPushToUser(supabase, user_id, {
           title: 'Refund processed',
@@ -562,20 +551,8 @@ export default async function handler(req, res) {
       if (deducted) {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-        await supabase.from('transactions').insert({
-          user_id,
-          customer_id: customerId,
-          type: 'refund',
-          category: productName || 'Unknown',
-          title: 'Automatic Refund',
-          subtitle: `System error – ${err.message}`,
-          amount: `₦${total.toLocaleString()}`,
-          amount_ngn: refund.ngn_restored,
-          amount_usd: refund.usd_restored,
-          external_reference: String(walletDebitId),
-          status: 'refunded',
-          notes: err.message
-        });
+
+        // Exact-debit RPC records the refund transaction atomically.
       try {
         await sendPushToUser(supabase, user_id, {
           title: 'Refund processed',

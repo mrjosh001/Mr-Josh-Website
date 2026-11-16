@@ -621,20 +621,8 @@ return res.status(200).json({
       try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-        await supabase.from('transactions').insert({
-          user_id,
-          customer_id: customerId,
-          type: 'refund',
-          category: productName || 'Unknown',
-          title: 'Automatic Refund',
-          subtitle: 'System error – ' + (err.message || 'classy'),
-          amount: '₦' + total.toLocaleString(),
-          amount_ngn: refund.ngn_restored,
-          amount_usd: refund.usd_restored,
-          external_reference: String(walletDebitId),
-          status: 'refunded',
-          notes: String(err.message || err)
-        });
+
+        // Exact-debit RPC records the refund transaction atomically.
       } catch (refundErr) {
         console.error('[classy] CRITICAL refund failed', refundErr);
       }
