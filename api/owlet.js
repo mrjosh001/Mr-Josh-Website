@@ -1362,30 +1362,8 @@ async function refundIfSupplierFailed(order, oldStatus, newStatus) {
     return 0;
   }
 
-  const { error: orderRefundErr } = await supabase.from('booster_orders').update({
-    refund_ngn: refunded,
-    updated_at: new Date().toISOString()
-  }).eq('id', order.id);
-  if (orderRefundErr) console.error('[booster refund] order refund marker', orderRefundErr.message);
-
-  try {
-    await supabase.from('transactions').insert({
-      user_id: order.user_id,
-      customer_id: order.customer_id || null,
-      type: 'deposit',
-      category: 'deposit',
-      title: isPartial ? 'Booster partial refund' : 'Booster order refund',
-      subtitle: subtitle,
-      amount: '₦' + refunded.toLocaleString(),
-      amount_ngn: Number(creditResult.amount_ngn || 0),
-      amount_usd: Number(creditResult.amount_usd || 0),
-      external_reference: String(creditResult.wallet_debit_id || order.wallet_debit_id || ''),
-      status: 'completed',
-      created_at: new Date().toISOString()
-    });
-  } catch (txErr) {
-    console.warn('[booster refund] transaction row', txErr.message || txErr);
-  }
+  // The database RPC credits the exact debit, updates the order, and writes
+  // the refund transaction atomically. Do not repeat those writes here.
 
   order.refund_ngn = refunded;
   return refunded;

@@ -870,6 +870,43 @@ export default async function handler(req, res) {
       });
     }
 
+    // ---- Admin: refund an eSIM order only before QR delivery/refill completion ----
+    if (String(body.action || '') === 'admin_refund_order') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const orderId = String(body.order_id || '').trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
+        return res.status(400).json({ success: false, message: 'A valid eSIM order is required.' });
+      }
+      const { data: order, error: orderError } = await supabase.from('esim_orders')
+        .select('id,user_id,status,order_ref,refill_completed_at')
+        .eq('id', orderId).maybeSingle();
+      if (orderError || !order) return res.status(404).json({ success: false, message: 'eSIM order not found.' });
+      if (/^completed$/i.test(String(order.status || '')) || order.refill_completed_at) {
+        return res.status(409).json({ success: false, message: 'This eSIM has already been delivered or refilled. Refund blocked.' });
+      }
+      const { data: refundData, error: refundError } = await supabase.rpc('refund_esim_order_admin', {
+        p_order_id: orderId,
+        p_reason: String(body.reason || 'Admin refund before delivery').slice(0, 180)
+      });
+      const refund = Array.isArray(refundData) ? refundData[0] : refundData;
+      if (refundError || refund?.success !== true) {
+        console.error('[esim admin refund] failed:', refundError?.message || refund?.message);
+        return res.status(409).json({ success: false, message: 'The eSIM refund could not be safely completed. No partial refund was recorded.' });
+      }
+      if (order.user_id) {
+        await notifyUserPush(order.user_id, 'eSIM order refunded', 'Your undelivered eSIM order was refunded to your MJ HUB wallet.', '/esim-orders.html', 'esim_refund');
+      }
+      return res.status(200).json({
+        success: true,
+        already_refunded: refund.already_refunded === true,
+        amount_ngn: Number(refund.amount_ngn || 0),
+        amount_usd: Number(refund.amount_usd || 0),
+        wallet_debit_id: refund.wallet_debit_id
+      });
+    }
+
     // ---- Admin: confirm a manually fulfilled renewal ----
     if (String(body.action || '') === 'admin_confirm_refill') {
       if (!(await isAdminUser(user))) {

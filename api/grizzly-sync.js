@@ -1243,35 +1243,9 @@ async function claimAndRefundOrder(order, userId, opts = {}) {
     if (profile) newBalance = Number(profile.balance || 0);
   }
 
-  // Update the SAME purchase transaction — never insert a second refund row
-  const txStatus = String(finalStatus).toLowerCase() === 'expired' ? 'expired' : 'cancelled';
-  const orderRef = order.order_id ? String(order.order_id) : '';
-  try {
-    if (orderRef) {
-      await supabase
-        .from('transactions')
-        .update({ status: txStatus, subtitle, notes: notes || ('sms_order:' + orderRef) })
-        .eq('user_id', userId)
-        .eq('category', category)
-        .eq('type', 'purchase')
-        .in('status', ['pending', 'completed', 'success'])
-        .ilike('notes', '%sms_order:' + orderRef + '%');
-    }
-  } catch (e) {
-    console.warn('[claimAndRefundOrder] tx update by order ref', e.message || e);
-  }
-  try {
-    await supabase
-      .from('transactions')
-      .update({ status: txStatus, subtitle, ...(notes ? { notes } : {}) })
-      .eq('user_id', userId)
-      .eq('category', category)
-      .eq('type', 'purchase')
-      .in('status', ['pending', 'completed', 'success'])
-      .eq('amount_ngn', refundAmount);
-  } catch (e) {
-    console.warn('[claimAndRefundOrder] tx update', e.message || e);
-  }
+  // The database trigger finalizes the exact linked debit and matching transaction
+  // in the same transaction as the order's refunded=true transition. Do not
+  // perform a second lookup by customer/amount here.
 
   try {
     await notifyUserPush(
