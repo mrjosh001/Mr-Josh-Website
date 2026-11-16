@@ -1334,6 +1334,17 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({ success: true, has_virtual_account: Array.isArray(virtualAccountRows) && virtualAccountRows.length > 0 });
   }
+  if (action === 'profile_sync_auth_email') {
+    const verifiedEmail = String(auth.user.email || '').trim().toLowerCase();
+    if (!verifiedEmail) return res.status(400).json({ success: false, message: 'No verified login email is available.' });
+    const { error: emailSyncError } = await supabase
+      .from('profiles').update({ email: verifiedEmail }).eq('id', user_id);
+    if (emailSyncError) {
+      console.error('[order profile_sync_auth_email]', emailSyncError.message);
+      return res.status(500).json({ success: false, message: 'Could not sync profile email.' });
+    }
+    return res.status(200).json({ success: true, email: verifiedEmail });
+  }
   if (action === 'update_profile') {
     return handleUpdateProfile(req, res, auth.user);
   }
