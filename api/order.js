@@ -218,8 +218,17 @@ async function handleUpdateProfile(req, res, user) {
     if (!full_name) {
       return res.status(400).json({ success: false, message: 'Enter your name' });
     }
-    const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle();
+    const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username, full_name, name').eq('id', user.id).maybeSingle();
     if (currentProfileError) throw currentProfileError;
+    const { data: virtualAccountRows, error: virtualAccountError } = await supabase
+      .from('virtual_accounts').select('user_id').eq('user_id', user.id).limit(1);
+    if (virtualAccountError) throw virtualAccountError;
+    const hasVirtualAccount = Array.isArray(virtualAccountRows) && virtualAccountRows.length > 0;
+    const currentFullName = String(currentProfile?.full_name || currentProfile?.name || '').trim();
+    if (hasVirtualAccount && full_name !== currentFullName) {
+      return res.status(403).json({ success: false, message: 'Your full name is locked because your Virtual Account has been created. Contact MJ HUB customer care for a correction.' });
+    }
+    const effectiveFullName = hasVirtualAccount ? currentFullName : full_name;
     const currentUsername = String(currentProfile?.username || '').trim();
     const sameUsername = !!currentUsername && requestedUsername === currentUsername.toLowerCase();
     const username = sameUsername ? currentUsername : requestedUsername;
@@ -227,8 +236,8 @@ async function handleUpdateProfile(req, res, user) {
     if (!sameUsername && !/^[a-z0-9_]{3,20}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3–20 characters using letters, numbers, and underscores only.' });
     const patch = {
       username,
-      full_name,
-      name: full_name,
+      full_name: effectiveFullName,
+      name: effectiveFullName,
       phone: phone || null,
       phone_number: phone || null,
       address: address || null,
@@ -242,7 +251,7 @@ async function handleUpdateProfile(req, res, user) {
       .select('id, username, full_name, name, phone, phone_number, address, bio')
       .maybeSingle();
     if (error && /column|schema cache|Could not find/i.test(String(error.message || ''))) {
-      const slim = { full_name, phone: phone || null };
+      const slim = { full_name: effectiveFullName, phone: phone || null };
       ({ data, error } = await supabase
         .from('profiles')
         .update(slim)
@@ -264,13 +273,13 @@ async function handleUpdateProfile(req, res, user) {
       return res.status(500).json({ success: false, message: (error && error.message) || 'Could not save profile' });
     }
     const savedName = String(data.full_name || data.name || '');
-    if (savedName && savedName !== full_name) {
+    if (savedName && savedName !== effectiveFullName) {
       return res.status(500).json({ success: false, message: 'Profile did not keep the new name. A database rule is blocking the change.' });
     }
     return res.status(200).json({
       success: true,
       profile: {
-        full_name: data.full_name || data.name || full_name,
+        full_name: data.full_name || data.name || effectiveFullName,
         username: data.username || username,
         phone: data.phone_number || data.phone || phone,
         address: data.address || address,
