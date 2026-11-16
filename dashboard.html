@@ -7049,13 +7049,13 @@ window.openProfileSettings = async function() {
     if (lockNote) lockNote.innerHTML = '<i class="fa-solid fa-lock"></i> Checking account status…';
     try {
         if (!supabaseClient || !currentUserId) throw new Error('Session unavailable');
-        const { data, error } = await supabaseClient
-            .from('virtual_accounts')
-            .select('user_id')
-            .eq('user_id', currentUserId)
-            .limit(1);
-        if (error) throw error;
-        const hasVirtualAccount = Array.isArray(data) && data.length > 0;
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const statusRes = await fetch('/api/order?action=profile_identity_status', {
+            headers: { Authorization: 'Bearer ' + (sessionData?.session?.access_token || '') }
+        });
+        const statusJson = await statusRes.json().catch(() => ({}));
+        if (!statusRes.ok || !statusJson.success) throw new Error(statusJson.message || 'Could not verify account status');
+        const hasVirtualAccount = !!statusJson.has_virtual_account;
         if (nameInput) {
             nameInput.readOnly = hasVirtualAccount;
             nameInput.style.opacity = hasVirtualAccount ? '.72' : '1';
