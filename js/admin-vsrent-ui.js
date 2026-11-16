@@ -106,7 +106,7 @@
     // Title like the GotSMS panel
     var head = panel.firstElementChild;
     if (head) {
-      head.outerHTML = '<div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>USA Platform Rental (VirtualSMS)</span></div>';
+      head.outerHTML = '<div class="panel-title" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>Global Platform Rental (VirtualSMS)</span></div>';
     }
     // Refresh button label
     var btns = panel.querySelectorAll('button');
