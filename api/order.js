@@ -218,13 +218,13 @@ async function handleUpdateProfile(req, res, user) {
     if (!full_name) {
       return res.status(400).json({ success: false, message: 'Enter your name' });
     }
-    const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username, full_name, name').eq('id', user.id).maybeSingle();
+    const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username, full_name').eq('id', user.id).maybeSingle();
     if (currentProfileError) throw currentProfileError;
     const { data: virtualAccountRows, error: virtualAccountError } = await supabase
       .from('virtual_accounts').select('user_id').eq('user_id', user.id).limit(1);
     if (virtualAccountError) throw virtualAccountError;
     const hasVirtualAccount = Array.isArray(virtualAccountRows) && virtualAccountRows.length > 0;
-    const currentFullName = String(currentProfile?.full_name || currentProfile?.name || '').trim();
+    const currentFullName = String(currentProfile?.full_name || '').trim();
     if (hasVirtualAccount && full_name !== currentFullName) {
       return res.status(403).json({ success: false, message: 'Your full name is locked because your Virtual Account has been created. Contact MJ HUB customer care for a correction.' });
     }
