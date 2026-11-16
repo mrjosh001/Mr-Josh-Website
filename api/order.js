@@ -221,9 +221,10 @@ async function handleUpdateProfile(req, res, user) {
     const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle();
     if (currentProfileError) throw currentProfileError;
     const currentUsername = String(currentProfile?.username || '').trim();
-    const username = requestedUsername || currentUsername.toLowerCase();
+    const sameUsername = !!currentUsername && requestedUsername === currentUsername.toLowerCase();
+    const username = sameUsername ? currentUsername : requestedUsername;
     if (!username) return res.status(400).json({ success: false, message: 'Choose a username to continue.' });
-    if (username !== currentUsername.toLowerCase() && !/^[a-z0-9_]{3,20}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3–20 characters using letters, numbers, and underscores only.' });
+    if (!sameUsername && !/^[a-z0-9_]{3,20}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3–20 characters using letters, numbers, and underscores only.' });
     const patch = {
       username,
       full_name,
