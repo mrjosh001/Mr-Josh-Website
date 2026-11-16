@@ -7061,8 +7061,21 @@ window.openProfileSettings = async function() {
     try {
         if (!supabaseClient || !currentUserId) throw new Error('Session unavailable');
         const { data: sessionData } = await supabaseClient.auth.getSession();
+        const profileAccessToken = sessionData?.session?.access_token || '';
+        const verifiedAuthEmail = String(sessionData?.session?.user?.email || '').trim();
+        if (emailInput && verifiedAuthEmail) {
+            emailInput.value = verifiedAuthEmail;
+            userData.email = verifiedAuthEmail;
+        }
+        if (profileAccessToken) {
+            fetch('/api/order?action=profile_sync_auth_email', {
+                headers: { Authorization: 'Bearer ' + profileAccessToken }
+            }).catch(function (syncError) {
+                console.warn('[profile] verified email sync deferred', syncError);
+            });
+        }
         const statusRes = await fetch('/api/order?action=profile_identity_status', {
-            headers: { Authorization: 'Bearer ' + (sessionData?.session?.access_token || '') }
+            headers: { Authorization: 'Bearer ' + profileAccessToken }
         });
         const statusJson = await statusRes.json().catch(() => ({}));
         if (!statusRes.ok || !statusJson.success) throw new Error(statusJson.message || 'Could not verify account status');
