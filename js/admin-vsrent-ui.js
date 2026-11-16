@@ -17,6 +17,7 @@
   }
   function status(r) {
     if (r.admin_hidden) return { t: 'HIDDEN', on: false };
+    if (r.availability_known !== true) return { t: 'STOCK UNKNOWN', on: false };
     if (!r.is_available) return { t: 'OUT', on: false };
     return { t: 'ACTIVE', on: true };
   }
@@ -53,7 +54,7 @@
             '<span style="color:var(--muted);">Profit</span>' +
             '<span style="font-weight:800;text-align:right;">' + profit(r.supplier_price_usd, r.price_ngn) + '</span>' +
             '<span style="color:var(--muted);">Stock</span>' +
-            '<span style="font-weight:700;text-align:right;">' + (r.is_available && !r.admin_hidden ? 1 : 0) + '</span>' +
+            '<span style="font-weight:700;text-align:right;">' + (r.availability_known ? (r.stock_count == null ? (r.is_available ? 'Available' : 0) : Number(r.stock_count)) : 'Not reported') + '</span>' +
           '</div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
             '<button type="button" class="btn btn-ghost btn-sm" data-act="edit"><i class="fas fa-pen"></i> Edit Price</button>' +
