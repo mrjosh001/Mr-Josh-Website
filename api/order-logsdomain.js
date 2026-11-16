@@ -208,11 +208,12 @@ async function handleBulkmailSync(req, res) {
       if (existing) {
         // Existing products keep their catalogue metadata. The approved subset follows live stock.
         const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', updated_at: now };
-        if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
-          patch.admin_hidden = false;
+        // An explicit admin hide always wins, including for normally auto-visible keys.
+        // Supplier sync may refresh stock/cost but must never clear admin_hidden.
+        if (existing.admin_hidden) { /* preserve admin visibility decision */ }
+        else if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
           patch.is_available = stockQty > 0;
         } else if (stockQty <= 0) patch.is_available = false;
-        else if (existing.admin_hidden) { /* preserve admin-hidden state for all other products */ }
         else patch.is_available = true;
         const { error } = await supabase.from('products').update(patch).eq('product_key', productKey);
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalUpdated++;
