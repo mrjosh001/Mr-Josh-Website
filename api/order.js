@@ -214,10 +214,18 @@ async function handleUpdateProfile(req, res, user) {
     const phone = String(body.phone || body.phone_number || '').trim().slice(0, 30);
     const address = String(body.address || '').trim().slice(0, 200);
     const bio = String(body.bio || '').trim().slice(0, 500);
+    const requestedUsername = String(body.username || '').trim().toLowerCase();
     if (!full_name) {
       return res.status(400).json({ success: false, message: 'Enter your name' });
     }
+    const { data: currentProfile, error: currentProfileError } = await supabase.from('profiles').select('username').eq('id', user.id).maybeSingle();
+    if (currentProfileError) throw currentProfileError;
+    const currentUsername = String(currentProfile?.username || '').trim();
+    const username = requestedUsername || currentUsername.toLowerCase();
+    if (!username) return res.status(400).json({ success: false, message: 'Choose a username to continue.' });
+    if (username !== currentUsername.toLowerCase() && !/^[a-z0-9_]{3,20}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3–20 characters using letters, numbers, and underscores only.' });
     const patch = {
+      username,
       full_name,
       name: full_name,
       phone: phone || null,
@@ -230,7 +238,7 @@ async function handleUpdateProfile(req, res, user) {
       .from('profiles')
       .update(patch)
       .eq('id', user.id)
-      .select('id, full_name, name, phone, phone_number, address, bio')
+      .select('id, username, full_name, name, phone, phone_number, address, bio')
       .maybeSingle();
     if (error && /column|schema cache|Could not find/i.test(String(error.message || ''))) {
       const slim = { full_name, phone: phone || null };
@@ -250,6 +258,7 @@ async function handleUpdateProfile(req, res, user) {
         .maybeSingle());
     }
     if (error || !data) {
+      if (error && (error.code === '23505' || /duplicate key|unique constraint/i.test(error.message || ''))) return res.status(409).json({ success: false, message: 'That username is already taken. Choose another one.' });
       console.error('[order update_profile]', error && error.message);
       return res.status(500).json({ success: false, message: (error && error.message) || 'Could not save profile' });
     }
@@ -261,6 +270,7 @@ async function handleUpdateProfile(req, res, user) {
       success: true,
       profile: {
         full_name: data.full_name || data.name || full_name,
+        username: data.username || username,
         phone: data.phone_number || data.phone || phone,
         address: data.address || address,
         bio: data.bio || bio

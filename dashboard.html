@@ -3824,6 +3824,11 @@ html[data-theme="light"] .logo-word, :root[data-theme="light"] .logo-word{color:
 
             <div class="content-card">
                 <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="profileUsernameInput" placeholder="Choose a username" minlength="3" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false">
+                    <small style="display:block;margin-top:6px;color:var(--muted);font-size:12px;">3–20 characters. Letters, numbers, and underscores only.</small>
+                </div>
+                <div class="form-group">
                     <label>Full Name</label>
                     <input type="text" id="profileNameInput" placeholder="e.g. Josh">
                 </div>
@@ -4860,6 +4865,7 @@ async function initUserData(user) {
     const meta = user.user_metadata || {};
     const email = user.email || '';
     let name = meta.full_name || email.split('@')[0] || 'User';
+    let username = String(meta.username || '').trim();
     // Bug fix: signup (auth.html) stores this in metadata as `phone_number`,
     // but this used to read `meta.phone` — a different key — so a phone
     // number entered at signup never showed up anywhere. Check both keys.
@@ -4900,7 +4906,7 @@ async function initUserData(user) {
                 else if (profile.name) name = profile.name;
                 if (profile.phone_number) phone = profile.phone_number;
                 else if (profile.phone) phone = profile.phone;
-                if (profile.username) userData.username = profile.username;
+                if (profile.username) username = String(profile.username).trim();
                 if (profile.address) address = profile.address;
                 if (profile.bio) bio = profile.bio;
                 if (profile.avatar_url) avatarUrl = profile.avatar_url;
@@ -4919,9 +4925,10 @@ async function initUserData(user) {
             // user actually typed in at signup (name/phone came through in
             // auth metadata but never made it into the profiles table),
             // backfill it now instead of leaving it blank forever.
-            const needsBackfill = profileRowMissing || (profile && !profile.full_name && meta.full_name) || (profile && !profile.phone && phone);
+            const needsBackfill = profileRowMissing || (profile && !profile.full_name && meta.full_name) || (profile && !profile.phone && phone) || (profile && !profile.username && username);
             if (needsBackfill) {
                 const backfill = { id: user.id, email, full_name: name };
+                if (username) backfill.username = username;
                 if (phone) backfill.phone = phone;
                 const { error: backfillErr } = await supabaseClient.from('profiles').upsert(backfill, { onConflict: 'id' });
                 if (backfillErr) console.warn('profile self-heal upsert', backfillErr);
@@ -4931,7 +4938,7 @@ async function initUserData(user) {
         }
     }
 
-    userData = { name, email, phone, address, bio, avatarUrl };
+    userData = { name, username, email, phone, address, bio, avatarUrl };
     safeSet('dropdownName', name);
     safeSet('dropdownEmail', email);
     safeSet('profileHeaderName', name);
@@ -4940,7 +4947,7 @@ async function initUserData(user) {
         const joined = new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
         safeSet('profileHeaderJoined', 'Member since ' + joined);
     }
-    safeSet('heroWelcomeTitle', name || 'there');
+    safeSet('heroWelcomeTitle', username || name || 'there');
     safeSet('heroSubText', 'Fund your wallet to get started with logs, SMS verification, and boosters.');
     if (avatarUrl) {
         safeSetHTML('headerAvatarText', `<img src="${avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;">`);
@@ -4949,8 +4956,10 @@ async function initUserData(user) {
         safeSet('headerAvatarText', name.charAt(0).toUpperCase());
         safeSet('profileAvatarInitial', name.charAt(0).toUpperCase());
     }
+    const usernameInput = document.getElementById('profileUsernameInput');
     const nameInput = document.getElementById('profileNameInput');
     const emailInput = document.getElementById('profileEmailInput');
+    if (usernameInput) usernameInput.value = username;
     const phoneInput = document.getElementById('profilePhoneInput');
     const addressInput = document.getElementById('profileAddressInput');
     const bioInput = document.getElementById('profileBioInput');
@@ -4959,6 +4968,7 @@ async function initUserData(user) {
     if (phoneInput) phoneInput.value = phone;
     if (addressInput) addressInput.value = address;
     if (bioInput) bioInput.value = bio;
+    if (!username) window.showUsernameSetupModal && window.showUsernameSetupModal();
     const idInput = document.getElementById('myCustomerId');
     if (idInput) idInput.value = customerId || user.id;
     const depId = document.getElementById('depositCustomerId');
@@ -7109,10 +7119,12 @@ window.handleAvatarUpload = function(e) {
 
 window.saveProfileSettingsData = async function() {
     const name = (document.getElementById('profileNameInput')?.value || '').trim();
+    const username = (document.getElementById('profileUsernameInput')?.value || '').trim().toLowerCase();
     const phone = (document.getElementById('profilePhoneInput')?.value || '').trim();
     const address = (document.getElementById('profileAddressInput')?.value || '').trim();
     const bio = (document.getElementById('profileBioInput')?.value || '').trim();
     if (!name) return showToast('Enter your name', 'error');
+    if (username !== String(userData.username || '').trim().toLowerCase() && !/^[a-z0-9_]{3,20}$/.test(username)) return showToast('Username must be 3–20 characters using letters, numbers, and underscores only.', 'error');
     if (!supabaseClient || !currentUserId) {
         return showToast('Please sign in again', 'error');
     }
@@ -7145,6 +7157,7 @@ window.saveProfileSettingsData = async function() {
         const { error: authErr } = await supabaseClient.auth.updateUser({
             data: {
                 full_name: name,
+                username: username,
                 phone: phone,
                 phone_number: phone,
                 address: address,
@@ -7166,6 +7179,7 @@ window.saveProfileSettingsData = async function() {
             body: JSON.stringify({
                 action: 'update_profile',
                 full_name: name,
+                username: username,
                 phone: phone,
                 address: address,
                 bio: bio
@@ -7178,16 +7192,19 @@ window.saveProfileSettingsData = async function() {
 
         const saved = json.profile || {};
         userData.name = saved.full_name || name;
+        userData.username = saved.username || username;
         userData.phone = saved.phone || phone;
         userData.address = saved.address || address;
         userData.bio = saved.bio || bio;
         safeSet('dropdownName', userData.name);
         safeSet('profileHeaderName', userData.name);
-        safeSet('heroWelcomeTitle', userData.name || 'there');
+        safeSet('heroWelcomeTitle', userData.username || 'there');
+        if (document.getElementById('profileUsernameInput')) document.getElementById('profileUsernameInput').value = userData.username;
         if (document.getElementById('profileNameInput')) document.getElementById('profileNameInput').value = userData.name;
         if (document.getElementById('profilePhoneInput')) document.getElementById('profilePhoneInput').value = userData.phone || '';
         if (document.getElementById('profileAddressInput')) document.getElementById('profileAddressInput').value = userData.address || '';
         if (document.getElementById('profileBioInput')) document.getElementById('profileBioInput').value = userData.bio || '';
+        if (document.getElementById('usernameSetupModal')?.classList.contains('active')) window.hideUsernameSetupModal();
         showToast('Profile saved!', 'success');
     } catch (err) {
         console.error('saveProfileSettingsData', err);
@@ -8789,5 +8806,22 @@ window.toggleHomeBalanceHide = function () {
 
   <script src="/js/haptic.js" defer></script>
 
+
+<div id="usernameSetupModal" aria-hidden="true" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(2,6,18,.88);backdrop-filter:blur(10px);align-items:center;justify-content:center;padding:20px;">
+ <div role="dialog" aria-modal="true" aria-labelledby="usernameSetupTitle" style="width:min(100%,420px);background:var(--card-bg,#111827);border:1px solid var(--border-color,rgba(255,255,255,.12));border-radius:22px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.5);">
+  <div style="width:48px;height:48px;border-radius:15px;background:rgba(59,130,246,.16);color:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:16px;"><i class="fa-solid fa-at"></i></div>
+  <h2 id="usernameSetupTitle" style="margin:0 0 8px;font-size:21px;font-weight:800;color:var(--text-color,#fff);">Choose your username</h2>
+  <p style="margin:0 0 18px;color:var(--muted,#94a3b8);font-size:14px;line-height:1.55;">A username is required to continue using MJ HUB. It will identify your account and must be unique.</p>
+  <label for="requiredUsernameInput" style="display:block;margin-bottom:7px;font-size:12px;font-weight:700;color:var(--text-color,#fff);">USERNAME</label>
+  <input id="requiredUsernameInput" type="text" minlength="3" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="e.g. josh_001" style="width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:1px solid var(--border-color,rgba(255,255,255,.16));background:var(--input-bg,#070b14);color:var(--text-color,#fff);font-size:16px;outline:none;">
+  <div id="requiredUsernameHint" aria-live="polite" style="min-height:19px;margin-top:8px;font-size:12px;color:var(--muted,#94a3b8);">3–20 characters. Letters, numbers, and underscores only.</div>
+  <button id="requiredUsernameSave" type="button" onclick="submitRequiredUsername()" style="width:100%;margin-top:14px;padding:14px;border:0;border-radius:13px;background:linear-gradient(135deg,#5797ff,#3478ed);color:#fff;font-weight:800;font-size:15px;cursor:pointer;">Save username & continue</button>
+ </div>
+</div>
+<script>
+window.showUsernameSetupModal=function(){const m=document.getElementById('usernameSetupModal');if(!m)return;m.style.display='flex';m.classList.add('active');m.setAttribute('aria-hidden','false');const i=document.getElementById('requiredUsernameInput');if(i){i.value='';setTimeout(()=>i.focus(),80);}};
+window.hideUsernameSetupModal=function(){const m=document.getElementById('usernameSetupModal');if(m){m.style.display='none';m.classList.remove('active');m.setAttribute('aria-hidden','true');}};
+window.submitRequiredUsername=async function(){const i=document.getElementById('requiredUsernameInput'),h=document.getElementById('requiredUsernameHint'),b=document.getElementById('requiredUsernameSave'),u=String(i?.value||'').trim().toLowerCase();if(!/^[a-z0-9_]{3,20}$/.test(u)){if(h)h.textContent='Use 3–20 characters: letters, numbers, and underscores only.';return;}if(!supabaseClient||!currentUserId){if(h)h.textContent='Your session expired. Sign in again.';return;}if(b){b.disabled=true;b.textContent='Checking & saving…';}if(h)h.textContent='Saving your username…';try{const {data:{session}}=await supabaseClient.auth.getSession();if(!session?.access_token)throw new Error('Session expired. Sign in again.');const r=await fetch('/api/order?action=update_profile',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'update_profile',full_name:userData.name||'User',username:u,phone:userData.phone||'',address:userData.address||'',bio:userData.bio||''})});const j=await r.json().catch(()=>({}));if(!r.ok||!j.success)throw new Error(j.message||'Could not save username. Try another.');const {error}=await supabaseClient.auth.updateUser({data:{username:u}});if(error)console.warn('username metadata sync failed',error.message);userData.username=j.profile?.username||u;const p=document.getElementById('profileUsernameInput');if(p)p.value=userData.username;safeSet('heroWelcomeTitle',userData.username);window.hideUsernameSetupModal();if(typeof showToast==='function')showToast('Username saved successfully.','success');}catch(e){if(h)h.textContent=e.message||'Could not save username. Try another.';}finally{if(b){b.disabled=false;b.textContent='Save username & continue';}}};
+</script>
 </body>
 </html>
