@@ -1635,7 +1635,7 @@ async function handleCheck(req, res) {
           .eq('category', 'MJ SMS')
           .eq('type', 'purchase')
           .eq('status', 'pending')
-          .eq('amount_ngn', Number(existing.price || 0));
+          .eq('external_reference', String(existing.wallet_debit_id || ''));
       } catch (e) {
         console.warn('tx complete update', e.message || e);
       }
@@ -1777,36 +1777,7 @@ async function handleCancel(req, res) {
       });
     }
 
-    // Keep secondary tx match for service title when claim path already updated by amount
-    try {
-      await supabase
-        .from('transactions')
-        .update({
-          status: 'cancelled',
-          subtitle: 'Cancelled — balance restored',
-          notes: 'SMS number cancelled; wallet credited without separate refund row'
-        })
-        .eq('user_id', user_id)
-        .eq('category', 'MJ SMS')
-        .eq('type', 'purchase')
-        .in('status', ['pending', 'completed', 'success'])
-        .ilike('title', order.service_name || '%');
-    } catch (e) {
-      console.warn('tx status update skipped', e.message || e);
-    }
-
-    // Broader match: any pending MJ SMS purchase for this user around this order price
-    try {
-      const refundAmount = Number(order.price || 0);
-      await supabase
-        .from('transactions')
-        .update({ status: 'cancelled', subtitle: 'Cancelled — balance restored' })
-        .eq('user_id', user_id)
-        .eq('category', 'MJ SMS')
-        .eq('type', 'purchase')
-        .eq('status', 'pending')
-        .eq('amount_ngn', refundAmount);
-    } catch (_) {}
+    // The refund trigger updates the matching purchase transaction by exact wallet debit ID.
 
     return res.status(200).json({
       success: true,
