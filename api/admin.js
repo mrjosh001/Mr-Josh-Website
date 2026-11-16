@@ -719,7 +719,7 @@ async function userUpdate(body) {
   const amountAdded = newBalance - prevBalance;
 
   const nextEmail = String(email || '').trim().toLowerCase();
-  if (nextEmail && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(nextEmail)) {
+  if (nextEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
     return { status: 400, body: { success: false, message: 'Enter a valid customer email address' } };
   }
   const payload = {
