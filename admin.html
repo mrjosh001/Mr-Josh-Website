@@ -7066,10 +7066,25 @@ function esimActionBtn(o) {
  if (esimIsClosed(o)) return '';
  if (esimIsRenewal(o)) {
   if (esimIsDelivered(o)) return '<span style="font-size:12px;color:var(--success);font-weight:700;">Refill Completed</span>';
-  return `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="confirmEsimRefill('${escapeHtml(o.id)}')"><i class="fas fa-check-circle"></i> Confirm Refill Completed</button>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;"><button class="btn btn-primary btn-sm" style="width:auto;" onclick="confirmEsimRefill('${escapeHtml(o.id)}')"><i class="fas fa-check-circle"></i> Confirm Refill Completed</button><button class="btn btn-ghost btn-sm" style="width:auto;color:var(--danger);" onclick="refundEsimOrder('${escapeHtml(o.id)}')"><i class="fas fa-rotate-left"></i> Refund</button></div>`;
  }
  if (esimIsDelivered(o)) return `<button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-rotate-right"></i> Resend</button>`;
- return `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-paper-plane"></i> Deliver</button>`;
+ return `<div style="display:flex;flex-wrap:wrap;gap:6px;"><button class="btn btn-primary btn-sm" style="width:auto;" onclick="openEsimDeliver('${escapeHtml(o.id)}')"><i class="fas fa-paper-plane"></i> Deliver</button><button class="btn btn-ghost btn-sm" style="width:auto;color:var(--danger);" onclick="refundEsimOrder('${escapeHtml(o.id)}')"><i class="fas fa-rotate-left"></i> Refund</button></div>`;
+}
+async function refundEsimOrder(id) {
+ const o=(esimOrdersCache||[]).find(x=>String(x.id)===String(id));
+ if(!o||esimIsClosed(o)||esimIsDelivered(o)||o.refill_completed_at) return;
+ const amount='₦'+Number(o.amount_ngn||0).toLocaleString();
+ const ok=window.confirm('Refund eSIM order '+String(o.order_ref||'')+' for '+amount+'? This is only allowed before QR delivery or refill completion. Confirm the supplier charge was cancelled or no delivery occurred.');
+ if(!ok) return;
+ try {
+  const {data}=await esimAdminCall({action:'admin_refund_order',order_id:o.id,reason:'Admin confirmed eSIM cancellation before delivery'});
+  if(!data.success) throw new Error(data.message||'Could not refund this eSIM order.');
+  showAdminToast('eSIM refund completed. '+amount+' restored using the linked wallet debit.','success');
+  await loadEsimOrders();
+ } catch(e) {
+  showAdminToast(e.message||'eSIM refund failed.','error');
+ }
 }
 async function confirmEsimRefill(id) {
  const o=(esimOrdersCache||[]).find(x=>String(x.id)===String(id));
