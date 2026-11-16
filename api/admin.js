@@ -742,21 +742,33 @@ async function userUpdate(body) {
   }
   const authEmail = String(authUserResult.user.email || '').trim().toLowerCase();
   const emailChanged = !!nextEmail && nextEmail !== authEmail;
-  if (emailChanged) {
-    const { error: authEmailError } = await supabase.auth.admin.updateUserById(user_id, {
-      email: nextEmail,
-      email_confirm: true
-    });
+  const requestedName = String(full_name || '').trim();
+  const currentAuthName = String(authUserResult.user.user_metadata?.full_name || '').trim();
+  const authIdentityChanged = emailChanged || (requestedName && requestedName !== currentAuthName);
+  if (authIdentityChanged) {
+    const authPatch = {
+      user_metadata: {
+        ...(authUserResult.user.user_metadata || {}),
+        full_name: requestedName || currentAuthName
+      }
+    };
+    if (emailChanged) {
+      authPatch.email = nextEmail;
+      authPatch.email_confirm = true;
+    }
+    const { error: authEmailError } = await supabase.auth.admin.updateUserById(user_id, authPatch);
     if (authEmailError) {
-      return { status: 409, body: { success: false, message: 'Customer email could not be updated in Supabase Auth: ' + authEmailError.message } };
+      return { status: 409, body: { success: false, message: 'Customer identity could not be updated in Supabase Auth: ' + authEmailError.message } };
     }
   }
 
   const { error: updateErr } = await supabase.from('profiles').update(payload).eq('id', user_id);
   if (updateErr) {
-    if (emailChanged) {
-      const { error: rollbackError } = await supabase.auth.admin.updateUserById(user_id, { email: authEmail, email_confirm: true });
-      if (rollbackError) console.error('[admin userUpdate] Auth email rollback failed', rollbackError);
+    if (authIdentityChanged) {
+      const rollbackPatch = { user_metadata: authUserResult.user.user_metadata || {} };
+      if (emailChanged) { rollbackPatch.email = authEmail; rollbackPatch.email_confirm = true; }
+      const { error: rollbackError } = await supabase.auth.admin.updateUserById(user_id, rollbackPatch);
+      if (rollbackError) console.error('[admin userUpdate] Auth identity rollback failed', rollbackError);
     }
     return { status: 500, body: { success: false, message: 'Profile update failed: ' + updateErr.message } };
   }
