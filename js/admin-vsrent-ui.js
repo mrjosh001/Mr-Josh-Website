@@ -23,7 +23,7 @@
   function renderVsRent() {
     var q = String((document.getElementById('vsRentSearch') || {}).value || '').toLowerCase().trim();
     var rows = (window._vsRentPlans || []).filter(function (r) {
-      return !q || String(r.service_name || '').toLowerCase().indexOf(q) !== -1;
+      return !q || (String(r.service_name || '').toLowerCase() + ' ' + String(r.country_name || '').toLowerCase() + ' ' + String(r.country_code || '').toLowerCase()).indexOf(q) !== -1;
     });
     var tbody = document.getElementById('vsRentTableBody');
     var cards = document.getElementById('vsRentMobileCards');
@@ -40,7 +40,7 @@
         return '<div class="m-card" data-id="' + esc(r.id) + '" style="margin-bottom:12px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--card);">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">' +
             '<div style="min-width:0;">' +
-              '<div style="font-weight:800;font-size:15px;margin-bottom:2px;">USA</div>' +
+              '<div style="font-weight:800;font-size:15px;margin-bottom:2px;">' + esc((r.country_flag ? r.country_flag + ' ' : '') + (r.country_name || r.country_code || '')) + '</div>' +
               '<div style="font-size:13px;color:var(--muted);font-weight:600;">' + esc(r.service_name || '') + ' · ' + esc(r.duration_label || '') + '</div>' +
             '</div>' +
             '<span style="flex-shrink:0;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;' + badge + '">' + st.t + '</span>' +
@@ -68,7 +68,7 @@
         var st = status(r), admin = r.price_source === 'admin';
         return '<tr data-id="' + esc(r.id) + '">' +
           '<td>' + esc(r.service_name || '') + ' · ' + esc(r.duration_label || '') + '</td>' +
-          '<td>USA</td>' +
+          '<td>' + esc((r.country_flag ? r.country_flag + ' ' : '') + (r.country_name || r.country_code || '')) + '</td>' +
           '<td>' + usd(r.supplier_price_usd) + '</td>' +
           '<td>₦' + Number(r.price_ngn || 0).toLocaleString() + (admin ? ' <span style="font-size:10px;color:#fbbf24;">admin</span>' : '') + '</td>' +
           '<td>' + profit(r.supplier_price_usd, r.price_ngn) + '</td>' +
@@ -96,7 +96,7 @@
   function setProgress() {
     var p = document.getElementById('vsRentSyncProgress');
     if (p && !/Syncing/.test(p.textContent || '') && (window._vsRentPlans || []).length) {
-      p.textContent = window._vsRentPlans.length + ' VirtualSMS rows in bank';
+      p.textContent = window._vsRentPlans.length + ' VirtualSMS plans across ' + Array.from(new Set((window._vsRentPlans || []).map(function(r){ return r.country_code; }))).length + ' countries';
     }
   }
   function restyleHeader() {
