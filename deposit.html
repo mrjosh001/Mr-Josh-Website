@@ -554,7 +554,8 @@ function backToProviderFromEmpty() {
   window.__pendingBankPay = false;
   showVaState('amount');
 }
-function continueFromAmount() {
+async function continueFromAmount() {
+  if (window.__depositContinueBusy) return;
   var amount = Math.round(parseFloat(document.getElementById('vaAmountInput').value) || 0);
   var method = window.__depositMethod || 'bank';
   var minA = method === 'bank' ? VA_MIN : (method === 'crypto' ? CRYPTO_MIN : MIN);
@@ -563,10 +564,24 @@ function continueFromAmount() {
   if (amount > maxA) return toast('Maximum is ₦' + maxA.toLocaleString());
   var di = document.getElementById('depositInput');
   if (di) di.value = String(amount);
-  if (method === 'bank') return proceedBankTransfer();
   if (method === 'crypto') return proceedCryptoFromAmount();
   if (method === 'manual') return proceedManualFromAmount();
-  return proceedBankTransfer();
+
+  var btn = document.getElementById('vaContinueBtn');
+  if (!btn || btn.disabled) return;
+  window.__depositContinueBusy = true;
+  var originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Preparing transfer…';
+  try {
+    await proceedBankTransfer();
+  } finally {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.innerHTML = originalHtml;
+    window.__depositContinueBusy = false;
+  }
 }
 
 function chooseBankTransfer() { selectDepositMethod('bank'); }
@@ -653,7 +668,7 @@ async function proceedBankTransfer() {
       return;
     }
     window.__pendingBankPay = true;
-    await continueVaPay();
+    await continueVaPay({ keepAmountVisible: true });
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -715,7 +730,8 @@ function pickVaAmount(n) {
   document.getElementById('vaAmountInput').value = String(n);
   onVaAmountInput();
 }
-async function continueVaPay() {
+async function continueVaPay(opts) {
+  opts = opts || {};
   if (!vaDetails || !vaDetails.account_number) {
     window.__pendingBankPay = true;
     toast('Generate your transfer account to continue');
@@ -726,7 +742,7 @@ async function continueVaPay() {
   if (amount < VA_MIN) return toast('Minimum is ₦' + VA_MIN.toLocaleString());
   if (amount > VA_MAX) return toast('Maximum is ₦' + VA_MAX.toLocaleString());
 
-  showVaState('loading');
+  if (!opts.keepAmountVisible) showVaState('loading');
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
