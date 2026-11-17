@@ -1357,7 +1357,7 @@ async function smsOrdersInboxCountHandle(body = {}) {
     return { status: 503, body: { success: false, message: 'GotSMS is not configured (set GOTSMS_API_TOKEN)', count: 0 } };
   }
   try {
-    const url = 'https://app.gotsms.org/api/numbers/' + encodeURIComponent(rentId) + '/messages';
+    const url = 'https://app.gotsms.com/api/numbers/' + encodeURIComponent(rentId) + '/messages';
     const res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -1763,7 +1763,7 @@ async function getGotsmsBalance() {
   const token = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN;
   if (!token) return { ok: false, error: 'Missing GOTSMS_API_TOKEN' };
   try {
-    const res = await fetch('https://app.gotsms.org/api/account', {
+    const res = await fetch('https://app.gotsms.com/api/account', {
       headers: {
         Authorization: 'Bearer ' + token,
         Accept: 'application/json',

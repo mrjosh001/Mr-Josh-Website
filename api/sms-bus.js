@@ -7,6 +7,10 @@ import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 
+// GotSMS signs the exact request bytes. Disable automatic parsing so webhook HMAC
+// verification receives the original body; other actions parse through readBody().
+export const config = { api: { bodyParser: false } };
+
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
  *
@@ -353,7 +357,7 @@ function assertSmsSaleCoversCost(priceNgn, supplierUsd) {
   return { ok: true };
 }
 
-const GOTSMS_BASE = 'https://app.gotsms.org';
+const GOTSMS_BASE = 'https://app.gotsms.com';
 
 const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
 /** HMAC secret from PUT /api/webhook response — store as GOTSMS_WEBHOOK_SECRET in Vercel */
@@ -362,6 +366,7 @@ const GOTSMS_WEBHOOK_SECRET = process.env.GOTSMS_WEBHOOK_SECRET || process.env.G
 async function readRawBody(req) {
   if (typeof req.rawBody === 'string' && req.rawBody) return req.rawBody;
   if (Buffer.isBuffer(req.rawBody) && req.rawBody.length) return req.rawBody.toString('utf8');
+  if (req.rawBody instanceof Uint8Array && req.rawBody.length) return Buffer.from(req.rawBody).toString('utf8');
   if (typeof req.body === 'string') return req.body;
   if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
   // Body may already be parsed by the runtime — stream if still available
@@ -370,9 +375,7 @@ async function readRawBody(req) {
     for await (const c of req) chunks.push(c);
     return Buffer.concat(chunks).toString('utf8');
   }
-  if (req.body && typeof req.body === 'object') {
-    try { return JSON.stringify(req.body); } catch (_) { return ''; }
-  }
+  // A parsed object is not the signed raw payload. Never reconstruct JSON for HMAC verification.
   return '';
 }
 
@@ -385,8 +388,9 @@ function gotsmsVerifyWebhookSignature(rawBody, headers) {
   const sig = String(lower['x-gotsms-signature'] || '').trim();
   const ts = String(lower['x-gotsms-timestamp'] || '').trim();
   if (!sig || !ts) return { ok: false, reason: 'missing_headers' };
+  if (!/^\d+$/.test(ts) || !Number.isSafeInteger(Number(ts))) return { ok: false, reason: 'invalid_timestamp' };
   const age = Math.abs(Math.floor(Date.now() / 1000) - Number(ts));
-  if (!Number.isFinite(age) || age > 300) return { ok: false, reason: 'stale_timestamp' };
+  if (age > 300) return { ok: false, reason: 'stale_timestamp' };
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(String(ts) + '.' + String(rawBody || '')).digest('hex');
   try {
     const a = Buffer.from(expected);
@@ -402,12 +406,13 @@ function gotsmsVerifyWebhookSignature(rawBody, headers) {
 async function gotsmsFindOrderByRentId(rentId) {
   const key = `gotsms-${String(rentId || '').trim()}`;
   if (key === 'gotsms-') return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('number_orders')
     .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
     .eq('source', 'gotsms')
     .eq('idempotency_key', key)
     .maybeSingle();
+  if (error) throw error;
   return data || null;
 }
 
@@ -416,12 +421,13 @@ async function gotsmsFindOrderByPhone(phone) {
   if (digits.length < 7) return null;
   // Match last 10 digits (US numbers)
   const tail = digits.length > 10 ? digits.slice(-10) : digits;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('number_orders')
     .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
     .eq('source', 'gotsms')
     .order('created_at', { ascending: false })
     .limit(40);
+  if (error) throw error;
   const rows = data || [];
   const matches = rows.filter((r) => {
     const p = String(r.phone_number || '').replace(/\D/g, '');
@@ -432,12 +438,18 @@ async function gotsmsFindOrderByPhone(phone) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+async function gotsmsWebhookUpdateOrder(orderId, patch) {
+  const { error } = await supabase.from('number_orders').update(patch).eq('id', orderId);
+  if (error) throw error;
+}
+
 function gotsmsNotesMeta(notes) {
   try {
     const s = String(notes || '').trim();
     if (s.startsWith('{')) {
       const o = JSON.parse(s);
       return {
+        ...o,
         inbox: Array.isArray(o.inbox) ? o.inbox : parseRentInboxNotes(notes),
         wh_ids: Array.isArray(o.wh_ids) ? o.wh_ids.map(String) : [],
         linked_rent_ids: Array.isArray(o.linked_rent_ids) ? o.linked_rent_ids.map(String) : [],
@@ -452,6 +464,7 @@ function gotsmsNotesMeta(notes) {
 function gotsmsSerializeNotes(meta) {
   const m = meta || {};
   return JSON.stringify({
+    ...m,
     inbox: Array.isArray(m.inbox) ? m.inbox : [],
     wh_ids: Array.isArray(m.wh_ids) ? m.wh_ids.map(String) : [],
     linked_rent_ids: Array.isArray(m.linked_rent_ids) ? m.linked_rent_ids.map(String) : [],
@@ -488,14 +501,29 @@ async function gotsmsResolveLinkedRentIds(userId, rentId, order) {
   return [...ids].filter(Boolean);
 }
 
-function gotsmsPackNotes(inbox, whIds) {
+function gotsmsPackNotes(inbox, whIds, extraMeta = {}) {
   const ids = (whIds || []).map(String).slice(-80);
-  return JSON.stringify({ inbox: mergeRentInbox([], inbox || []).slice(0, 100), wh_ids: ids });
+  return gotsmsSerializeNotes({
+    ...(extraMeta || {}),
+    inbox: mergeRentInbox([], inbox || []).slice(0, 100),
+    wh_ids: ids
+  });
+}
+
+// State webhooks may arrive out of order. Keep the newest provider event time
+// so an older rent.online / rent.renewed / rent.ended delivery cannot regress state.
+function gotsmsAcceptRentStateEvent(meta, payload) {
+  const incoming = Date.parse(String(payload?.created_at || payload?.data?.created_at || ''));
+  const previous = Date.parse(String(meta?.rent_state_event_at || ''));
+  if (!Number.isFinite(incoming) || incoming <= 0) return true;
+  if (Number.isFinite(previous) && previous > 0 && incoming < previous) return false;
+  meta.rent_state_event_at = new Date(incoming).toISOString();
+  return true;
 }
 
 /**
  * GotSMS webhook (beta): POST events with HMAC signature.
- * Docs: https://app.gotsms.org/docs/api/v1#api-webhooks
+ * Docs: https://app.gotsms.com
  * Endpoint: POST /api/sms-bus?action=gotsms_webhook
  */
 async function gotsmsHandleWebhook(req, res) {
@@ -561,22 +589,21 @@ async function gotsmsHandleWebhook(req, res) {
       };
       if (!msg.code && msg.body) msg.code = extractRentOtp(msg.body);
       const inbox = mergeRentInbox(meta.inbox, [msg]);
-      const notes = gotsmsPackNotes(inbox, meta.wh_ids);
+      const notes = gotsmsPackNotes(inbox, meta.wh_ids, meta);
 
       const patch = { notes };
-      // First SMS on an active rental → completed (keeps code field = active_till)
+      // Preserve terminal wallet states if a delayed message webhook arrives.
+      const terminalWalletState = ['refunded', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()) || !!order.refunded;
       const sn = String(order.service_name || '');
-      if (!/sms\s*received/i.test(sn) && order.status !== 'completed') {
-        patch.status = 'completed';
-        patch.service_name = (sn || 'USA rental') + ' · SMS received';
-      } else if (!/sms\s*received/i.test(sn)) {
-        patch.service_name = (sn || 'USA rental') + ' · SMS received';
+      if (!/sms\s*received/i.test(sn)) patch.service_name = (sn || 'USA rental') + ' · SMS received';
+      if (!terminalWalletState && order.status !== 'completed') patch.status = 'completed';
+      await gotsmsWebhookUpdateOrder(order.id, patch);
+      if (!terminalWalletState) {
+        try {
+          const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+          if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
+        } catch (_) {}
       }
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
-      try {
-        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
-        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
-      } catch (_) {}
       {
         const push = buildSmsCodePush({
           phone: order.phone_number,
@@ -596,14 +623,18 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids) };
-      if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
-      if (['expired', 'finished', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
+      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
+      const terminalWalletState = ['expired', 'finished', 'cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase()) || order.refunded;
+      if (!terminalWalletState && (data.wake_till || data.active_till)) patch.code = String(data.wake_till || data.active_till);
+      if (terminalWalletState) {
         // do not resurrect cancelled
       } else if (order.status !== 'completed') {
         patch.status = 'active';
       }
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await gotsmsWebhookUpdateOrder(order.id, patch);
       return json(res, 200, { success: true, event });
     }
 
@@ -613,12 +644,22 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      const patch = {
-        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
-        status: order.status === 'completed' ? 'completed' : 'active'
-      };
-      if (data.active_till) patch.code = String(data.active_till);
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
+      const currentStatus = String(order.status || '').toLowerCase();
+      const terminalWalletState = ['refunded', 'cancelled', 'canceled'].includes(currentStatus) || !!order.refunded;
+      const incomingTill = data.active_till ? Date.parse(String(data.active_till)) : 0;
+      const storedTill = order.code ? Date.parse(String(order.code)) : 0;
+      const newerExpiry = incomingTill > 0 && (!storedTill || incomingTill > storedTill + 60000);
+      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
+      if (!terminalWalletState && (currentStatus === 'active' || newerExpiry)) {
+        patch.status = currentStatus === 'completed' ? 'completed' : 'active';
+      } else if (currentStatus === 'completed') {
+        patch.status = 'completed';
+      }
+      if (!terminalWalletState && newerExpiry) patch.code = new Date(incomingTill).toISOString();
+      await gotsmsWebhookUpdateOrder(order.id, patch);
       return json(res, 200, { success: true, event });
     }
 
@@ -628,9 +669,14 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      // Flag in notes only — no wallet change (supplier-side balance)
-      const notesObj = { inbox: meta.inbox, wh_ids: meta.wh_ids, renewal_failed_at: new Date().toISOString() };
-      await supabase.from('number_orders').update({ notes: JSON.stringify(notesObj) }).eq('id', order.id);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
+      // Flag in notes only — no wallet change (supplier-side balance). Preserve all metadata.
+      meta.renewal_failed_at = payload.created_at || new Date().toISOString();
+      await gotsmsWebhookUpdateOrder(order.id, {
+        notes: gotsmsSerializeNotes(meta)
+      });
       await notifyUserPush(
         order.user_id,
         'Auto-renew failed',
@@ -648,6 +694,13 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
+      const currentStatus = String(order.status || '').toLowerCase();
+      if (order.refunded || ['refunded', 'cancelled', 'canceled'].includes(currentStatus)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'terminal_wallet_state' });
+      }
 
       let supplierMessagesVerified = false;
       let supplierHasSms = false;
@@ -673,7 +726,7 @@ async function gotsmsHandleWebhook(req, res) {
 
       // Paid multi/primary only — skip ₦0 linked rows for wallet credit
       const orderPrice = Number(order.price) || 0;
-      const alreadyRefunded = !!(order.refunded || order.status === 'refunded' || order.status === 'cancelled');
+      const alreadyRefunded = !!(order.refunded || ['refunded', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()));
 
       let nextStatus = hadSms ? 'completed' : 'expired';
       let refundedNow = false;
@@ -725,22 +778,23 @@ async function gotsmsHandleWebhook(req, res) {
       }
 
       const patch = {
-        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
+        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta),
         status: nextStatus
       };
       if (refundedNow) patch.refunded = true;
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await gotsmsWebhookUpdateOrder(order.id, patch);
 
       // Mark ₦0 multi-pack link rows for same phone as expired/refunded too
       try {
         if (order.phone_number) {
-          await supabase.from('number_orders')
+          const { error: linkedUpdateError } = await supabase.from('number_orders')
             .update({ status: refundedNow ? 'refunded' : nextStatus, refunded: refundedNow || undefined })
             .eq('user_id', order.user_id)
             .eq('source', 'gotsms')
             .eq('phone_number', order.phone_number)
             .eq('price', 0)
             .neq('id', order.id);
+          if (linkedUpdateError) console.warn('[gotsms webhook] linked rental rows update failed:', linkedUpdateError.message);
         }
       } catch (_) {}
 
@@ -1011,7 +1065,8 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
 /** Normalize supplier list responses across plain arrays and nested data envelopes. */
 function gotsmsListPayload(payload) {
   const candidates = [payload, payload && payload.data, payload && payload.data && payload.data.data,
-    payload && payload.data && payload.data.items, payload && payload.items, payload && payload.results,
+    payload && payload.data && payload.data.items, payload && payload.data && payload.data.services,
+    payload && payload.services, payload && payload.items, payload && payload.results,
     payload && payload.rentals];
   for (const value of candidates) if (Array.isArray(value)) return value;
   return [];
@@ -1019,6 +1074,135 @@ function gotsmsListPayload(payload) {
 function gotsmsMetaPayload(payload) {
   return (payload && payload.meta) || (payload && payload.data && payload.data.meta) ||
     (payload && payload.pagination) || (payload && payload.data && payload.data.pagination) || {};
+}
+
+// The documented GET /api/rents collection is the source of live rental state.
+// Do not call an undocumented GET /api/rents/{id} detail route.
+async function gotsmsLoadRentIndex() {
+  const rows = [];
+  for (let page = 1; page <= 100; page++) {
+    const g = await gotsmsFetch(`/api/rents?per_page=100&page=${page}`);
+    if (!g.ok) return { ok: false, status: g.status || 503, rows: [] };
+    const chunk = gotsmsListPayload(g.data);
+    rows.push(...chunk);
+    const meta = gotsmsMetaPayload(g.data);
+    const lastPage = Number(meta.last_page || meta.lastPage || meta.total_pages || meta.pages || 0);
+    if (!chunk.length || (lastPage > 0 ? page >= lastPage : chunk.length < 100)) {
+      return { ok: true, rows };
+    }
+  }
+  return { ok: false, status: 503, rows: [] };
+}
+
+function gotsmsFindRentInIndex(index, rentId) {
+  const id = String(rentId || '');
+  return (index?.rows || []).find((r) => String(r.id ?? r.rent_id ?? '') === id) || null;
+}
+
+function gotsmsHasNextPage(payload, chunk, page, perPage) {
+  const meta = gotsmsMetaPayload(payload);
+  const lastPage = Number(meta.last_page || meta.lastPage || meta.total_pages || meta.pages || 0);
+  if (lastPage > 0) return page < lastPage;
+  const currentPage = Number(meta.current_page || meta.currentPage || page);
+  if (meta.next_page_url || meta.next_page || meta.has_more === true || meta.hasMore === true) return true;
+  if (meta.has_more === false || meta.hasMore === false) return false;
+  const total = Number(meta.total || meta.total_count || 0);
+  if (total > 0) return currentPage * perPage < total;
+  return chunk.length >= perPage;
+}
+
+async function gotsmsFindPlanById(planId, serviceId = '') {
+  const wanted = String(planId || '');
+  if (!wanted) return { ok: false, status: 400, plan: null, complete: true };
+  const perPage = 100;
+  const searches = serviceId ? [{ service_id: String(serviceId) }, {}] : [{}];
+  for (const filters of searches) {
+    for (let page = 1; page <= 100; page += 1) {
+      const qs = new URLSearchParams({ ...filters, per_page: String(perPage), page: String(page), include_unavailable: 'true' });
+      const g = await gotsmsFetch('/api/rents/plans?' + qs);
+      if (!g.ok) return { ok: false, status: g.status || 503, plan: null, complete: false };
+      const chunk = gotsmsListPayload(g.data);
+      const found = chunk.find((p) => String(p.id ?? p.plan_id ?? '') === wanted);
+      if (found) return { ok: true, status: 200, plan: found, complete: true };
+      if (!gotsmsHasNextPage(g.data, chunk, page, perPage)) break;
+      if (page === 100) return { ok: false, status: 503, plan: null, complete: false };
+    }
+  }
+  return { ok: true, status: 200, plan: null, complete: true };
+}
+
+async function gotsmsSetRenewalState(userId, rentId, order, requestedEnabled) {
+  const linkedIds = await gotsmsResolveLinkedRentIds(userId, rentId, order);
+  if (!linkedIds.length) return { ok: false, status: 404, message: 'Rental not found' };
+
+  const index = await gotsmsLoadRentIndex();
+  if (!index.ok) return { ok: false, status: 503, message: 'Could not verify the live rental state. No renewal setting was changed.' };
+
+  const liveById = new Map();
+  for (const id of linkedIds) {
+    const live = gotsmsFindRentInIndex(index, id);
+    if (!live || live.is_included_for_next_renewal == null) {
+      return { ok: false, status: 503, message: 'Could not verify auto-renewal for every linked rental. No renewal setting was changed.' };
+    }
+    liveById.set(String(id), live);
+  }
+
+  const primaryLive = liveById.get(String(rentId));
+  const currentlyOn = !!primaryLive.is_included_for_next_renewal;
+  const wantOn = requestedEnabled === undefined || requestedEnabled === null || requestedEnabled === ''
+    ? !currentlyOn
+    : (requestedEnabled === true || requestedEnabled === 'true' || requestedEnabled === 1 || requestedEnabled === '1');
+  const renewPrice = gotsmsRenewPriceNgn(order);
+
+  if (wantOn && linkedIds.some((id) => !liveById.get(String(id)).is_included_for_next_renewal)) {
+    if (!(renewPrice > 0)) {
+      return { ok: false, status: 400, message: 'Cannot enable auto-renew: rental price missing on order.' };
+    }
+    const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', userId).maybeSingle();
+    const balanceNgn = Number(prof?.balance) || 0;
+    const balanceUsd = Number(prof?.balance_usd) || 0;
+    const combined = balanceNgn + balanceUsd * WALLET_USD_RATE;
+    if (combined + 0.0001 < renewPrice) {
+      return {
+        ok: false, status: 400,
+        message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+        data: { required_ngn: renewPrice, balance_ngn: balanceNgn, balance_usd: balanceUsd, combined_value_ngn: combined }
+      };
+    }
+  }
+
+  const failed = [];
+  for (const id of linkedIds) {
+    const live = liveById.get(String(id));
+    if (!!live.is_included_for_next_renewal === wantOn) continue;
+    const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/renewal/toggle`, { method: 'POST' });
+    if (!toggle.ok || toggle.data?.success === false) failed.push(String(id));
+  }
+
+  const verify = await gotsmsLoadRentIndex();
+  if (!verify.ok) {
+    return {
+      ok: false, status: 503, enabled: currentlyOn, partial: true,
+      message: 'The supplier accepted the request, but the final auto-renewal state could not be verified. Refresh Number History before trying again.',
+      data: { auto_renew: currentlyOn, renew_price_ngn: renewPrice, failed_rent_ids: failed, verification_pending: true }
+    };
+  }
+  const after = gotsmsFindRentInIndex(verify, rentId);
+  const enabled = after && after.is_included_for_next_renewal != null
+    ? !!after.is_included_for_next_renewal
+    : currentlyOn;
+  const allMatch = linkedIds.every((id) => {
+    const live = gotsmsFindRentInIndex(verify, id);
+    return live && live.is_included_for_next_renewal != null && !!live.is_included_for_next_renewal === wantOn;
+  });
+
+  if (!allMatch) {
+    return {
+      ok: false, status: 502, enabled, partial: true, message: 'Auto-renewal could not be confirmed for every linked rental. Refresh Number History before trying again.',
+      data: { auto_renew: enabled, renew_price_ngn: renewPrice, failed_rent_ids: failed }
+    };
+  }
+  return { ok: true, enabled: wantOn, renew_price_ngn: renewPrice };
 }
 
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
@@ -1101,20 +1285,18 @@ function gotsmsPlanUnavailable(plan) {
   return false;
 }
 
-/** Switch-plan options live on the rental detail endpoint; the list endpoint may omit them. Short cache keeps polling cheap. */
+/** Switch-plan options are supplied on the documented GET /api/rents collection. */
 const _gotsmsTransCache = new Map();
 async function gotsmsLoadTransitionOptions(rentId, listRent) {
   const rid = String(rentId || '');
   if (!rid) return [];
-  if (listRent && Array.isArray(listRent.transition_options) && listRent.transition_options.length) return listRent.transition_options;
+  if (listRent && Array.isArray(listRent.transition_options)) return listRent.transition_options;
   const hit = _gotsmsTransCache.get(rid);
   if (hit && Date.now() - hit.t < 60000) return hit.opts;
-  let opts = [];
-  try {
-    const cur = await gotsmsFetch('/api/rents/' + encodeURIComponent(rid));
-    const d = (cur.data && (cur.data.data || cur.data)) || null;
-    if (d && Array.isArray(d.transition_options)) opts = d.transition_options;
-  } catch (_) {}
+  const index = await gotsmsLoadRentIndex();
+  if (!index.ok) return [];
+  const live = gotsmsFindRentInIndex(index, rid);
+  const opts = Array.isArray(live?.transition_options) ? live.transition_options : [];
   _gotsmsTransCache.set(rid, { t: Date.now(), opts });
   return opts;
 }
@@ -1216,7 +1398,7 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
   const price = gotsmsRenewPriceNgn(order);
   const liveTill = liveRent.active_till ? Date.parse(String(liveRent.active_till)) : 0;
   const storedTill = order.code && !isNaN(Date.parse(String(order.code))) ? Date.parse(String(order.code)) : 0;
-  const autoOn = !!(liveRent.is_included_for_next_renewal || liveRent.auto_renew);
+  const autoOn = liveRent.is_included_for_next_renewal === true;
 
   if (autoOn && price > 0) {
     try {
@@ -1224,16 +1406,27 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
       const bal = Number(prof && prof.balance) || 0;
       const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
       if (combined + 0.0001 < price) {
-        try {
-          await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
-        } catch (_) {}
+        const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+        if (!toggle.ok || toggle.data?.success === false) {
+          return {
+            charged: false,
+            disabled: false,
+            message: 'Wallet balance is insufficient and the supplier did not confirm auto-renew was turned off. Contact support before the renewal time.'
+          };
+        }
         return {
           charged: false,
           disabled: true,
           message: 'Auto-renew turned off — need ₦' + price.toLocaleString() + ' in wallet (same as this rental).'
         };
       }
-    } catch (_) {}
+    } catch (_) {
+      return {
+        charged: false,
+        disabled: false,
+        message: 'Could not verify wallet balance or update auto-renewal. Please retry or contact support.'
+      };
+    }
   }
 
   if (liveTill && storedTill && liveTill > storedTill + 60 * 1000 && price > 0) {
@@ -1268,13 +1461,19 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 
     const debit = await debitWallet(supabase, userId, price);
     if (!debit.ok) {
-      try {
-        if (autoOn) await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
-      } catch (_) {}
+      let disabled = !autoOn;
+      if (autoOn) {
+        try {
+          const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+          disabled = !!(toggle.ok && toggle.data?.success !== false);
+        } catch (_) {}
+      }
       return {
         charged: false,
-        disabled: true,
-        message: 'Renewal blocked because your combined wallet balance is insufficient. Auto-renew is off.'
+        disabled,
+        message: disabled
+          ? 'Renewal blocked because your combined wallet balance is insufficient. Auto-renew is off.'
+          : 'Renewal could not be charged and auto-renew could not be confirmed off. Contact support before the next renewal.'
       };
     }
     try {
@@ -4329,8 +4528,8 @@ export default async function handler(req, res) {
           if (v) qs.set(k, v);
         });
         qs.set('per_page', String(Math.min(100, Number(url.searchParams.get('per_page') || 100))));
-        const includeUnavailable = url.searchParams.get('include_unavailable') === '1';
-        if (includeUnavailable) qs.set('include_unavailable', '1');
+        const includeUnavailable = ['1', 'true'].includes(String(url.searchParams.get('include_unavailable') || '').toLowerCase());
+        if (includeUnavailable) qs.set('include_unavailable', 'true');
         let page = 1;
         const all = [];
         let lastPage = 1;
@@ -4386,44 +4585,17 @@ export default async function handler(req, res) {
         const plan_id = String(body.plan_id || '').trim();
         if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
 
-        // Resolve plan from supplier — never only the first global page (that caused false "out of stock")
-        let plan = null;
+        // Resolve the exact plan through the documented paginated collection.
+        // A supplier read failure is not the same as an unavailable plan.
         const service_id = String(body.service_id || '').trim();
-        // 1) Direct plan endpoint if supported
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
-          }
+        const planLookup = await gotsmsFindPlanById(plan_id, service_id);
+        if (!planLookup.ok) {
+          return json(res, planLookup.status || 503, {
+            success: false, code: 'PLAN_LOOKUP_UNAVAILABLE',
+            message: 'Could not verify this rental plan with GotSMS. No wallet charge was made. Please retry shortly.'
+          });
         }
-        // 2) Filter by service_id and paginate until found
-        if (!plan && service_id) {
-          for (let page = 1; page <= 10 && !plan; page++) {
-            const qs = new URLSearchParams({
-              service_id,
-              per_page: '100',
-              page: String(page),
-              include_unavailable: '1'
-            });
-            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
-            if (!g.ok) break;
-            const chunk = g.data?.data || [];
-            plan = chunk.find((p) => String(p.id) === plan_id) || null;
-            const last = Number(g.data?.meta?.last_page || 1);
-            if (page >= last) break;
-          }
-        }
-        // 3) Fallback: search plans by plan id across a few pages
-        if (!plan) {
-          for (let page = 1; page <= 5 && !plan; page++) {
-            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
-            if (!g.ok) break;
-            const chunk = g.data?.data || [];
-            plan = chunk.find((p) => String(p.id) === plan_id) || null;
-            if (page >= Number(g.data?.meta?.last_page || 1)) break;
-          }
-        }
+        const plan = planLookup.plan;
         if (!plan || gotsmsPlanUnavailable(plan)) {
           return json(res, 409, {
             success: false,
@@ -4667,21 +4839,9 @@ export default async function handler(req, res) {
               (tg.data.data && tg.data.data.is_included_for_next_renewal === true) ||
               /enabled/i.test(String(tg.data.message || ''))
             ));
-            // If response shape unclear, verify with GET rent
-            if (!autoRenew) {
-              const check = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent.id)}`);
-              const r = check.data?.data || check.data;
-              if (r && r.is_included_for_next_renewal === true) autoRenew = true;
-              else if (r && r.is_included_for_next_renewal === false) {
-                // still off — toggle again once
-                const tg2 = await gotsmsFetch(
-                  `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
-                  { method: 'POST' }
-                );
-                const r2 = tg2.data?.data;
-                autoRenew = !!(r2 && r2.is_included_for_next_renewal === true) || /enabled/i.test(String(tg2.data?.message || ''));
-              }
-            }
+            // Trust one successful documented toggle response. Never issue
+            // a second flip based on an unsupported detail read.
+            autoRenew = !!(tg.ok && tg.data && tg.data.success !== false);
           } catch (e) {
             console.error('[gotsms] auto_renew', e.message || e);
           }
@@ -4748,24 +4908,21 @@ export default async function handler(req, res) {
         }
 
         let plan = null;
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+        // The API documents only the paginated plans collection, not a plan-detail route.
+        for (const sid of serviceIds) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: 'true' });
+            const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
+            if (!pg.ok) break;
+            const rows = gotsmsListPayload(pg.data);
+            const hit = rows.find((p) => String(p.id) === plan_id);
+            if (hit) { plan = hit; break; }
+            const meta = gotsmsMetaPayload(pg.data);
+            const lastPage = Number(meta.last_page || meta.lastPage || meta.total_pages || 0);
+            if (lastPage > 0 && page >= lastPage) break;
+            if (!rows.length) break;
           }
-        }
-        if (!plan) {
-          for (const sid of serviceIds) {
-            for (let page = 1; page <= 5 && !plan; page++) {
-              const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: '1' });
-              const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
-              const rows = pg.data?.data || [];
-              const hit = rows.find((p) => String(p.id) === plan_id);
-              if (hit) { plan = hit; break; }
-            }
-            if (plan) break;
-          }
+          if (plan) break;
         }
         if (!plan) return json(res, 400, { success: false, message: 'Plan not found. Refresh and try again.' });
         if (typeof gotsmsPlanUnavailable === 'function' && gotsmsPlanUnavailable(plan)) {
@@ -4920,10 +5077,8 @@ export default async function handler(req, res) {
         if (!g2.ok || !g2.data?.success) {
           // The attach request may have succeeded even if its response was lost.
           // Read the supplier rental before deciding whether to cancel/refund.
-          const detail = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}`);
-          const detailRent = detail.data?.data || detail.data?.rent || detail.data;
-          const detailServices = Array.isArray(detailRent?.services) ? detailRent.services
-            : (Array.isArray(detailRent?.service_ids) ? detailRent.service_ids : null);
+          const detail = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`);
+          const detailServices = gotsmsListPayload(detail.data);
           const secondAttached = Array.isArray(detailServices) && detailServices.some((x) =>
             String(x?.id ?? x?.service_id ?? x) === String(secondId)
           );
@@ -5110,32 +5265,15 @@ export default async function handler(req, res) {
         if (!plan_id) return json(res, 400, { success: false, message: 'Select a rental plan' });
         if (!(quantity >= 1 && quantity <= 25)) return json(res, 400, { success: false, message: 'Quantity must be between 1 and 25' });
 
-        let plan = null;
         const service_id = String(body.service_id || '').trim();
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
-          }
+        const planLookup = await gotsmsFindPlanById(plan_id, service_id);
+        if (!planLookup.ok) {
+          return json(res, planLookup.status || 503, {
+            success: false, code: 'PLAN_LOOKUP_UNAVAILABLE',
+            message: 'Could not verify this rental plan with GotSMS. No wallet charge was made. Please retry shortly.'
+          });
         }
-        if (!plan && service_id) {
-          for (let page = 1; page <= 10 && !plan; page++) {
-            const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: '1' });
-            const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
-            if (!g.ok) break;
-            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
-            if (page >= Number(g.data?.meta?.last_page || 1)) break;
-          }
-        }
-        if (!plan) {
-          for (let page = 1; page <= 5 && !plan; page++) {
-            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
-            if (!g.ok) break;
-            plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
-            if (page >= Number(g.data?.meta?.last_page || 1)) break;
-          }
-        }
+        const plan = planLookup.plan;
         if (!plan || gotsmsPlanUnavailable(plan)) {
           return json(res, 409, { success: false, message: 'This rental plan is currently out of stock. Your wallet has not been charged.' });
         }
@@ -5368,20 +5506,25 @@ export default async function handler(req, res) {
       if (method === 'GET' && ga === 'gotsms_rents') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-        const qs = new URLSearchParams();
         const status = url.searchParams.get('status');
         const requestedRentId = String(url.searchParams.get('rent_id') || '').trim();
         const includeTransitions = url.searchParams.get('include_transitions') === '1';
-        if (status) qs.set('status', status);
-        qs.set('per_page', '50');
-        const g = await gotsmsFetch(`/api/rents?${qs}`);
-        if (!g.ok) return json(res, g.status || 400, { success: false, message: gotsmsSafeMsg(g.data?.message, 'Could not load rentals') });
-        const { data: mine } = await supabase.from('number_orders').select('idempotency_key, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').limit(200);
-        const mineRentIds = new Set((mine || []).map((m) => String(m.idempotency_key || '').replace(/^gotsms-/, '')).filter(Boolean));
-        const minePhones = new Set((mine || []).map((m) => String(m.phone_number || '').replace(/\s/g, '')));
-        const supplierRents = gotsmsListPayload(g.data);
-        let filtered = supplierRents.filter((r) => mineRentIds.has(String(r.id)) || minePhones.has(String(r.phone || '').replace(/\s/g, '')));
-        if (requestedRentId) filtered = filtered.filter((r) => String(r.id) === requestedRentId);
+        const index = await gotsmsLoadRentIndex();
+        if (!index.ok) return json(res, index.status || 503, { success: false, message: 'Could not load the complete rental list from GotSMS. Please retry shortly.' });
+        const { data: mine, error: mineError } = await supabase.from('number_orders')
+          .select('idempotency_key, notes')
+          .eq('user_id', auth.userId).eq('source', 'gotsms').limit(1000);
+        if (mineError) return json(res, 503, { success: false, message: 'Could not verify your rental ownership. Please retry shortly.' });
+        const mineRentIds = new Set();
+        for (const row of mine || []) {
+          const key = String(row.idempotency_key || '');
+          if (key.startsWith('gotsms-')) mineRentIds.add(key.slice(7));
+          const meta = gotsmsNotesMeta(row.notes);
+          for (const linkedId of meta.linked_rent_ids || []) mineRentIds.add(String(linkedId));
+        }
+        let filtered = index.rows.filter((r) => mineRentIds.has(String(r.id ?? r.rent_id ?? '')));
+        if (status) filtered = filtered.filter((r) => String(r.status || '').toLowerCase() === String(status).toLowerCase());
+        if (requestedRentId) filtered = filtered.filter((r) => String(r.id ?? r.rent_id ?? '') === requestedRentId);
         // Auto-renew: charge same NGN as original rental when period extends; disable if wallet too low
         try {
           for (const r of filtered.slice(0, 30)) {
@@ -5423,7 +5566,7 @@ export default async function handler(req, res) {
             pr.transition_options = await gotsmsApplyAdminPlanPrices(pr.transition_options);
           }
         }
-        return json(res, 200, { success: true, data: publicRents, meta: gotsmsMetaPayload(g.data) });
+        return json(res, 200, { success: true, data: publicRents, meta: { count: publicRents.length } });
       }
 
       if (method === 'POST' && ga === 'gotsms_wake') {
@@ -5459,7 +5602,7 @@ export default async function handler(req, res) {
         let rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id && method === 'POST') {
           try {
-            const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+            const b = await readBody(req);
             rent_id = String(b.rent_id || '').trim();
           } catch (_) {}
         }
@@ -5556,13 +5699,18 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         }
         // Only after the number has received at least one SMS/code
         try {
-          const msgRes = await gotsmsFetch('/api/messages?rent_id=' + encodeURIComponent(rent_id) + '&per_page=5');
-          const msgs = (msgRes.data && (msgRes.data.data || msgRes.data)) || [];
-          if (!Array.isArray(msgs) || msgs.length < 1) {
+          // Use the documented per-number inbox endpoint. The global messages
+          // collection does not document a rent_id query filter.
+          const msgRes = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+          if (!msgRes.ok) {
+            return json(res, 503, { success: false, message: 'Could not verify SMS history with GotSMS. No charge was made. Please retry shortly.' });
+          }
+          const msgs = gotsmsListPayload(msgRes.data);
+          if (!msgs.length) {
             return json(res, 400, { success: false, message: 'Add service is available after this number has received at least one code.' });
           }
         } catch (_) {
-          return json(res, 400, { success: false, message: 'Could not verify SMS history for this number.' });
+          return json(res, 503, { success: false, message: 'Could not verify SMS history with GotSMS. No charge was made. Please retry shortly.' });
         }
         const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
         const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
@@ -5690,93 +5838,26 @@ if (method === 'GET' && ga === 'gotsms_messages') {
 if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
 
-        let live = null;
-        try {
-          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          live = (cur.data && (cur.data.data || cur.data)) || null;
-        } catch (_) {}
-        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
-        let wantOn = body.enabled;
-        if (wantOn === undefined || wantOn === null || wantOn === '') {
-          wantOn = !currentlyOn;
-        } else {
-          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
-        }
-
-        const renewPrice = gotsmsRenewPriceNgn(order);
-        if (wantOn && !currentlyOn) {
-          if (!(renewPrice > 0)) {
-            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
-          }
-          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
-          const bal = Number(prof && prof.balance) || 0;
-          const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
-          if (combined + 0.0001 < renewPrice) {
-            return json(res, 400, {
-              success: false,
-              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: Number(prof && prof.balance_usd) || 0, combined_value_ngn: combined }
-            });
-          }
-        }
-
-        if (wantOn === currentlyOn) {
-          return json(res, 200, {
-            success: true,
-            message: wantOn
-              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
-              : 'Auto-renew is off',
-            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+        const state = await gotsmsSetRenewalState(auth.userId, rent_id, order, body.enabled);
+        if (!state.ok) {
+          return json(res, state.status || 400, {
+            success: false, message: state.message || 'Could not update auto-renewal',
+            data: state.data || { auto_renew: !!state.enabled, renew_price_ngn: state.renew_price_ngn || gotsmsRenewPriceNgn(order), partial: !!state.partial }
           });
         }
-
-        const linkedRenewIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
-        let g = { ok: false, data: {} };
-        let anyToggleOk = false;
-        for (const rid of linkedRenewIds) {
-          try {
-            // Toggle each linked rent until state matches desired (GotSMS toggle flips)
-            let liveR = null;
-            try {
-              const curR = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}`);
-              liveR = curR.data && (curR.data.data || curR.data);
-            } catch (_) {}
-            const onNow = !!(liveR && (liveR.is_included_for_next_renewal || liveR.auto_renew));
-            if (onNow === wantOn) { anyToggleOk = true; continue; }
-            const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
-            g = gg;
-            if (gg.ok) anyToggleOk = true;
-          } catch (_) {}
-        }
-        if (!anyToggleOk && !g.ok) {
-          return json(res, g.status || 400, {
-            success: false,
-            message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
-            data: (g.data && g.data.data) || null
-          });
-        }
-        let afterOn = wantOn;
-        try {
-          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          const d = again.data && (again.data.data || again.data);
-          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
-        } catch (_) {}
-
         return json(res, 200, {
           success: true,
-          message: afterOn
-            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+          message: state.enabled
+            ? ('Auto-renew is on. ₦' + state.renew_price_ngn.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
             : 'Auto-renew is off',
-          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+          data: { auto_renew: state.enabled, renew_price_ngn: state.renew_price_ngn }
         });
-
       }
 
       if (method === 'POST' && ga === 'gotsms_refund') {
@@ -5886,126 +5967,28 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
       if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
 
-        // Prefer list endpoint — single-rent GET is unreliable on provider
-        async function readRenewOn(rid) {
-          const id = String(rid);
-          try {
-            const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}`);
-            if (cur.ok) {
-              const d = cur.data && (cur.data.data || cur.data);
-              if (d && (d.id || d.is_included_for_next_renewal !== undefined || d.auto_renew !== undefined)) {
-                return !!(d.is_included_for_next_renewal || d.auto_renew);
-              }
-            }
-          } catch (_) {}
-          for (const st of ['active', 'finished']) {
-            try {
-              const list = await gotsmsFetch(`/api/rents?status=${st}&per_page=100`);
-              const rows = Array.isArray(list.data?.data) ? list.data.data : [];
-              const hit = rows.find((r) => String(r.id) === id || String(r.rent_id || '') === id);
-              if (hit) return !!(hit.is_included_for_next_renewal || hit.auto_renew);
-            } catch (_) {}
-          }
-          return null;
-        }
-        async function toggleRenew(rid) {
-          return gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
-        }
-        function messageImpliesOn(msg) {
-          const s = String(msg || '').toLowerCase();
-          if (/disabled|turned off|is off|deactivated/.test(s)) return false;
-          if (/enabled|turned on|is on|activated/.test(s)) return true;
-          return null;
-        }
-        async function ensureRenew(rid, want) {
-          let on = await readRenewOn(rid);
-          if (on === want) return { ok: true, on: !!on };
-          const t1 = await toggleRenew(rid);
-          const implied1 = messageImpliesOn(t1.data && t1.data.message);
-          if (t1.ok) {
-            on = await readRenewOn(rid);
-            if (on === want) return { ok: true, on: !!on };
-            if (on === null && implied1 === want) return { ok: true, on: want };
-            if (on === null && t1.data && t1.data.success) return { ok: true, on: want };
-            // second flip only if we can read state and it is still wrong
-            if (on !== null && on !== want) {
-              const t2 = await toggleRenew(rid);
-              on = await readRenewOn(rid);
-              if (on === want) return { ok: true, on: !!on };
-              const implied2 = messageImpliesOn(t2.data && t2.data.message);
-              if (t2.ok && on === null && (implied2 === want || t2.data?.success)) return { ok: true, on: want };
-            }
-            if (t1.ok && on === null) return { ok: true, on: want };
-          }
-          on = await readRenewOn(rid);
-          return { ok: on === want, on: on === null ? want : !!on };
-        }
-
-        const currentlyOn = (await readRenewOn(rent_id)) === true;
-        let wantOn = body.enabled;
-        if (wantOn === undefined || wantOn === null || wantOn === '') {
-          wantOn = !currentlyOn;
-        } else {
-          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
-        }
-
-        const renewPrice = gotsmsRenewPriceNgn(order);
-        if (wantOn && !currentlyOn) {
-          if (!(renewPrice > 0)) {
-            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
-          }
-          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
-          const bal = Number(prof && prof.balance) || 0;
-          const balUsd = Number(prof && prof.balance_usd) || 0;
-          const combined = bal + balUsd * WALLET_USD_RATE;
-          if (combined + 0.0001 < renewPrice) {
-            return json(res, 400, {
-              success: false,
-              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: balUsd, combined_value_ngn: combined }
-            });
-          }
-        }
-
-        const primary = await ensureRenew(rent_id, wantOn);
-        try {
-          const linked = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
-          for (const rid of linked) {
-            if (String(rid) === String(rent_id)) continue;
-            await ensureRenew(rid, wantOn);
-          }
-        } catch (_) {}
-
-        // Prefer live read; if unreadable after successful toggle, trust wantOn when ok
-        let afterOn = await readRenewOn(rent_id);
-        if (afterOn === null) afterOn = primary.ok ? wantOn : false;
-        else afterOn = !!afterOn;
-
-        if (!primary.ok && afterOn !== wantOn) {
-          return json(res, 400, {
-            success: false,
-            message: 'Could not update auto-renew. Please try again.',
-            data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+        const state = await gotsmsSetRenewalState(auth.userId, rent_id, order, body.enabled);
+        if (!state.ok) {
+          return json(res, state.status || 400, {
+            success: false, message: state.message || 'Could not update auto-renewal',
+            data: state.data || { auto_renew: !!state.enabled, renew_price_ngn: state.renew_price_ngn || gotsmsRenewPriceNgn(order), partial: !!state.partial }
           });
         }
-
         return json(res, 200, {
           success: true,
-          message: afterOn
-            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged when this period renews.')
+          message: state.enabled
+            ? ('Auto-renew is on. ₦' + state.renew_price_ngn.toLocaleString() + ' will be charged when this period renews.')
             : 'Auto-renew is off.',
-          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+          data: { auto_renew: state.enabled, renew_price_ngn: state.renew_price_ngn }
         });
       }
 
-      
       if ((method === 'POST' || method === 'GET') && (ga === 'gotsms_preexpire_cancel' || ga === 'gotsms_preexpire_sweep')) {
         const authHeader = String(req.headers['authorization'] || '');
         const cronSecret = process.env.CRON_SECRET;
@@ -6114,7 +6097,7 @@ if (method === 'GET' && ga === 'gotsms_my_orders') {
 
         while (pagesDone < maxPages) {
           const g = await gotsmsFetch(
-            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
+            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=true`
           );
           if (!g.ok) {
             return json(res, g.status || 400, {
