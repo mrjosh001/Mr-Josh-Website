@@ -58,7 +58,11 @@ begin
          subtitle='Cancelled — exact wallet debit restored',
          notes=concat_ws(' | ',nullif(notes,''),'wallet_debit_id:'||v_debit.id::text,'number_order_id:'||new.id::text)
    where user_id=new.user_id and type='purchase' and category='MJ SMS'
-     and (external_reference=v_debit.id::text or meta->>'wallet_debit_id'=v_debit.id::text);
+     and (
+       external_reference=v_debit.id::text
+       or meta->>'wallet_debit_id'=v_debit.id::text
+       or (new.source='gotsms' and external_reference=regexp_replace(coalesce(new.idempotency_key,''),'^gotsms-',''))
+     );
   get diagnostics v_tx_count=row_count;
 
   if v_tx_count=0 then
