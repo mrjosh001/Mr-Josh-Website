@@ -1025,25 +1025,63 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
     return { ok: false, status: 503, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
   }
+
   const opts = {
     method,
     headers: {
       Authorization: `Bearer ${GOTSMS_TOKEN}`,
       'Content-Type': 'application/json',
       Accept: 'application/json'
-    }
+    },
+    // Bound each supplier request so a stalled connection cannot consume the
+    // entire serverless execution window.
+    signal: AbortSignal.timeout(12000)
   };
   if (body != null) opts.body = JSON.stringify(body);
-  try {
-    const res = await fetch(`${GOTSMS_BASE}${path}`, opts);
-    let data = null;
-    try { data = await res.json(); } catch { data = { success: false, message: 'Invalid supplier response' }; }
-    return { ok: res.ok, status: res.status, data };
-  } catch (e) {
-    // A failed POST may have reached the supplier before the connection dropped.
-    return { ok: false, status: 502, uncertain: method !== 'GET', error: e?.message || String(e),
-      data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
+
+  // Retry only safe reads. Never automatically retry a POST because the
+  // supplier may have processed it before the connection failed.
+  const maxAttempts = method === 'GET' ? 3 : 1;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${GOTSMS_BASE}${path}`, opts);
+      const raw = await res.text();
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : {}; }
+      catch { data = { success: false, message: 'Invalid supplier response' }; }
+
+      const retryableStatus = res.status === 429 || res.status >= 500;
+      if (retryableStatus && attempt < maxAttempts && method === 'GET') {
+        const retryAfter = Number(res.headers.get('retry-after'));
+        const delay = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(1500, retryAfter * 1000)
+          : attempt * 450;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      return { ok: res.ok, status: res.status, data };
+    } catch (e) {
+      lastError = e;
+      if (attempt < maxAttempts && method === 'GET') {
+        // Covers transient DNS resolution failures, connection resets and
+        // request timeouts. Backoff is deliberately short and bounded.
+        await new Promise(resolve => setTimeout(resolve, attempt * 450));
+        continue;
+      }
+      break;
+    }
   }
+
+  // A failed POST may have reached the supplier before the connection dropped.
+  // Preserve that uncertainty so purchase/cancellation callers do not retry it.
+  return {
+    ok: false,
+    status: method === 'GET' ? 503 : 502,
+    uncertain: method !== 'GET',
+    error: lastError?.cause?.code || lastError?.code || lastError?.message || (lastError ? String(lastError) : 'Supplier request failed'),
+    data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' }
+  };
 }
 
 function gotsmsPlanUnavailable(plan) {
