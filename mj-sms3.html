@@ -84,7 +84,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .empty-state{text-align:center;padding:40px 16px;color:var(--muted)}
 .server-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-glow);padding:4px 10px;border-radius:20px;margin-bottom:10px}
 
-/* Purchase confirmation modal — matches Server 1 (mj-sms.html) exactly,
+/* Purchase confirmation modal. matches Server 1 (mj-sms.html) exactly,
    so the buy flow feels identical regardless of which server the
    customer picked. */
 .purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
@@ -161,7 +161,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 <div class="ps-block-label">Country</div>
 <div class="ps-block-text" id="psCountry">—</div>
 </div>
-<div class="ps-reuse-note" id="psReuseNote" style="display:none"><i class="fa-solid fa-rotate"></i> Reuse preferred — you may get a number that can receive another code later.</div>
+<div class="ps-reuse-note" id="psReuseNote" style="display:none"><i class="fa-solid fa-rotate"></i> Reuse preferred. you may get a number that can receive another code later.</div>
 <div class="ps-total-row">
 <span class="ps-total-label">Total</span>
 <span class="ps-total-price" id="psTotal">₦0</span>
@@ -495,7 +495,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
           allServiceCatalog = cached.catalog;
           serviceCountryIndex = cached.index || {};
           renderServiceCatalogS2(allServiceCatalog);
-          // Complete cache lasts the rest of the Lagos day — no reload
+          // Complete cache lasts the rest of the Lagos day. no reload
           if(cached.complete){
             __s2CatalogLoading = false;
             return;
@@ -573,7 +573,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         paint();
       }catch(e){ console.warn('fast catalog', e); }
 
-      // More DB pages in background (non-blocking feel — still awaited but after first paint)
+      // More DB pages in background (non-blocking feel. still awaited but after first paint)
       if(sbClient){
         try{
           for(var pg = 1; pg < 5; pg++){
@@ -919,7 +919,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       return;
     }
     if(!currentCountry){
-      toast('Country missing — go back and pick a country', 'error');
+      toast('Country missing. go back and pick a country', 'error');
       isBuying = false;
       if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); if(prevHtml) btn.innerHTML = prevHtml; }
       return;
@@ -943,7 +943,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         try{if(window.__mjSms3BuyStorageKey)sessionStorage.removeItem(window.__mjSms3BuyStorageKey);}catch(e){}
       }
       const oid = j && j.data && j.data.order_id;
-      if(!oid) throw new Error((j && j.message) || 'Purchase failed — no order id returned. Try again.');
+      if(!oid) throw new Error((j && j.message) || 'Purchase failed. no order id returned. Try again.');
       const num = (j.data && (j.data.number || j.data.phone_number)) || '';
       const payload = {
         order_id: oid, number: num, phone_number: num,
@@ -970,7 +970,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     }catch(e){
       var msg = (e && e.message) ? e.message : 'Purchase failed. Please try again.';
       if(/insufficient|balance/i.test(msg)){
-        toast(msg + ' — redirecting to deposit…', 'error');
+        toast(msg + '. redirecting to deposit…', 'error');
         isBuying = false;
         if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = prevHtml || '<i class="fa-solid fa-mobile-screen"></i> Confirm Purchase'; }
         setTimeout(function(){ location.href = 'deposit.html'; }, 900);
