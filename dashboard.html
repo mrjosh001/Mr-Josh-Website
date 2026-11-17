@@ -5809,128 +5809,130 @@ async function fetchActivityFromOrders(userId) {
 }
 
 async function fetchUserTransactions(userId) {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !userId) return;
+    const historyContainer = document.getElementById('transactionListContainer');
     try {
         await expireStaleSmsEverywhere();
-        // Egress: named columns only; single query (boosters included via type)
-        let { data } = await supabaseClient
-            .from('transactions')
-            .select('id, user_id, type, category, title, subtitle, amount, amount_ngn, status, channel, payment_provider, created_at, external_reference')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(100);
-        if (!data) data = [];
-        data = await expireStalePocketFiDeposits(data);
+
+        // IMPORTANT: customer SELECT grants intentionally expose only this safe projection.
+        // Do not request external_reference, channel, payment_provider, meta or supplier fields.
+        // Paginate instead of limiting the entire history to the latest 100 ledger rows.
+        const ledgerRows = [];
+        const pageSize = 500;
+        const maxRows = 10000;
+        for (let offset = 0; offset < maxRows; offset += pageSize) {
+            const { data: page, error } = await supabaseClient
+                .from('transactions')
+                .select('id,user_id,type,category,title,subtitle,amount,amount_ngn,status,created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(offset, offset + pageSize - 1);
+            if (error) throw new Error('Transaction history query failed: ' + error.message);
+            ledgerRows.push(...(page || []));
+            if (!page || page.length < pageSize) break;
+            if (offset + pageSize >= maxRows) {
+                console.warn('[activity history] Reached the 10,000-row history safety limit.');
+            }
+        }
+
+        const data = await expireStalePocketFiDeposits(ledgerRows);
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
-            let channel = tx.channel || 'Wallet';
-            // Hide processor brand names in history
-            if (String(tx.payment_provider || '').toLowerCase() === 'pocketfi' ||
-                /pocketfi/i.test(title) || /pocketfi/i.test(channel)) {
-                title = title
-                    .replace(/PocketFi deposit \(pending\)/gi, 'Deposit (pending)')
-                    .replace(/PocketFi deposit \(expired\)/gi, 'Deposit (expired)')
-                    .replace(/PocketFi deposit/gi, 'Deposit')
-                    .replace(/PocketFi/gi, 'Deposit');
-                channel = 'Bank Transfer';
-            }
-            if (/paystack/i.test(title) || /paystack/i.test(channel)) {
-                title = title.replace(/Paystack/gi, 'Deposit');
-                channel = 'Bank Transfer';
-            }
+            // Legacy processor labels may remain in older titles. Hide them in customer history.
+            title = title
+                .replace(/PocketFi deposit \\(pending\\)/gi, 'Deposit (pending)')
+                .replace(/PocketFi deposit \\(expired\\)/gi, 'Deposit (expired)')
+                .replace(/PocketFi deposit/gi, 'Deposit')
+                .replace(/PocketFi/gi, 'Deposit')
+                .replace(/Paystack/gi, 'Deposit');
             return {
                 id: tx.id,
-                external_reference: tx.external_reference || '',
                 type: normalizeTxType(tx),
                 category: tx.category || '',
                 title,
                 subtitle: tx.subtitle || '',
-                amount: tx.amount || '₦0.00',
+                amount: tx.amount || (tx.amount_ngn ? fmtNgnAmount(tx.amount_ngn) : '₦0.00'),
                 amount_ngn: Number(tx.amount_ngn) || 0,
                 date: new Date(tx.created_at).toLocaleString(),
                 created_at: tx.created_at,
                 status: tx.status || 'Success',
-                paymentProvider: tx.payment_provider || 'MJ HUB',
-                channel,
-                _ref: tx.external_reference ? String(tx.external_reference) : '',
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
                 _source: 'transactions'
             };
         });
 
-        // Fill gaps: real orders that never got a transactions row
+        // Recover orders that predate or missed their transaction-ledger insert.
         const fromOrders = await fetchActivityFromOrders(userId);
-        const seen = new Set();
-        // Match MJ Mails transaction-ledger entries to their order rows so the order
-        // fallback never duplicates a purchase or its separate refund transaction.
-        const mailTransactionRefs = new Set(fromTx
-            .map(t => String(t._ref || ''))
-            .filter(ref => /^MJMAIL-(?!REFUND-)/i.test(ref))
-            .map(ref => ref.replace(/^MJMAIL-/i, '')));
-        function smsTitleBase(title) {
-            // "Whatsapp · Canada" and "Whatsapp" → same key so order merge does not double SMS rows
-            return String(title || '').toLowerCase().split('·')[0].trim().slice(0, 40);
-        }
-        function dedupeKey(t) {
-            const day = (t.created_at || t.date || '').toString().slice(0, 10);
-            const typ = String(t.type || '').toLowerCase();
-            const title = (typ === 'sms' || /mj sms|sms/i.test(String(t.category || '')))
-              ? smsTitleBase(t.title)
-              : String(t.title || '').toLowerCase().slice(0, 40);
-            return [typ || t.type, title, String(t.amount_ngn || t.amount || ''), day].join('|');
-        }
-        // USA rentals: ONE row per rental. The purchase transaction is the row; its status follows
-        // the rental (pending -> completed when the code arrives -> refunded if cancelled/refunded).
-        const orderByRent = new Map();
-        for (const o of fromOrders) { if (o._rentKey) orderByRent.set(o._rentKey, o); }
-        const txRentRefs = new Set();
-        for (const t of fromTx) { if (t._ref && orderByRent.has(t._ref)) txRentRefs.add(t._ref); }
-        for (const t of fromTx) {
-            const o = t._ref ? orderByRent.get(t._ref) : null;
-            if (!o) continue;
-            const os = String(o.status || '').toLowerCase();
-            if (o._refunded || ['refunded', 'cancelled', 'canceled'].includes(os)) t.status = 'refunded';
-            else if (os === 'completed' && String(t.status || '').toLowerCase() !== 'refunded') t.status = 'completed';
-        }
-        const merged = [];
-        for (const t of fromTx) {
-            // Older rentals also have a separate "USA rental cancelled" refund row: it is now shown on the rental itself.
-            if (String(t.type || '').toLowerCase() === 'refund' && /^usa rental cancelled$/i.test(String(t.title || '').trim())) continue;
-            const k = dedupeKey(t);
-            if (seen.has(k)) continue;
-            seen.add(k);
-            merged.push(t);
-        }
-        for (const t of fromOrders) {
-            // MJ Mails purchase/refund transactions are authoritative when present.
-            if (t._mailOrderId && mailTransactionRefs.has(t._mailOrderId)) continue;
-            // This rental already has its transaction row above
-            if (t._rentKey && txRentRefs.has(t._rentKey)) continue;
-            const k = dedupeKey(t);
-            // Skip if a transactions row already covers this order
-            if (seen.has(k)) continue;
-            // SMS: same service + amount on same day = same purchase lifecycle
-            let dup = false;
-            for (const m of merged) {
-                const sameType = m.type === t.type || (String(m.category||'').toLowerCase().includes('sms') && String(t.category||'').toLowerCase().includes('sms'));
-                if (!sameType) continue;
-                const a = Number(m.amount_ngn) || 0;
-                const b = Number(t.amount_ngn) || 0;
-                if (!(a && b && Math.abs(a - b) < 1)) continue;
-                if (smsTitleBase(m.title) === smsTitleBase(t.title)) { dup = true; break; }
+        const matchedLedgerIds = new Set();
+        const matchedOrderIds = new Set();
+        const comparableTitle = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const amountValue = (row) => {
+            const numeric = Number(row.amount_ngn);
+            if (Number.isFinite(numeric) && numeric > 0) return numeric;
+            const parsed = Number(String(row.amount || '').replace(/[^0-9.-]/g, ''));
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const findUniqueLedgerMatch = (order, windowMs = 120000) => {
+            const orderTime = new Date(order.created_at || 0).getTime();
+            const orderAmount = amountValue(order);
+            if (!orderTime || !orderAmount) return null;
+            let candidates = fromTx.filter((tx) => {
+                if (matchedLedgerIds.has(String(tx.id))) return false;
+                if (String(tx.type || '') !== String(order.type || '')) return false;
+                const txTime = new Date(tx.created_at || 0).getTime();
+                const txAmount = amountValue(tx);
+                return txTime && Math.abs(txTime - orderTime) <= windowMs && Math.abs(txAmount - orderAmount) < 1;
+            });
+            if (candidates.length === 1) return candidates[0];
+            if (candidates.length > 1) {
+                const wanted = comparableTitle(order.title);
+                const titleMatches = candidates.filter((tx) => {
+                    const actual = comparableTitle(tx.title);
+                    return wanted && actual && (actual === wanted || actual.includes(wanted) || wanted.includes(actual));
+                });
+                if (titleMatches.length === 1) return titleMatches[0];
             }
-            if (dup) continue;
-            seen.add(k);
-            merged.push(t);
+            return null;
+        };
+
+        // Preserve every actual transactions row. Only suppress a fallback order when
+        // one unique ledger row matches its type, amount and creation time.
+        const merged = [...fromTx];
+        for (const order of fromOrders) {
+            const matchWindow = order.type === 'email' ? 10000 : 120000;
+            const matched = findUniqueLedgerMatch(order, matchWindow);
+            if (matched) {
+                matchedLedgerIds.add(String(matched.id));
+                matchedOrderIds.add(String(order.id));
+                // Keep the one-row rental lifecycle: update the purchase row as the
+                // underlying number order moves from pending to completed/refunded.
+                if (order.type === 'sms') {
+                    const orderStatus = String(order.status || '').toLowerCase();
+                    if (order._refunded || ['refunded', 'cancelled', 'canceled'].includes(orderStatus)) {
+                        matched.status = 'refunded';
+                    } else if (orderStatus === 'completed' && String(matched.status || '').toLowerCase() !== 'refunded') {
+                        matched.status = 'completed';
+                    }
+                }
+                continue;
+            }
+            merged.push(order);
         }
+
         merged.sort((a, b) => {
             const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
             return tb - ta;
         });
-        transactions = merged.map((t) => Object.assign({}, t, { type: normalizeTxType(t) }));
+        transactions = merged;
         renderRecentActivity();
     } catch (e) {
-        console.warn('fetchUserTransactions', e);
+        console.error('[activity history] Could not load customer transactions:', e?.message || e);
+        if (historyContainer) {
+            historyContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Transaction history could not be loaded</h4><p>Please refresh and try again. Your transactions have not been changed.</p></div>';
+        }
     }
 }
 
