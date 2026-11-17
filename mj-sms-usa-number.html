@@ -184,7 +184,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   const rentId = params.get('rent_id') || '';
   const isVsRent = String(params.get('source')||'').toLowerCase()==='virtualsms_rent';
   let rent = null, pollTimer = null, cdTimer = null, renewBusy = false, hasReceivedCode = false, syncBusy = false, pollCount = 0;
-  const LOCKED = '<p class="refund-locked">Cancel unavailable — a message was already received on this number.</p>';
+  const LOCKED = '<p class="refund-locked">Cancel unavailable. a message was already received on this number.</p>';
 
   function relTime(d){
     try{
@@ -249,7 +249,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var status = String((rent && rent.status) || 'active').toLowerCase();
     var tillMs = rent && rent.active_till ? new Date(rent.active_till).getTime() : 0;
     var liveByTime = (!tillMs || (tillMs > Date.now())) && !(rent && rent.expired_local);
-    // "completed" only means SMS arrived — rental stays active while the plan clock runs
+    // "completed" only means SMS arrived. rental stays active while the plan clock runs
     var deadStatus = ['refunded','cancelled','canceled','expired','finished','ended'].indexOf(status) >= 0;
     if(status === 'completed' || status === 'complete' || status === 'success'){
       deadStatus = !liveByTime; // still active until timer ends
@@ -290,7 +290,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     t.textContent = msg||'';
     t.className = 'toast-pop on '+(ok?'ok':'err');
     clearTimeout(window.__toastT);
-    window.__toastT = setTimeout(function(){ t.classList.remove('on'); }, 3200);
+    window.__toastT = setTimeout(function(){ t.classList.remove('on'); if(el){el.textContent='';el.className='flash';} }, 3200);
   }
   function showModal(id){ var el=document.getElementById(id); if(el) el.classList.add('on'); }
   function hideModal(id){ var el=document.getElementById(id); if(el) el.classList.remove('on'); }
@@ -392,7 +392,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
           (active ? '<button type="button" class="n3-btn n3-ghost" id="btnRefresh"><i class="fa-solid fa-rotate"></i> Refresh SMS</button>' : '')+
         '</div>'+
         '<div class="flash" id="flash"></div>'+
-        /* 3. all other controls — always visible, just compact */
+        /* 3. all other controls. always visible, just compact */
         '<div class="more"><div class="n3-lab">More options</div><div class="more-body">'+
           (active && !st.terminal ?
             '<div class="n3-two">'+
@@ -424,10 +424,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       wake.classList.add('is-busy'); wake.disabled = true;
       var prev = wake.innerHTML;
       wake.innerHTML = '<i class="fa-solid fa-spinner spin"></i> Waking…';
-      setFlash('Waking number — please wait…', true);
+      setFlash('Waking number. please wait…', true);
       var j = await api('wake', { method:'POST', body:{ rent_id: rentId } });
       wake.classList.remove('is-busy'); wake.disabled = false; wake.innerHTML = prev;
-      setFlash(j.message || (j.success ? (isMultiPack?'Number ready — both services can receive SMS':'Number is ready for SMS') : 'Wake failed'), !!j.success);
+      setFlash(j.message || (j.success ? (isMultiPack?'Number ready. both services can receive SMS':'Number is ready for SMS') : 'Wake failed'), !!j.success);
       if(j.success) loadMessages();
     };
     document.getElementById('btnRefresh').onclick = async function(){
@@ -438,7 +438,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       btn.innerHTML = '<i class="fa-solid fa-spinner spin"></i> Refreshing…';
       await loadMessages(true);
       btn.classList.remove('is-busy'); btn.disabled = false; btn.innerHTML = prev;
-      setFlash(hasReceivedCode ? 'Inbox updated' : 'Inbox refreshed — no SMS yet', true);
+      setFlash(hasReceivedCode ? 'Inbox updated' : 'Inbox refreshed. no SMS yet', true);
     };
     var ar = document.getElementById('autoRenew');
     if(ar) ar.onchange = async function(){
@@ -500,7 +500,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(btn.disabled) return;
     if(hasReceivedCode){
       hideModal('refundModal');
-      setFlash('Cancel unavailable — a message was already received on this number.', false);
+      setFlash('Cancel unavailable. a message was already received on this number.', false);
       return;
     }
     btn.disabled = true;
@@ -519,7 +519,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(j && j.success){
       rent.status = 'refunded'; rent.refunded = true;
       render();   // render() -> startCountdown() sees the rental is dead and stops the timer
-      setFlash('Cancelled — balance restored', true);
+      setFlash('Cancelled. balance restored', true);
       setTimeout(function(){ location.href = 'mj-sms-usa-rent.html'; }, 2200);
     } else {
       setFlash((j && j.message) || 'Cancel is not available for this number', false);
@@ -590,7 +590,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
         if(rent && !rent.expired_local){ rent.expired_local = true; render(); }
         return;
       }
-      // Status changed underneath us (cancelled / refunded / finished) — stop ticking right away.
+      // Status changed underneath us (cancelled / refunded / finished). stop ticking right away.
       if(rent && !computeState().active){
         el.textContent = endedLabel();
         el.classList.add('ended');
@@ -665,7 +665,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }).join('');
     box.querySelectorAll('[data-c]').forEach(function(b){
       b.onclick = function(){
-        copyText(b.getAttribute('data-c')).then(function(){ setFlash('Copied', true); }).catch(function(){ setFlash('Could not copy — press and hold the text instead', false); });
+        copyText(b.getAttribute('data-c')).then(function(){ setFlash('Copied', true); }).catch(function(){ setFlash('Could not copy. press and hold the text instead', false); });
       };
     });
   }
@@ -735,7 +735,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       var label = p.duration_translation || ((p.duration_in_type || '') + ' ' + (p.duration_type || 'plan'));
       var unavailable = p.is_available === false || !(price > 0);
       return '<button type="button" class="n3-btn n3-ghost opt" data-plan-id="' + esc(p.plan_id || p.id || '') + '" ' + (unavailable ? 'disabled' : '') + '>' +
-        '<span><strong>' + esc(label) + '</strong><small>Fresh plan charge — no credit for the previous plan</small></span>' +
+        '<span><strong>' + esc(label) + '</strong><small>Fresh plan charge. no credit for the previous plan</small></span>' +
         '<strong>' + (price > 0 ? '₦' + price.toLocaleString() : 'Unavailable') + '</strong></button>';
     }).join('');
     list.querySelectorAll('[data-plan-id]').forEach(function(btn) {
