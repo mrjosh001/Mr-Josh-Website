@@ -748,7 +748,7 @@ async function fetchUserTransactions(userId) {
     try {
         const { data, error } = await supabaseClient
             .from('transactions')
-            .select('*')
+            .select('id,type,category,title,subtitle,amount,amount_ngn,status,created_at')
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
