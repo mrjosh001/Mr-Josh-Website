@@ -5531,33 +5531,33 @@ async function expireStalePocketFiDeposits(rows) {
     const now = Date.now();
     const updates = [];
     for (const tx of rows) {
-        const isPendingPocket =
-            String(tx.payment_provider || '').toLowerCase() === 'pocketfi' &&
+        const isPendingDeposit =
+            String(tx.type || '').toLowerCase() === 'deposit' &&
             String(tx.status || '').toLowerCase() === 'pending' &&
-            String(tx.type || '').toLowerCase() === 'deposit';
-        if (!isPendingPocket) continue;
+            /deposit/i.test(String(tx.title || ''));
+        if (!isPendingDeposit) continue;
         const created = new Date(tx.created_at).getTime();
         if (!created || now - created < POCKETFI_PENDING_TIMEOUT_MS) continue;
         updates.push(tx.id);
     }
     if (!updates.length) return rows;
     try {
-        await supabaseClient
+        const { error } = await supabaseClient
             .from('transactions')
             .update({
                 status: 'failed',
                 title: 'Deposit (expired)',
-                subtitle: 'Payment not completed in time',
-                channel: 'Bank Transfer'
+                subtitle: 'Payment not completed in time'
             })
             .in('id', updates);
+        if (error) throw error;
         return rows.map((tx) =>
             updates.includes(tx.id)
-                ? { ...tx, status: 'failed', title: 'Deposit (expired)', subtitle: 'Payment not completed in time', channel: 'Bank Transfer' }
+                ? { ...tx, status: 'failed', title: 'Deposit (expired)', subtitle: 'Payment not completed in time' }
                 : tx
         );
     } catch (e) {
-        console.warn('expireStalePocketFiDeposits', e);
+        console.warn('expireStalePocketFiDeposits', e?.message || e);
         return rows;
     }
 }
@@ -5580,7 +5580,7 @@ function normalizeTxType(tx) {
     }
 
     // Currency convert
-    if (type === 'conversion' || cat === 'conversion' || /currency\s*conversion|converter/i.test(title + ' ' + channel)) {
+    if (type === 'conversion' || cat === 'conversion' || /convert|swap|exchange|currency\s*conversion|converter/i.test(title + ' ' + cat + ' ' + channel)) {
       return 'conversion';
     }
 
@@ -5626,11 +5626,6 @@ function normalizeTxType(tx) {
     ) {
       return 'log';
     }
-    // purchase/order with no SMM markers → log (manual suppliers)
-    if ((type === 'purchase' || type === 'order') && !/booster|boost|owlet|smm/i.test(cat + ' ' + type)) {
-      return 'log';
-    }
-
     // Social boost (Owlet) — never Telegram, never log accounts
     if (
       type === 'booster' || type === 'boost' ||
@@ -5645,6 +5640,11 @@ function normalizeTxType(tx) {
       return 'booster';
     }
 
+    // Only classify generic purchase rows after checking service-specific markers.
+    if ((type === 'purchase' || type === 'order') && /booster|boost|owlet|smm/i.test(cat + ' ' + title)) {
+      return 'booster';
+    }
+
     // Logs fallback by product keywords (accounts sold as logs)
     if (
       /hotmail|premade|google voice|\bvpn\b|2fa|aged account|created page/i.test(title + ' ' + cat) ||
@@ -5654,8 +5654,13 @@ function normalizeTxType(tx) {
     }
     if (type === 'purchase' || type === 'order') return 'log';
 
+    // Refund and failed-purchase rows for account/log products use the product name
+    // as category in older records. After the specific SMS, mail, eSIM, deposit,
+    // conversion, Telegram and booster checks above, these belong under Log Orders.
+    if (type === 'refund' || type === 'purchase_failed') return 'log';
+
     // Already-normalized kinds from a prior pass
-    if (['telegram','booster','deposit','conversion','sms','log','logs'].includes(type)) return type;
+    if (['telegram','booster','deposit','conversion','sms','log','logs','esim','email'].includes(type)) return type;
 
     return type || 'log';
 }
@@ -5682,273 +5687,275 @@ async function fetchActivityFromOrders(userId) {
     const extra = [];
     if (!supabaseClient || !userId) return extra;
     try {
-        const [logsRes, smsRes, boostRes, mailRes] = await Promise.all([
-            supabaseClient
-                .from('orders')
+        const [logsRes, smsRes, boostRes, mailRes, esimRes] = await Promise.all([
+            supabaseClient.from('orders')
                 .select('id, order_id, product_name, amount, status, created_at, quantity')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(200),
-            supabaseClient
-                .from('number_orders')
-                .select('id, order_id, service_name, country_name, price, status, created_at, phone_number, source, idempotency_key, refunded')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(200),
-            supabaseClient
-                .from('booster_orders')
-                .select('id, order_id, service_name, link, price_ngn, charge, price, status, created_at, source')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(200),
-            supabaseClient
-                .from('mj_mail_orders')
+                .eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+            // Customer-facing fields only. Supplier source IDs and idempotency keys stay server-side.
+            supabaseClient.from('number_orders')
+                .select('id, service_name, country_name, price, status, created_at, phone_number, refunded')
+                .eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+            // Use real booster_orders columns. order_id, charge and price do not exist here.
+            supabaseClient.from('booster_orders')
+                .select('id, service_name, link, price_ngn, status, created_at, category')
+                .eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+            supabaseClient.from('mj_mail_orders')
                 .select('id, site, domain, email_address, retail_price_ngn, status, refunded, created_at, updated_at')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(200)
+                .eq('user_id', userId).order('created_at', { ascending: false }).limit(500),
+            // eSIM orders live in their own ledger and need a history fallback too.
+            supabaseClient.from('esim_orders')
+                .select('id, plan_name, amount_ngn, status, created_at, carrier')
+                .eq('user_id', userId).order('created_at', { ascending: false }).limit(500)
         ]);
 
-        const logRows = logsRes.error ? [] : (logsRes.data || []);
-        const mailRows = mailRes.error ? [] : (mailRes.data || []);
-        // Group multi-qty log purchases by base order_id
+        const rows = (result, label) => {
+            if (result?.error) {
+                console.warn('[activity history] ' + label + ' query failed:', result.error.message);
+                return [];
+            }
+            return result?.data || [];
+        };
+        const logRows = rows(logsRes, 'log orders');
+        const smsRows = rows(smsRes, 'SMS numbers');
+        const boostRows = rows(boostRes, 'social boost and Telegram');
+        const mailRows = rows(mailRes, 'MJ Mails');
+        const esimRows = rows(esimRes, 'eSIM');
+
+        // Group multi-quantity log purchases by their order reference.
         const logMap = new Map();
         for (const o of logRows) {
             const key = baseOrderKey(o.order_id || o.id);
             if (!logMap.has(key)) {
                 logMap.set(key, {
-                    id: 'log-' + key,
-                    type: 'log',
-                    category: 'MJ Logs',
-                    title: o.product_name || 'Log order',
-                    subtitle: '',
-                    amount_ngn: 0,
-                    quantity: 0,
-                    status: o.status || 'completed',
-                    created_at: o.created_at,
-                    channel: 'Wallet'
+                    id: 'log-' + key, type: 'log', category: 'MJ Logs',
+                    title: o.product_name || 'Log order', subtitle: '',
+                    amount_ngn: 0, quantity: 0, status: o.status || 'completed',
+                    created_at: o.created_at
                 });
             }
-            const g = logMap.get(key);
-            g.amount_ngn += Number(o.amount) || 0;
-            g.quantity += Math.max(1, Number(o.quantity) || 1);
-            if (o.created_at && (!g.created_at || o.created_at > g.created_at)) g.created_at = o.created_at;
-            if (o.product_name) g.title = o.product_name;
-            if (o.status) g.status = o.status;
+            const group = logMap.get(key);
+            group.amount_ngn += Number(o.amount) || 0;
+            group.quantity += Math.max(1, Number(o.quantity) || 1);
+            if (o.created_at && (!group.created_at || o.created_at > group.created_at)) group.created_at = o.created_at;
+            if (o.product_name) group.title = o.product_name;
+            if (o.status) group.status = o.status;
         }
-        for (const g of logMap.values()) {
+        for (const group of logMap.values()) {
             extra.push({
-                id: g.id,
-                type: 'log',
-                category: g.category,
-                title: g.title,
-                subtitle: g.quantity > 1 ? (g.quantity + ' units') : '',
-                amount: fmtNgnAmount(g.amount_ngn),
-                amount_ngn: g.amount_ngn,
-                date: g.created_at ? new Date(g.created_at).toLocaleString() : '',
-                created_at: g.created_at,
-                status: g.status || 'completed',
-                paymentProvider: 'MJ HUB',
-                channel: 'Wallet',
-                _source: 'orders'
+                id: group.id, type: 'log', category: group.category, title: group.title,
+                subtitle: group.quantity > 1 ? group.quantity + ' units' : '',
+                amount: fmtNgnAmount(group.amount_ngn), amount_ngn: group.amount_ngn,
+                date: group.created_at ? new Date(group.created_at).toLocaleString() : '',
+                created_at: group.created_at, status: group.status || 'completed',
+                paymentProvider: 'MJ HUB', channel: 'Wallet', _source: 'orders'
             });
         }
 
-        for (const o of (smsRes.error ? [] : (smsRes.data || []))) {
-            // Plan-switch bookkeeping rows (gotsms-<rent>-tr-...) are already shown by their "plan switch" transaction.
-            if (String(o.source || '').toLowerCase() === 'gotsms' && /^gotsms-.+-tr-/.test(String(o.idempotency_key || ''))) continue;
-            const title = (o.service_name || 'SMS') + (o.country_name ? (' · ' + o.country_name) : '');
+        for (const o of smsRows) {
             extra.push({
-                id: 'sms-' + (o.id || o.order_id),
-                type: 'sms',
-                category: 'MJ SMS',
-                title: title,
+                id: 'sms-' + o.id, type: 'sms', category: 'MJ SMS',
+                title: (o.service_name || 'SMS') + (o.country_name ? ' · ' + o.country_name : ''),
                 subtitle: o.phone_number || '',
-                amount: fmtNgnAmount(o.price),
-                amount_ngn: Number(o.price) || 0,
+                amount: fmtNgnAmount(o.price), amount_ngn: Number(o.price) || 0,
                 date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
-                created_at: o.created_at,
-                status: o.status || 'completed',
-                paymentProvider: 'MJ HUB',
-                channel: 'Wallet',
-                _rentKey: (String(o.source || '').toLowerCase() === 'gotsms' && /^gotsms-/.test(String(o.idempotency_key || ''))) ? String(o.idempotency_key).replace(/^gotsms-/, '') : '',
-                _refunded: o.refunded === true,
-                _source: 'number_orders'
+                created_at: o.created_at, status: o.status || 'completed',
+                paymentProvider: 'MJ HUB', channel: 'Wallet',
+                _refunded: o.refunded === true, _source: 'number_orders'
+            });
+        }
+
+        for (const o of boostRows) {
+            const title = String(o.service_name || 'Social boost');
+            const isTelegram = /telegram\s*(premium|stars)|telegram/i.test(title) ||
+                /telegram/i.test(String(o.category || ''));
+            const price = Number(o.price_ngn) || 0;
+            extra.push({
+                id: 'boost-' + o.id, type: isTelegram ? 'telegram' : 'booster',
+                category: isTelegram ? 'Telegram' : 'MJ Boosters',
+                title, subtitle: o.link ? String(o.link).slice(0, 40) : '',
+                amount: fmtNgnAmount(price), amount_ngn: price,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at, status: o.status || 'completed',
+                paymentProvider: 'MJ HUB', channel: 'Wallet', _source: 'booster_orders'
+            });
+        }
+
+        for (const o of esimRows) {
+            const price = Number(o.amount_ngn) || 0;
+            extra.push({
+                id: 'esim-' + o.id, type: 'esim', category: 'eSIM',
+                title: o.plan_name || 'eSIM plan',
+                subtitle: o.carrier || '',
+                amount: fmtNgnAmount(price), amount_ngn: price,
+                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
+                created_at: o.created_at, status: o.status || 'completed',
+                paymentProvider: 'MJ HUB', channel: 'Wallet', _source: 'esim_orders'
             });
         }
 
         for (const o of mailRows) {
             const isRefunded = o.refunded === true || String(o.status || '').toLowerCase() === 'refunded';
+            const price = Number(o.retail_price_ngn) || 0;
             extra.push({
-                id: 'mail-' + o.id,
-                type: 'email',
-                category: 'MJ Mails',
+                id: 'mail-' + o.id, type: 'email', category: 'MJ Mails',
                 title: isRefunded ? 'MJ Mails Refund' : 'MJ Mails',
                 subtitle: [o.site, o.domain, o.email_address].filter(Boolean).join(' · '),
-                amount: fmtNgnAmount(o.retail_price_ngn),
-                amount_ngn: Number(o.retail_price_ngn) || 0,
+                amount: fmtNgnAmount(price), amount_ngn: price,
                 date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
-                created_at: o.created_at,
-                status: isRefunded ? 'refunded' : (o.status || 'waiting'),
-                paymentProvider: 'MJ HUB',
-                channel: 'Wallet',
-                _mailOrderId: String(o.id),
-                _source: 'mj_mail_orders'
-            });
-        }
-
-        for (const o of (boostRes.error ? [] : (boostRes.data || []))) {
-            const price = Number(
-                o.price_ngn != null ? o.price_ngn
-                    : (o.charge != null ? o.charge : o.price)
-            ) || 0;
-            const isTg = String(o.source || '').toLowerCase() === 'smmkings'
-              || /telegram\s*(premium|stars)/i.test(String(o.service_name || ''));
-            extra.push({
-                id: 'boost-' + (o.id || o.order_id),
-                type: isTg ? 'telegram' : 'booster',
-                category: isTg ? 'Telegram' : 'MJ Boosters',
-                title: o.service_name || (isTg ? 'Telegram' : 'Social boost'),
-                subtitle: o.link ? String(o.link).slice(0, 40) : '',
-                amount: fmtNgnAmount(price),
-                amount_ngn: price,
-                date: o.created_at ? new Date(o.created_at).toLocaleString() : '',
-                created_at: o.created_at,
-                status: o.status || 'completed',
-                paymentProvider: 'MJ HUB',
-                channel: 'Wallet',
-                _source: 'booster_orders'
+                created_at: o.created_at, status: isRefunded ? 'refunded' : (o.status || 'waiting'),
+                paymentProvider: 'MJ HUB', channel: 'Wallet',
+                _mailOrderId: String(o.id), _source: 'mj_mail_orders'
             });
         }
     } catch (e) {
-        console.warn('fetchActivityFromOrders', e);
+        console.warn('fetchActivityFromOrders', e?.message || e);
     }
     return extra;
 }
 
 async function fetchUserTransactions(userId) {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !userId) return;
+    const historyContainer = document.getElementById('transactionListContainer');
     try {
         await expireStaleSmsEverywhere();
-        // Egress: named columns only; single query (boosters included via type)
-        let { data } = await supabaseClient
-            .from('transactions')
-            .select('id, user_id, type, category, title, subtitle, amount, amount_ngn, status, channel, payment_provider, created_at, external_reference')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(100);
-        if (!data) data = [];
-        data = await expireStalePocketFiDeposits(data);
+
+        // IMPORTANT: customer SELECT grants intentionally expose only this safe projection.
+        // Do not request external_reference, channel, payment_provider, meta or supplier fields.
+        // Paginate instead of limiting the entire history to the latest 100 ledger rows.
+        const ledgerRows = [];
+        const pageSize = 500;
+        const maxRows = 10000;
+        for (let offset = 0; offset < maxRows; offset += pageSize) {
+            const { data: page, error } = await supabaseClient
+                .from('transactions')
+                .select('id,user_id,type,category,title,subtitle,amount,amount_ngn,status,created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(offset, offset + pageSize - 1);
+            if (error) throw new Error('Transaction history query failed: ' + error.message);
+            ledgerRows.push(...(page || []));
+            if (!page || page.length < pageSize) break;
+            if (offset + pageSize >= maxRows) {
+                console.warn('[activity history] Reached the 10,000-row history safety limit.');
+            }
+        }
+
+        const data = await expireStalePocketFiDeposits(ledgerRows);
         const fromTx = data.map(tx => {
             let title = tx.title || 'Transaction';
-            let channel = tx.channel || 'Wallet';
-            // Hide processor brand names in history
-            if (String(tx.payment_provider || '').toLowerCase() === 'pocketfi' ||
-                /pocketfi/i.test(title) || /pocketfi/i.test(channel)) {
-                title = title
-                    .replace(/PocketFi deposit \(pending\)/gi, 'Deposit (pending)')
-                    .replace(/PocketFi deposit \(expired\)/gi, 'Deposit (expired)')
-                    .replace(/PocketFi deposit/gi, 'Deposit')
-                    .replace(/PocketFi/gi, 'Deposit');
-                channel = 'Bank Transfer';
-            }
-            if (/paystack/i.test(title) || /paystack/i.test(channel)) {
-                title = title.replace(/Paystack/gi, 'Deposit');
-                channel = 'Bank Transfer';
-            }
+            // Legacy processor labels may remain in older titles. Hide them in customer history.
+            title = title
+                .replace(/PocketFi deposit [(]pending[)]/gi, 'Deposit (pending)')
+                .replace(/PocketFi deposit [(]expired[)]/gi, 'Deposit (expired)')
+                .replace(/PocketFi deposit/gi, 'Deposit')
+                .replace(/PocketFi/gi, 'Deposit')
+                .replace(/Paystack/gi, 'Deposit');
             return {
                 id: tx.id,
-                external_reference: tx.external_reference || '',
                 type: normalizeTxType(tx),
                 category: tx.category || '',
                 title,
                 subtitle: tx.subtitle || '',
-                amount: tx.amount || '₦0.00',
+                amount: tx.amount || (tx.amount_ngn ? fmtNgnAmount(tx.amount_ngn) : '₦0.00'),
                 amount_ngn: Number(tx.amount_ngn) || 0,
                 date: new Date(tx.created_at).toLocaleString(),
                 created_at: tx.created_at,
                 status: tx.status || 'Success',
-                paymentProvider: tx.payment_provider || 'MJ HUB',
-                channel,
-                _ref: tx.external_reference ? String(tx.external_reference) : '',
+                paymentProvider: 'MJ HUB',
+                channel: 'Wallet',
                 _source: 'transactions'
             };
         });
 
-        // Fill gaps: real orders that never got a transactions row
+        // Recover orders that predate or missed their transaction-ledger insert.
         const fromOrders = await fetchActivityFromOrders(userId);
-        const seen = new Set();
-        // Match MJ Mails transaction-ledger entries to their order rows so the order
-        // fallback never duplicates a purchase or its separate refund transaction.
-        const mailTransactionRefs = new Set(fromTx
-            .map(t => String(t._ref || ''))
-            .filter(ref => /^MJMAIL-(?!REFUND-)/i.test(ref))
-            .map(ref => ref.replace(/^MJMAIL-/i, '')));
-        function smsTitleBase(title) {
-            // "Whatsapp · Canada" and "Whatsapp" → same key so order merge does not double SMS rows
-            return String(title || '').toLowerCase().split('·')[0].trim().slice(0, 40);
-        }
-        function dedupeKey(t) {
-            const day = (t.created_at || t.date || '').toString().slice(0, 10);
-            const typ = String(t.type || '').toLowerCase();
-            const title = (typ === 'sms' || /mj sms|sms/i.test(String(t.category || '')))
-              ? smsTitleBase(t.title)
-              : String(t.title || '').toLowerCase().slice(0, 40);
-            return [typ || t.type, title, String(t.amount_ngn || t.amount || ''), day].join('|');
-        }
-        // USA rentals: ONE row per rental. The purchase transaction is the row; its status follows
-        // the rental (pending -> completed when the code arrives -> refunded if cancelled/refunded).
-        const orderByRent = new Map();
-        for (const o of fromOrders) { if (o._rentKey) orderByRent.set(o._rentKey, o); }
-        const txRentRefs = new Set();
-        for (const t of fromTx) { if (t._ref && orderByRent.has(t._ref)) txRentRefs.add(t._ref); }
-        for (const t of fromTx) {
-            const o = t._ref ? orderByRent.get(t._ref) : null;
-            if (!o) continue;
-            const os = String(o.status || '').toLowerCase();
-            if (o._refunded || ['refunded', 'cancelled', 'canceled'].includes(os)) t.status = 'refunded';
-            else if (os === 'completed' && String(t.status || '').toLowerCase() !== 'refunded') t.status = 'completed';
-        }
-        const merged = [];
-        for (const t of fromTx) {
-            // Older rentals also have a separate "USA rental cancelled" refund row: it is now shown on the rental itself.
-            if (String(t.type || '').toLowerCase() === 'refund' && /^usa rental cancelled$/i.test(String(t.title || '').trim())) continue;
-            const k = dedupeKey(t);
-            if (seen.has(k)) continue;
-            seen.add(k);
-            merged.push(t);
-        }
-        for (const t of fromOrders) {
-            // MJ Mails purchase/refund transactions are authoritative when present.
-            if (t._mailOrderId && mailTransactionRefs.has(t._mailOrderId)) continue;
-            // This rental already has its transaction row above
-            if (t._rentKey && txRentRefs.has(t._rentKey)) continue;
-            const k = dedupeKey(t);
-            // Skip if a transactions row already covers this order
-            if (seen.has(k)) continue;
-            // SMS: same service + amount on same day = same purchase lifecycle
-            let dup = false;
-            for (const m of merged) {
-                const sameType = m.type === t.type || (String(m.category||'').toLowerCase().includes('sms') && String(t.category||'').toLowerCase().includes('sms'));
-                if (!sameType) continue;
-                const a = Number(m.amount_ngn) || 0;
-                const b = Number(t.amount_ngn) || 0;
-                if (!(a && b && Math.abs(a - b) < 1)) continue;
-                if (smsTitleBase(m.title) === smsTitleBase(t.title)) { dup = true; break; }
+        const matchedLedgerIds = new Set();
+        const comparableTitle = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const amountValue = (row) => {
+            const numeric = Number(row.amount_ngn);
+            if (Number.isFinite(numeric) && numeric > 0) return numeric;
+            const parsed = Number(String(row.amount || '').replace(/[^0-9.-]/g, ''));
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const findUniqueLedgerMatch = (order, windowMs = 120000) => {
+            const orderTime = new Date(order.created_at || 0).getTime();
+            const orderAmount = amountValue(order);
+            if (!orderTime) return null;
+            const timeCandidates = fromTx.filter((tx) => {
+                if (matchedLedgerIds.has(String(tx.id))) return false;
+                if (String(tx.type || '') !== String(order.type || '')) return false;
+                const txTime = new Date(tx.created_at || 0).getTime();
+                return txTime && Math.abs(txTime - orderTime) <= windowMs;
+            });
+
+            // eSIM and MJ Mails can debit either wallet currency. Their NGN amount
+            // may therefore differ from the displayed plan/retail price, while the
+            // order and ledger insert share the same database transaction timestamp.
+            if (order.type === 'email' || order.type === 'esim') {
+                if (timeCandidates.length === 1) return timeCandidates[0];
+                const wanted = comparableTitle(order.title);
+                const titleMatches = timeCandidates.filter((tx) => {
+                    const actual = comparableTitle(tx.title);
+                    return wanted && actual && (actual === wanted || actual.includes(wanted) || wanted.includes(actual));
+                });
+                if (titleMatches.length === 1) return titleMatches[0];
+                const amountMatches = timeCandidates.filter((tx) => Math.abs(amountValue(tx) - orderAmount) < 1);
+                if (amountMatches.length === 1) return amountMatches[0];
+                return null;
             }
-            if (dup) continue;
-            seen.add(k);
-            merged.push(t);
+
+            if (!orderAmount) return null;
+            const candidates = timeCandidates.filter((tx) => Math.abs(amountValue(tx) - orderAmount) < 1);
+            if (candidates.length === 1) return candidates[0];
+            if (candidates.length > 1) {
+                const wanted = comparableTitle(order.title);
+                const titleMatches = candidates.filter((tx) => {
+                    const actual = comparableTitle(tx.title);
+                    return wanted && actual && (actual === wanted || actual.includes(wanted) || wanted.includes(actual));
+                });
+                if (titleMatches.length === 1) return titleMatches[0];
+            }
+            return null;
+        };
+
+        // Preserve every actual transactions row. Only suppress a fallback order when
+        // one unique ledger row matches its type, amount and creation time.
+        const merged = [...fromTx];
+        for (const order of fromOrders) {
+            const matchWindow = order.type === 'email' ? 10000 : 120000;
+            const matched = findUniqueLedgerMatch(order, matchWindow);
+            if (matched) {
+                matchedLedgerIds.add(String(matched.id));
+                // Keep the one-row rental lifecycle: update the purchase row as the
+                // underlying number order moves from pending to completed/refunded.
+                if (order.type === 'sms') {
+                    const orderStatus = String(order.status || '').toLowerCase();
+                    if (order._refunded || ['refunded', 'cancelled', 'canceled'].includes(orderStatus)) {
+                        matched.status = 'refunded';
+                    } else if (orderStatus === 'completed' && String(matched.status || '').toLowerCase() !== 'refunded') {
+                        matched.status = 'completed';
+                    }
+                }
+                continue;
+            }
+            merged.push(order);
         }
+
         merged.sort((a, b) => {
             const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
             return tb - ta;
         });
-        transactions = merged.map((t) => Object.assign({}, t, { type: normalizeTxType(t) }));
+        transactions = merged;
         renderRecentActivity();
+        return true;
     } catch (e) {
-        console.warn('fetchUserTransactions', e);
+        console.error('[activity history] Could not load customer transactions:', e?.message || e);
+        if (historyContainer) {
+            historyContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Transaction history could not be loaded</h4><p>Please refresh and try again. Your transactions have not been changed.</p></div>';
+        }
+        return false;
     }
 }
 
@@ -8213,10 +8220,12 @@ window.toggleActivityHistory = async function() {
     } else {
         drawer.classList.add('active');
         overlay.classList.add('active');
+        let historyLoaded = true;
         if (currentUserId && typeof fetchUserTransactions === 'function') {
-            try { await fetchUserTransactions(currentUserId); } catch (_) {}
+            try { historyLoaded = (await fetchUserTransactions(currentUserId)) !== false; }
+            catch (_) { historyLoaded = false; }
         }
-        renderHistoryList('all');
+        if (historyLoaded) renderHistoryList('all');
     }
 };
 
@@ -8246,7 +8255,7 @@ function renderHistoryList(filterType = 'all') {
             if (filterType === 'booster') return kind === 'booster';
             if (filterType === 'conversion') return kind === 'conversion';
             if (filterType === 'telegram') return kind === 'telegram';
-            if (filterType === 'esim') return kind === 'esim' && String(t._source || 'transactions') === 'transactions';
+            if (filterType === 'esim') return kind === 'esim';
             return kind === filterType;
         });
     }
