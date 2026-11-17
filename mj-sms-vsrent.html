@@ -156,7 +156,7 @@ function renderPlans(){
  selectedPlan=null;$('rentActionBar').classList.add('hidden');$('buyBtn').classList.remove('hidden');$('buyBtn').disabled=false;$('buyBtn').textContent='Rent Number';$('selectedPrice').textContent='';
  $('plans').innerHTML=list.map((p,i)=>{
   const available=p.is_available===true&&(p.availability_known===true||p.availability_status==='verify_at_checkout');
-  const status=available?(p.availability_known===true?'Available':'Stock confirmed at checkout'):'Out of stock';
+  const status=available?(p.availability_known===true?'Available':'Check stock at checkout'):'Out of stock';
   return '<button type="button" class="item plan-option" data-i="'+i+'" '+(available?'':'disabled')+'><span class="name">'+esc(p.duration_label)+'</span><span class="meta">'+status+'</span><span class="price">'+money(p.price_ngn)+'</span></button>';
  }).join('')||'<div class="empty">No supplier plans are listed for this service and country.</div>';
  Array.from($('plans').querySelectorAll('[data-i]:not([disabled])')).forEach(btn=>btn.addEventListener('click',()=>{
