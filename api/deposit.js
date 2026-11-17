@@ -1978,7 +1978,12 @@ async function handleVaBegin(req, res) {
 // Docs: https://doc.heleket.com/
 // ═══════════════════════════════════════════════════════════
 
-const HELEKET_API = (process.env.HELEKET_API_BASE || 'https://api.heleket.com').replace(/\/$/, '');
+const configuredHeleketApi = String(process.env.HELEKET_API_BASE || 'https://api.heleket.hk').trim();
+// Heleket has moved its API host. Normalize the retired hostname even when the old
+// value is still present in Vercel environment variables; preserve custom base paths.
+const HELEKET_API = configuredHeleketApi
+  .replace(/^https?:\/\/api\.heleket\.com(?=\/|$)/i, 'https://api.heleket.hk')
+  .replace(/\/$/, '');
 
 function heleketMd5Sign(jsonString, apiKey) {
   const b64 = Buffer.from(String(jsonString || ''), 'utf8').toString('base64');
