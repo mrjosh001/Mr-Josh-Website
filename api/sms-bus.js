@@ -571,6 +571,12 @@ async function gotsmsHandleWebhook(req, res) {
         patch.service_name = (sn || 'USA rental') + ' · SMS received';
       }
       await supabase.from('number_orders').update(patch).eq('id', order.id);
+      // A code completes the purchase transaction, not the rental itself.
+      const receivedRentId = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+      if (receivedRentId) {
+        try { await gotsmsSetPurchaseTxStatus(order.user_id, receivedRentId, ['pending', 'active'], 'completed'); }
+        catch (txError) { console.warn('[gotsms webhook] transaction completion failed', txError?.message || txError); }
+      }
       {
         const push = buildSmsCodePush({
           phone: order.phone_number,
@@ -3615,8 +3621,8 @@ export default async function handler(req, res) {
       }
 
       const { data: txRows, error: txError } = await supabase.from('transactions').update({
-        title: `Number rental ${area_code}`, subtitle: `${fullPhone} · ${time} month(s)`,
-        status: 'completed', notes: 'smsbus_rent_order:' + orderId,
+        title: `Number rental ${area_code}`, subtitle: `${fullPhone} · ${time} month(s) · Waiting for first SMS`,
+        status: 'pending', notes: 'smsbus_rent_order:' + orderId,
         supplier_order: { provider: 'smsbus_rent', order_id: orderId, request_id: requestId }
       }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
         .eq('external_reference', String(debit.wallet_debit_id)).select('id');
@@ -3727,6 +3733,16 @@ export default async function handler(req, res) {
             patch.service_name = (name || 'Rental') + ' · SMS received';
           }
           await supabase.from('number_orders').update(patch).eq('id', orderRow.id).eq('user_id', auth.userId);
+          if (messages.some(m => String(m.code || '').trim() || String(m.body || '').trim())) {
+            if (orderRow.wallet_debit_id) {
+              const { error: txError } = await supabase.from('transactions').update({
+                status: 'completed',
+                subtitle: `${orderRow.phone_number || 'Rental number'} · SMS received`
+              }).eq('user_id', auth.userId).eq('category', 'MJ SMS').eq('type', 'purchase')
+                .eq('external_reference', String(orderRow.wallet_debit_id)).eq('status', 'pending');
+              if (txError) console.warn('[rent_sms] transaction completion failed', txError.message);
+            }
+          }
           const { data: stillOwned } = await supabase.from('number_orders').select('id')
             .eq('id', orderRow.id).eq('user_id', auth.userId).maybeSingle();
           if (!stillOwned) return json(res, 404, { success: false, message: 'Rental not found or no longer belongs to you.' });
@@ -5340,8 +5356,8 @@ export default async function handler(req, res) {
               message: 'The supplier created a rental, but saving its details needs reconciliation. Do not retry.' });
           }
           await supabase.from('transactions').update({
-            status: 'completed', title: 'USA number rental · ' + (rent.service?.name || plan?.service?.name || 'SMS'),
-            subtitle: String(rent.phone || '') + ' · ' + String(plan?.duration_translation || '')
+            status: 'pending', title: 'USA number rental · ' + (rent.service?.name || plan?.service?.name || 'SMS'),
+            subtitle: String(rent.phone || '') + ' · ' + String(plan?.duration_translation || '') + ' · Waiting for first SMS'
           }).eq('user_id', auth.userId).eq('external_reference', String(unitDebit.wallet_debit_id))
             .like('notes', requestNote + '%');
           out.push({ ...gotsmsPublicRent(rent), order_id: orderId, price_ngn: unitNgn });
@@ -5485,7 +5501,7 @@ export default async function handler(req, res) {
         const name = String(row.service_name || '');
         if (!/sms\s*received/i.test(name)) {
           const next = (name || 'USA rental') + ' · SMS received';
-          await supabase.from('number_orders').update({ service_name: next, status: 'completed' }).eq('id', row.id);
+          await supabase.from('number_orders').update({ service_name: next }).eq('id', row.id);
         }
         await gotsmsSetPurchaseTxStatus(auth.userId, rent_id, ['pending'], 'completed');
         return json(res, 200, { success: true, marked: true });
@@ -5521,7 +5537,7 @@ if (method === 'GET' && ga === 'gotsms_messages') {
             const key = `gotsms-${rent_id}`;
             const { data: row } = await supabase.from('number_orders').select('id, service_name, phone_number').eq('user_id', auth.userId).eq('source', 'gotsms').eq('idempotency_key', key).maybeSingle();
             if (row && !/sms\s*received/i.test(String(row.service_name || ''))) {
-              await supabase.from('number_orders').update({ status: 'completed', service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
+              await supabase.from('number_orders').update({ service_name: (row.service_name || 'USA rental') + ' · SMS received' }).eq('id', row.id);
               const last = msgs[msgs.length - 1] || msgs[0] || {};
               const push = buildSmsCodePush({
                 phone: row.phone_number,
