@@ -741,6 +741,44 @@ function listenToBalanceChanges(userId) {
 }
 
 /* ==========================================
+   CUSTOMER-SAFE TRANSACTION HISTORY LABELS
+   Supplier routing and supplier identifiers must never be rendered here.
+   This is defence in depth; the database also sanitizes title/subtitle.
+   ========================================== */
+function sanitizeCustomerTransactionLabel(value, fallback = '', field = 'subtitle') {
+    const original = String(value == null ? '' : value).trim();
+    if (!original) return fallback;
+
+    const supplierPattern = /\\b(?:sms[\\s_-]*bus|smsbus|got[\\s_-]*sms|gotsms|virtual[\\s_-]*sms|grizzly[\\s_-]*sms|hero[\\s_-]*sms|herosms|sms[\\s_-]*server[\\s_-]*[123])\\b/i;
+    const hadSupplier = supplierPattern.test(original);
+    const isRenewalRef = /gotsms-renew-|virtualsms_rent_req:|smsbus_rent_order:/i.test(original);
+    const isInternalRef = /(?:sms_order:|order_id:|rent_id:|activation_id:|supplier_order:|supplier_id:|provider_id:|service_id:|country_id:)/i.test(original);
+    const isBackendDetail = /(?:https?:\\/\\/|api[_ -]?key|authorization:|bearer\\s|raw (?:supplier|provider)? ?response|supplier (?:error|response)|provider (?:error|response)|json payload)/i.test(original);
+
+    let safe = original
+        .replace(/https?:\\/\\/[^\\s]+/gi, '')
+        .replace(/\\b[a-z0-9.-]*(?:gotsms|got-sms|smsbus|sms-bus|grizzlysms|virtualsms|hero-sms)[a-z0-9.-]*\\.(?:org|com|io|net)\\b/gi, '')
+        .replace(/\\b(?:sms[\\s_-]*bus|smsbus|got[\\s_-]*sms|gotsms|virtual[\\s_-]*sms|grizzly[\\s_-]*sms|hero[\\s_-]*sms|herosms|sms[\\s_-]*server[\\s_-]*[123])\\b/gi, '')
+        .replace(/\\b(?:sms_order|order_id|rent_id|activation_id|supplier_order|supplier_id|provider_id|service_id|country_id)\\s*[:=]\\s*[^\\s,;|]+/gi, '')
+        .replace(/\\s*[|·•,:;_-]\\s*/g, ' ')
+        .replace(/\\s{2,}/g, ' ')
+        .trim();
+
+    if (isBackendDetail) return fallback;
+    if (!safe && field === 'title' && hadSupplier) {
+        if (/refund|cancel/i.test(original)) return 'MJ SMS refund';
+        if (/rent/i.test(original)) return 'Number rental';
+        return fallback || 'MJ SMS';
+    }
+    if (!safe && field === 'subtitle' && (isInternalRef || isRenewalRef || hadSupplier)) {
+        if (isRenewalRef || /renew/i.test(original)) return 'Rental renewal';
+        if (/refund/i.test(original)) return 'Refund processed';
+        return '';
+    }
+    return safe || fallback;
+}
+
+/* ==========================================
    DYNAMIC SUPABASE TRANSACTION FETCH & FILTER
    ========================================== */
 async function fetchUserTransactions(userId) {
@@ -774,8 +812,12 @@ async function fetchUserTransactions(userId) {
                     id: tx.id,
                     type: rawType,
                     category,
-                    title: tx.title || (category === 'deposit' ? 'Wallet Deposit' : category === 'conversion' ? 'Currency Conversion' : 'Transaction'),
-                    subtitle: tx.subtitle || '',
+                    title: sanitizeCustomerTransactionLabel(
+                        tx.title,
+                        category === 'deposit' ? 'Wallet Deposit' : category === 'conversion' ? 'Currency Conversion' : category === 'sms' ? 'MJ SMS' : 'Transaction',
+                        'title'
+                    ),
+                    subtitle: sanitizeCustomerTransactionLabel(tx.subtitle, '', 'subtitle'),
                     amount: tx.amount || (tx.amount_ngn ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
                     date: new Date(tx.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
                     status: tx.status || 'Success'
