@@ -749,19 +749,19 @@ function sanitizeCustomerTransactionLabel(value, fallback = '', field = 'subtitl
     const original = String(value == null ? '' : value).trim();
     if (!original) return fallback;
 
-    const supplierPattern = /\\b(?:sms[\\s_-]*bus|smsbus|got[\\s_-]*sms|gotsms|virtual[\\s_-]*sms|grizzly[\\s_-]*sms|hero[\\s_-]*sms|herosms|sms[\\s_-]*server[\\s_-]*[123])\\b/i;
+    const supplierPattern = /\b(?:sms[\s_-]*bus|smsbus|got[\s_-]*sms|gotsms|virtual[\s_-]*sms|grizzly[\s_-]*sms|hero[\s_-]*sms|herosms|sms[\s_-]*server[\s_-]*[123])\b/i;
     const hadSupplier = supplierPattern.test(original);
     const isRenewalRef = /gotsms-renew-|virtualsms_rent_req:|smsbus_rent_order:/i.test(original);
     const isInternalRef = /(?:sms_order:|order_id:|rent_id:|activation_id:|supplier_order:|supplier_id:|provider_id:|service_id:|country_id:)/i.test(original);
-    const isBackendDetail = /(?:https?:\\/\\/|api[_ -]?key|authorization:|bearer\\s|raw (?:supplier|provider)? ?response|supplier (?:error|response)|provider (?:error|response)|json payload)/i.test(original);
+    const isBackendDetail = /(?:https?:\/\/|api[_ -]?key|authorization:|bearer\s|raw (?:supplier|provider)? ?response|supplier (?:error|response)|provider (?:error|response)|json payload)/i.test(original);
 
     let safe = original
-        .replace(/https?:\\/\\/[^\\s]+/gi, '')
-        .replace(/\\b[a-z0-9.-]*(?:gotsms|got-sms|smsbus|sms-bus|grizzlysms|virtualsms|hero-sms)[a-z0-9.-]*\\.(?:org|com|io|net)\\b/gi, '')
-        .replace(/\\b(?:sms[\\s_-]*bus|smsbus|got[\\s_-]*sms|gotsms|virtual[\\s_-]*sms|grizzly[\\s_-]*sms|hero[\\s_-]*sms|herosms|sms[\\s_-]*server[\\s_-]*[123])\\b/gi, '')
-        .replace(/\\b(?:sms_order|order_id|rent_id|activation_id|supplier_order|supplier_id|provider_id|service_id|country_id)\\s*[:=]\\s*[^\\s,;|]+/gi, '')
-        .replace(/\\s*[|·•,:;_-]\\s*/g, ' ')
-        .replace(/\\s{2,}/g, ' ')
+        .replace(/https?:\/\/[^\s]+/gi, '')
+        .replace(/\b[a-z0-9.-]*(?:gotsms|got-sms|smsbus|sms-bus|grizzlysms|virtualsms|hero-sms)[a-z0-9.-]*\.(?:org|com|io|net)\b/gi, '')
+        .replace(/\b(?:sms[\s_-]*bus|smsbus|got[\s_-]*sms|gotsms|virtual[\s_-]*sms|grizzly[\s_-]*sms|hero[\s_-]*sms|herosms|sms[\s_-]*server[\s_-]*[123])\b/gi, '')
+        .replace(/\b(?:sms_order|order_id|rent_id|activation_id|supplier_order|supplier_id|provider_id|service_id|country_id)\s*[:=]\s*[^\s,;|]+/gi, '')
+        .replace(/\s*[|·•,:;_-]\s*/g, ' ')
+        .replace(/\s{2,}/g, ' ')
         .trim();
 
     if (isBackendDetail) return fallback;
