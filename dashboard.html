@@ -5626,11 +5626,6 @@ function normalizeTxType(tx) {
     ) {
       return 'log';
     }
-    // purchase/order with no SMM markers → log (manual suppliers)
-    if ((type === 'purchase' || type === 'order') && !/booster|boost|owlet|smm/i.test(cat + ' ' + type)) {
-      return 'log';
-    }
-
     // Social boost (Owlet) — never Telegram, never log accounts
     if (
       type === 'booster' || type === 'boost' ||
@@ -5642,6 +5637,11 @@ function normalizeTxType(tx) {
         !/\b2fa\b|full 2fa|login|account|premades?|aged/i.test(title)
       )
     ) {
+      return 'booster';
+    }
+
+    // Only classify generic purchase rows after checking service-specific markers.
+    if ((type === 'purchase' || type === 'order') && /booster|boost|owlet|smm/i.test(cat + ' ' + title)) {
       return 'booster';
     }
 
@@ -5871,7 +5871,6 @@ async function fetchUserTransactions(userId) {
         // Recover orders that predate or missed their transaction-ledger insert.
         const fromOrders = await fetchActivityFromOrders(userId);
         const matchedLedgerIds = new Set();
-        const matchedOrderIds = new Set();
         const comparableTitle = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         const amountValue = (row) => {
             const numeric = Number(row.amount_ngn);
@@ -5910,7 +5909,6 @@ async function fetchUserTransactions(userId) {
             const matched = findUniqueLedgerMatch(order, matchWindow);
             if (matched) {
                 matchedLedgerIds.add(String(matched.id));
-                matchedOrderIds.add(String(order.id));
                 // Keep the one-row rental lifecycle: update the purchase row as the
                 // underlying number order moves from pending to completed/refunded.
                 if (order.type === 'sms') {
@@ -5933,11 +5931,13 @@ async function fetchUserTransactions(userId) {
         });
         transactions = merged;
         renderRecentActivity();
+        return true;
     } catch (e) {
         console.error('[activity history] Could not load customer transactions:', e?.message || e);
         if (historyContainer) {
             historyContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Transaction history could not be loaded</h4><p>Please refresh and try again. Your transactions have not been changed.</p></div>';
         }
+        return false;
     }
 }
 
@@ -8202,10 +8202,12 @@ window.toggleActivityHistory = async function() {
     } else {
         drawer.classList.add('active');
         overlay.classList.add('active');
+        let historyLoaded = true;
         if (currentUserId && typeof fetchUserTransactions === 'function') {
-            try { await fetchUserTransactions(currentUserId); } catch (_) {}
+            try { historyLoaded = (await fetchUserTransactions(currentUserId)) !== false; }
+            catch (_) { historyLoaded = false; }
         }
-        renderHistoryList('all');
+        if (historyLoaded) renderHistoryList('all');
     }
 };
 
