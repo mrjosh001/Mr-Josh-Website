@@ -1536,13 +1536,13 @@ async function wipeUnusedSmsNumbersHandle() {
 
   const txIds = new Set();
   let ordersWithoutTransaction = 0;
-  let transactionsProtectedForOtherOrders = 0;
+  const transactionsProtectedForOtherOrders = new Set();
   for (const order of toWipe) {
     const matches = txRows.filter((tx) => transactionMatchesOrder(tx, order));
     if (!matches.length) ordersWithoutTransaction += 1;
     for (const tx of matches) {
       if (tx.id == null) continue;
-      if (protectedTransactionIds.has(String(tx.id))) transactionsProtectedForOtherOrders += 1;
+      if (protectedTransactionIds.has(String(tx.id))) transactionsProtectedForOtherOrders.add(String(tx.id));
       else txIds.add(String(tx.id));
     }
   }
@@ -1568,7 +1568,7 @@ async function wipeUnusedSmsNumbersHandle() {
   return {
     status: 200,
     body: {
-      success: true, wiped, transactions_removed, orders_without_transaction: ordersWithoutTransaction,
+      success: true, wiped, transactions_removed, orders_without_transaction: ordersWithoutTransaction, transactions_preserved_for_other_orders: transactionsProtectedForOtherOrders.size,
       message: wiped + ' unused number(s) and ' + transactions_removed + ' matching transaction(s) removed.'
     }
   };
