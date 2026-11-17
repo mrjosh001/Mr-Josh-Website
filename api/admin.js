@@ -1474,7 +1474,31 @@ async function wipeUnusedSmsNumbersHandle() {
     .limit(5000);
 
   if (selErr) return { status: 500, body: { success: false, message: 'Could not scan SMS orders: ' + selErr.message } };
-  const toWipe = (rows || []).filter((order) => !hasReceivedCode(order));
+  const candidates = rows || [];
+  const virtualRentalIds = [...new Set(candidates
+    .filter((order) => String(order.source || '').toLowerCase() === 'virtualsms_rent')
+    .map((order) => String(order.order_id || '').trim())
+    .filter(Boolean))];
+  const receivedVirtualRentalIds = new Set();
+  for (let i = 0; i < virtualRentalIds.length; i += 200) {
+    const { data: messages, error: inboxError } = await supabase
+      .from('virtualsms_rent_messages')
+      .select('rental_id, code, content')
+      .in('rental_id', virtualRentalIds.slice(i, i + 200));
+    if (inboxError) {
+      return { status: 500, body: { success: false, message: 'Could not verify Global rental inbox history: ' + inboxError.message } };
+    }
+    for (const message of messages || []) {
+      if (String(message.code || '').trim() || String(message.content || '').trim()) {
+        receivedVirtualRentalIds.add(String(message.rental_id));
+      }
+    }
+  }
+
+  const toWipe = candidates.filter((order) =>
+    !hasReceivedCode(order) &&
+    !(String(order.source || '').toLowerCase() === 'virtualsms_rent' && receivedVirtualRentalIds.has(String(order.order_id || '')))
+  );
   if (!toWipe.length) return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, message: 'Nothing to remove.' } };
 
   // transactions has external_reference, notes and meta. It has no order_id/reference columns.
