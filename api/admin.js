@@ -1514,12 +1514,37 @@ async function wipeUnusedSmsNumbersHandle() {
     if (offset === 49000) return { status: 503, body: { success: false, message: 'SMS transaction scan reached its safety limit. No rows were deleted.' } };
   }
 
+  // Protect any transaction that is also linked to a recent, active, completed,
+  // or message-received SMS order. A shared purchase must not disappear from
+  // history while another related order is being retained.
+  const { data: allSmsOrders, error: allOrdersError } = await supabase.from('number_orders')
+    .select('id, source, status, code, service_name, notes, created_at, user_id, order_id, idempotency_key, wallet_debit_id')
+    .in('source', smsSources)
+    .limit(10000);
+  if (allOrdersError) return { status: 500, body: { success: false, message: 'Could not verify related SMS orders: ' + allOrdersError.message } };
+  if ((allSmsOrders || []).length >= 10000) {
+    return { status: 503, body: { success: false, message: 'SMS order safety limit reached. No rows were deleted.' } };
+  }
+  const wipingOrderIds = new Set(toWipe.map((order) => String(order.id)));
+  const protectedTransactionIds = new Set();
+  for (const order of allSmsOrders || []) {
+    if (wipingOrderIds.has(String(order.id))) continue;
+    for (const tx of txRows) {
+      if (tx.id != null && transactionMatchesOrder(tx, order)) protectedTransactionIds.add(String(tx.id));
+    }
+  }
+
   const txIds = new Set();
   let ordersWithoutTransaction = 0;
+  let transactionsProtectedForOtherOrders = 0;
   for (const order of toWipe) {
     const matches = txRows.filter((tx) => transactionMatchesOrder(tx, order));
     if (!matches.length) ordersWithoutTransaction += 1;
-    matches.forEach((tx) => { if (tx.id != null) txIds.add(String(tx.id)); });
+    for (const tx of matches) {
+      if (tx.id == null) continue;
+      if (protectedTransactionIds.has(String(tx.id))) transactionsProtectedForOtherOrders += 1;
+      else txIds.add(String(tx.id));
+    }
   }
 
   // Remove linked history first. If this fails, leave number orders intact for retry.
