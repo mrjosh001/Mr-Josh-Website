@@ -32,7 +32,7 @@ main{max-width:700px;margin:0 auto;padding:16px 16px 60px}
 #countries.grid{grid-template-columns:1fr;gap:8px}
 #plans.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .item{min-width:0;text-align:left;padding:13px;border:1px solid var(--border);border-radius:13px;background:var(--bg);color:var(--text);cursor:pointer;font:inherit;transition:background .18s,border-color .18s,transform .18s}
-.item:active{border-color:var(--primary);background:var(--soft);transform:scale(.985)}
+.item:active{border-color:var(--primary);background:var(--soft);transform:scale(.985)}.item:disabled{opacity:.62;cursor:not-allowed;transform:none}#plans .plan-option:disabled .price{color:var(--muted)}
 .name{display:block;font-size:13px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}
 .meta{display:block;font-size:11px;color:var(--muted);margin-top:5px}
 .price{display:block;color:var(--primary);font-size:14px;font-weight:800;margin-top:8px}
@@ -106,13 +106,28 @@ function renderServices(){const q=$('serviceSearch').value.trim().toLowerCase();
 function renderCountries(){const q=$('countrySearch').value.trim().toLowerCase();const list=plans.filter(p=>p.service_id===selectedService.service_id&&(!q||(p.country_name+' '+p.country_code).toLowerCase().includes(q)));const by=new Map(),counts=new Map();list.forEach(p=>{if(!by.has(p.country_code))by.set(p.country_code,p);counts.set(p.country_code,(counts.get(p.country_code)||0)+1);});const countries=Array.from(by.values()).sort((a,b)=>a.country_name.localeCompare(b.country_name));$('countries').innerHTML=countries.length?countries.map(c=>'<button type="button" class="item" data-code="'+esc(c.country_code)+'"><span class="name"><span aria-hidden="true" style="font-size:21px">'+flag(c.country_code)+'</span>'+esc(c.country_name)+'</span><span class="meta">'+counts.get(c.country_code)+' plans</span></button>').join(''):'<div class="empty">No plans are currently available for this service in this country.</div>';Array.from($('countries').querySelectorAll('[data-code]')).forEach(btn=>btn.addEventListener('click',()=>chooseCountry(btn.dataset.code)));}
 function chooseService(service){selectedService=service;selectedCountry=null;selectedPlan=null;$('serviceStep').classList.add('hidden');$('countryStep').classList.remove('hidden');$('planStep').classList.add('hidden');$('serviceContext').textContent=service.service_name;$('countrySearch').value='';renderCountries();}
 function chooseCountry(code){selectedCountry=plans.find(p=>p.service_id===selectedService.service_id&&p.country_code===code);if(!selectedCountry)return;selectedPlan=null;$('countryStep').classList.add('hidden');$('planStep').classList.remove('hidden');$('planContext').innerHTML='<span class="plan-context-service">'+esc(selectedService.service_name)+'</span><span class="plan-context-dot">·</span>'+flag(code)+'<span class="plan-context-country">'+esc(selectedCountry.country_name)+'</span>';renderPlans();}
-function renderPlans(){const list=plans.filter(p=>p.service_id===selectedService.service_id&&p.country_code===selectedCountry.country_code).sort((a,b)=>a.duration_hours-b.duration_hours);$('plans').innerHTML=list.map((p,i)=>'<button type="button" class="item" data-i="'+i+'"><span class="name">'+esc(p.duration_label)+'</span><span class="meta">MJ HUB number rental</span><span class="price">'+money(p.price_ngn)+'</span></button>').join('');Array.from($('plans').querySelectorAll('[data-i]')).forEach(btn=>btn.addEventListener('click',()=>{selectedPlan=list[Number(btn.dataset.i)];Array.from($('plans').querySelectorAll('.item')).forEach(x=>x.style.borderColor='var(--border)');btn.style.borderColor='var(--primary)';$('buyBtn').classList.remove('hidden');$('buyBtn').textContent='Rent this number\n'+selectedPlan.country_name+' · '+selectedService.service_name+' · '+selectedPlan.duration_label+' · '+money(selectedPlan.price_ngn);$('selectedPrice').textContent='';}));}
+function renderPlans(){
+ const list=plans.filter(p=>p.service_id===selectedService.service_id&&p.country_code===selectedCountry.country_code).sort((a,b)=>a.duration_hours-b.duration_hours);
+ selectedPlan=null;$('buyBtn').classList.add('hidden');$('buyBtn').textContent='Rent this number';$('selectedPrice').textContent='';
+ $('plans').innerHTML=list.map((p,i)=>{
+  const available=p.is_available===true&&p.availability_known===true;
+  const status=available?'Available':(p.availability_known===true?'Sold out':'Stock unconfirmed');
+  return '<button type="button" class="item plan-option" data-i="'+i+'" '+(available?'':'disabled')+'><span class="name">'+esc(p.duration_label)+'</span><span class="meta">'+status+'</span><span class="price">'+money(p.price_ngn)+'</span></button>';
+ }).join('')||'<div class="empty">No supplier plans are listed for this service and country.</div>';
+ Array.from($('plans').querySelectorAll('[data-i]:not([disabled])')).forEach(btn=>btn.addEventListener('click',()=>{
+  selectedPlan=list[Number(btn.dataset.i)];
+  Array.from($('plans').querySelectorAll('.item')).forEach(x=>x.style.borderColor='var(--border)');
+  btn.style.borderColor='var(--primary)';$('buyBtn').classList.remove('hidden');
+  $('buyBtn').textContent='Rent this number\n'+selectedPlan.country_name+' · '+selectedService.service_name+' · '+selectedPlan.duration_label+' · '+money(selectedPlan.price_ngn);
+  $('selectedPrice').textContent='';
+ }));
+}
 const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v1';
 const RENT_CACHE_TTL=7*24*60*60*1000;
 const POPULAR_SERVICE_ORDER=['whatsapp','telegram','facebook','instagram','google','tiktok','twitter','discord','gmail','paypal','snapchat','linkedin'];
 function popularServiceRank(name){const n=String(name||'').toLowerCase();const i=POPULAR_SERVICE_ORDER.findIndex(key=>n===key||n.includes(key));return i<0?POPULAR_SERVICE_ORDER.length:i;}
 function buildRentalServices(rows){const map=new Map();rows.forEach(p=>{const k=String(p.service_id||'');if(!k)return;if(!map.has(k))map.set(k,{service_id:k,service_name:p.service_name,country_count:0,countries:new Set(),icon_url:p.icon_url||null,popular:p.popular===true});const entry=map.get(k);entry.countries.add(p.country_code);if(!entry.icon_url&&p.icon_url)entry.icon_url=p.icon_url;if(p.popular===true)entry.popular=true;});return Array.from(map.values()).map(s=>({...s,country_count:s.countries.size})).sort((a,b)=>(Number(b.popular)-Number(a.popular))||popularServiceRank(a.service_name)-popularServiceRank(b.service_name)||a.service_name.localeCompare(b.service_name));}
-function applyRentalCatalog(rows){plans=rows.filter(p=>String(p.country_code||'').toUpperCase()!=='US'&&p.is_available===true&&p.availability_known===true);services=buildRentalServices(plans);renderServices();if(!plans.length)$('services').innerHTML='<div class="empty">No global rental plans are available right now. Please check again shortly.</div>';}
+function applyRentalCatalog(rows){plans=rows.filter(p=>String(p.country_code||'').toUpperCase()!=='US');services=buildRentalServices(plans);renderServices();if(!plans.length)$('services').innerHTML='<div class="empty">No global rental plans are available right now. Please check again shortly.</div>';}
 function readRentalCache(){try{const o=JSON.parse(localStorage.getItem(RENT_CACHE_KEY)||'null');const age=Date.now()-Number(o&&o.ts||0);return o&&Array.isArray(o.plans)&&o.plans.length&&Number.isFinite(Number(o.ts))&&age>=0&&age<RENT_CACHE_TTL?o:null;}catch(_){return null;}}
 function writeRentalCache(rows){try{localStorage.setItem(RENT_CACHE_KEY,JSON.stringify({ts:Date.now(),plans:rows}));}catch(e){console.warn('[MJ global rental cache] Could not save cache',e&&e.message||e);}}
 function rentalServiceSkeleton(){let html='';for(let i=0;i<12;i++)html+='<div class="item service-item rent-skel-tile" aria-hidden="true"><div class="rent-skel-icon"></div><div class="rent-skel-label"></div><div class="rent-skel-meta"></div></div>';return html;}
