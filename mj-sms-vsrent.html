@@ -32,7 +32,7 @@ main{max-width:700px;margin:0 auto;padding:16px 16px 60px}
 #countries.grid{grid-template-columns:1fr;gap:8px}
 #plans.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .item{min-width:0;text-align:left;padding:13px;border:1px solid var(--border);border-radius:13px;background:var(--bg);color:var(--text);cursor:pointer;font:inherit;transition:background .18s,border-color .18s,transform .18s}
-.item:active{border-color:var(--primary);background:var(--soft);transform:scale(.985)}.item:disabled{opacity:.62;cursor:not-allowed;transform:none}#plans .plan-option:disabled .price{color:var(--muted)}
+.item:active{border-color:var(--primary);background:var(--soft);transform:scale(.985)}.item:disabled{opacity:.62;cursor:not-allowed;transform:none}#plans .plan-option:disabled .price{color:var(--muted)}#plans .plan-option:disabled .meta{color:#dc5555;font-weight:800}
 .name{display:block;font-size:13px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}
 .meta{display:block;font-size:11px;color:var(--muted);margin-top:5px}
 .price{display:block;color:var(--primary);font-size:14px;font-weight:800;margin-top:8px}
@@ -111,7 +111,7 @@ function renderPlans(){
  selectedPlan=null;$('buyBtn').classList.add('hidden');$('buyBtn').textContent='Rent this number';$('selectedPrice').textContent='';
  $('plans').innerHTML=list.map((p,i)=>{
   const available=p.is_available===true&&p.availability_known===true;
-  const status=available?'Available':(p.availability_known===true?'Sold out':'Stock unconfirmed');
+  const status=available?'Available':'Out of stock';
   return '<button type="button" class="item plan-option" data-i="'+i+'" '+(available?'':'disabled')+'><span class="name">'+esc(p.duration_label)+'</span><span class="meta">'+status+'</span><span class="price">'+money(p.price_ngn)+'</span></button>';
  }).join('')||'<div class="empty">No supplier plans are listed for this service and country.</div>';
  Array.from($('plans').querySelectorAll('[data-i]:not([disabled])')).forEach(btn=>btn.addEventListener('click',()=>{
