@@ -5580,7 +5580,7 @@ function normalizeTxType(tx) {
     }
 
     // Currency convert
-    if (type === 'conversion' || cat === 'conversion' || /currency\s*conversion|converter/i.test(title + ' ' + channel)) {
+    if (type === 'conversion' || cat === 'conversion' || /convert|swap|exchange|currency\s*conversion|converter/i.test(title + ' ' + cat + ' ' + channel)) {
       return 'conversion';
     }
 
