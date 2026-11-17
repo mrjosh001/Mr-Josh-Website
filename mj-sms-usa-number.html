@@ -436,7 +436,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       btn.classList.add('is-busy'); btn.disabled = true;
       var prev = btn.innerHTML;
       btn.innerHTML = '<i class="fa-solid fa-spinner spin"></i> Refreshing…';
-      await loadMessages();
+      await loadMessages(true);
       btn.classList.remove('is-busy'); btn.disabled = false; btn.innerHTML = prev;
       setFlash(hasReceivedCode ? 'Inbox updated' : 'Inbox refreshed — no SMS yet', true);
     };
@@ -610,10 +610,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     tick();
   }
 
-  async function loadMessages(){
+  async function loadMessages(forceSupplier){
     var box = document.getElementById('inbox');
     if(!box) return;
-    var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId) });
+    var j = await api('messages', { query: 'rent_id='+encodeURIComponent(rentId)+(forceSupplier?'&refresh_supplier=1':'') });
     if(isVsRent && j && j.rental){rent=Object.assign({},rent||{},j.rental,{source:'virtualsms_rent',id:rentId,service:{name:j.rental.service_name}});}
     var refreshAction=document.getElementById('btnRefresh');
     if(refreshAction&&!computeState().active)refreshAction.remove();
