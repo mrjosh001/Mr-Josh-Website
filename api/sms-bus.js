@@ -564,19 +564,13 @@ async function gotsmsHandleWebhook(req, res) {
       const notes = gotsmsPackNotes(inbox, meta.wh_ids);
 
       const patch = { notes };
-      // First SMS on an active rental → completed (keeps code field = active_till)
+      // Receiving an SMS does not end a multi-code rental. Keep the rental active
+      // and keep its purchase transaction pending until the rental naturally expires.
       const sn = String(order.service_name || '');
-      if (!/sms\s*received/i.test(sn) && order.status !== 'completed') {
-        patch.status = 'completed';
-        patch.service_name = (sn || 'USA rental') + ' · SMS received';
-      } else if (!/sms\s*received/i.test(sn)) {
+      if (!/sms\s*received/i.test(sn)) {
         patch.service_name = (sn || 'USA rental') + ' · SMS received';
       }
       await supabase.from('number_orders').update(patch).eq('id', order.id);
-      try {
-        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
-        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
-      } catch (_) {}
       {
         const push = buildSmsCodePush({
           phone: order.phone_number,
@@ -2099,6 +2093,15 @@ async function handleExpireStaleSmsBus(req, res) {
     const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', auth.userId).maybeSingle();
     if (prof?.is_admin) scopeUserId = null;
     else scopeUserId = auth.userId;
+  }
+
+  // Complete rental purchase transactions only after their stored rental expiry.
+  // The SQL function locks and finalizes rows atomically; it never touches OTP orders.
+  try {
+    const { error: rentalExpiryError } = await supabase.rpc('mj_complete_expired_sms_rentals');
+    if (rentalExpiryError) console.warn('[sms-bus rental expiry reconciliation]', rentalExpiryError.message);
+  } catch (e) {
+    console.warn('[sms-bus rental expiry reconciliation]', e?.message || e);
   }
 
   const cutoff = new Date(Date.now() - SMSBUS_EXPIRY_MS).toISOString();
