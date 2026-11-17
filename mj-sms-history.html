@@ -322,7 +322,7 @@ function parseUsaExpiry(o){
   var raw=o.active_till||o.code||null;
   if(!raw) return 0;
   var s=String(raw);
-  // SMS OTP codes are short numeric — not dates
+  // SMS OTP codes are short numeric. not dates
   if(/^\d{4,8}$/.test(s)) return 0;
   var ms=Date.parse(s);
   return isNaN(ms)?0:ms;
@@ -353,7 +353,7 @@ function usaMetaFromName(name){
 
 function isRent(o){var s=String(o.source||'').toLowerCase();return s==='gotsms'||s==='smsbus_rent'||s==='virtualsms_rent';}
 function serverLabel(o){
-  // Customer-facing labels only — never show supplier names
+  // Customer-facing labels only. never show supplier names
   const src=String(o.source||'').toLowerCase();
   if(src==='gotsms'||src==='virtualsms_rent') return 'USA rental';
   if(src==='smsbus_rent'||src.indexOf('rent')>=0) return 'Rental';
@@ -443,7 +443,7 @@ function render(){
     if(!isRent(o)&&isHeroSms&&b==='completed'&&o.code&&String(o.code).trim()&&!o.refunded){
       action='<div class="act"><button type="button" class="btn-reuse" data-hero-reactivate="1" data-order="'+esc(String(o.order_id||''))+'">Check reuse availability</button></div>';
     }
-    // Completed OTP — always allow opening the number page to re-read the code
+    // Completed OTP. always allow opening the number page to re-read the code
     if(!isRent(o)&&(b==='completed'||(o.code&&String(o.code).trim()))&&String(o.status)!=='waiting_for_code'){
       const page=isS2?'mj-sms3-number.html':'mj-sms-number.html';
       const oid=encodeURIComponent(o.order_id||'');
@@ -457,7 +457,7 @@ function render(){
     const tillMs=(isGotsms||isVsRent||String(o.source||'').toLowerCase()==='smsbus_rent')?parseUsaExpiry(o):(o.active_till?new Date(o.active_till).getTime():0);
     const rentStillLive=tillMs?tillMs>Date.now():true;
     const rentDead=['refunded','cancelled','canceled','finished','ended'].indexOf(stLow)>=0;
-    // Only mark expired if past active_till OR status is refunded/cancelled — never expire just because code field is odd
+    // Only mark expired if past active_till OR status is refunded/cancelled. never expire just because code field is odd
     // Trust countdown first: if active_till is still in the future, treat as Active even if DB status lagged
     var isActiveUsa = isGotsms ? isUsaActiveRow(o) : ((isVsRent||String(o.source||'').toLowerCase()==='smsbus_rent') ? isRentActiveRow(o) : false);
     const meta=(isGotsms||isVsRent)?usaMetaFromName(o.service_name||name):null;
@@ -471,7 +471,7 @@ function render(){
       else if(stLow==='expired'||stLow==='finished'||stLow==='ended'){ statusLabel='Expired'; pillCls='bad'; }
       else { statusLabel='Ended'; pillCls='muted'; }
     }
-    // Active or completed (timer ended after use) — allow inbox so codes stay readable
+    // Active or completed (timer ended after use). allow inbox so codes stay readable
     var showUsaInbox=(isGotsms||isVsRent)&&rentId&&(isActiveUsa||(typeof isRentCompletedRow==='function'&&isRentCompletedRow(o))||isRentCancelledOrRefunded(o));
     var isBusRent=String(o.source||'').toLowerCase()==='smsbus_rent';
     var showBusInbox=isBusRent&&o.order_id&&(isActiveUsa||(typeof isRentCompletedRow==='function'&&isRentCompletedRow(o))||true);
