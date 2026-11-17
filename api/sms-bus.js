@@ -7,6 +7,10 @@ import { handleVirtualSmsRental } from '../lib/virtualsms-rental.js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 
+// GotSMS signs the exact request bytes. Disable automatic parsing so webhook HMAC
+// verification receives the original body; other actions parse through readBody().
+export const config = { api: { bodyParser: false } };
+
 /**
  * SMS-BUS integration — OTP (with reuse) + long-term rentals.
  *
@@ -5598,7 +5602,7 @@ export default async function handler(req, res) {
         let rent_id = String(url.searchParams.get('rent_id') || '').trim();
         if (!rent_id && method === 'POST') {
           try {
-            const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+            const b = await readBody(req);
             rent_id = String(b.rent_id || '').trim();
           } catch (_) {}
         }
