@@ -198,17 +198,29 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     }catch(_){return '';}
   }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
-  function fmtNational(d){ return d.length===10 ? d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6) : d; }
-  function fmtPhone(p){
-    var d = String(p||'').replace(/\D/g,'');
-    if(d.length===11 && d[0]==='1') return '+1 '+fmtNational(d.slice(1));
-    if(d.length===10) return '+1 '+fmtNational(d);
-    return p || '—';
+  function fmtNational(d,countryCode){
+    if(countryCode==='GB'&&d.length>=9)return d.slice(0,4)+' '+d.slice(4);
+    return d.length===10&&['US','CA',''].indexOf(countryCode)>=0?d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6):d;
   }
-  function splitPhone(p){
-    var d = String(p||'').replace(/\D/g,'');
-    if(d.length===11 && d[0]==='1') d = d.slice(1);
-    return { dial: d.length===10 ? '+1' : '', digits: d, shown: d ? fmtNational(d) : '—' };
+  function fmtPhone(p){
+    var raw=String(p||'').trim(),d=raw.replace(/\D/g,'');
+    if(raw.charAt(0)==='+'&&d.length>0)return raw;
+    if(d.length===11&&d[0]==='1')return '+1 '+fmtNational(d.slice(1),'US');
+    if(d.length===10)return '+1 '+fmtNational(d,'US');
+    return p||'—';
+  }
+  function splitPhone(p,countryCode){
+    var raw=String(p||'').trim(),d=raw.replace(/\D/g,''),cc=String(countryCode||'').toUpperCase();
+    var dialCodes={GB:'44',US:'1',CA:'1',NG:'234',GH:'233',KE:'254',ZA:'27',IN:'91',AU:'61',DE:'49',FR:'33',ES:'34',IT:'39',NL:'31',BE:'32',IE:'353',PT:'351',PL:'48',SE:'46',NO:'47',DK:'45',FI:'358',CH:'41',AT:'43',TR:'90',AE:'971',SA:'966',EG:'20',BR:'55',MX:'52',AR:'54',JP:'81',KR:'82',SG:'65',MY:'60',ID:'62',PH:'63',TH:'66',VN:'84',HK:'852',NZ:'64'};
+    var dial=dialCodes[cc]||'';
+    if(raw.charAt(0)==='+'&&dial&&d.indexOf(dial)===0)d=d.slice(dial.length);
+    else if(dial&&d.indexOf(dial)===0&&d.length>dial.length+6)d=d.slice(dial.length);
+    if(!dial&&raw.charAt(0)==='+'){
+      var prefixes=Object.keys(dialCodes).map(function(k){return dialCodes[k];}).sort(function(a,b){return b.length-a.length;});
+      for(var i=0;i<prefixes.length;i++){if(d.indexOf(prefixes[i])===0&&d.length>prefixes[i].length+6){dial=prefixes[i];d=d.slice(dial.length);break;}}
+    }
+    if(!dial&&cc==='US'&&d.length===11&&d[0]==='1'){dial='1';d=d.slice(1);}
+    return {dial:dial?'+'+dial:'',digits:d,shown:d?fmtNational(d,cc):'—'};
   }
   // Clipboard with a fallback for in-app browsers / non-secure contexts.
   function legacyCopy(text){
@@ -342,7 +354,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     var withinRefundWindow = !!(isVsRent && rent && rent.created_at && vsAgeMs>=2*60*1000 && vsAgeMs<=20*60*1000);
     var canCancel = active && !hasReceivedCode && (!isVsRent || withinRefundWindow);
     var autoOn = !!(rent.auto_renew || rent.renewal || rent.is_auto_renew);
-    var ph = splitPhone(rent.phone || rent.number);
+    var ph = splitPhone(rent.phone || rent.number,rent.country_code);
     var renewPrice = Math.round(Number(rent.renew_price_ngn || rent.price_ngn || rent.price || 0));
 
     var badge = document.getElementById('statusBadge');
