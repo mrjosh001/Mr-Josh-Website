@@ -470,7 +470,7 @@ async function fetchAllServices(search){
     }
   }
   var unique=dedupeServices(collected);
-  if(!unique.length)return{ok:false,message:'The supplier returned an empty service catalogue.'};
+  if(!unique.length)return{ok:false,message:'No services are currently available.'};
   return{ok:true,services:unique};
 }
 function sortServices(){
@@ -801,7 +801,7 @@ function renderDetailForm(){
     var isOneDay=String(p.duration_type||'').toLowerCase().replace(/s$/,'')==='day' && Number(p.duration_in_type)===1;
     if(!isOneDay) isOneDay=/\b1\s*day\b/i.test(String(p.duration_translation||p.name||''));
     var recommended=isWhatsAppOnly && isOneDay;
-    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'><span class="supplier">'+(p.source==='virtualsms_rent'?'VS':'GS')+'</span>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
+    return '<div class="plan'+(available?'':' sold-out')+'" data-i="'+i+'"'+(available?'':' aria-disabled="true" title="This duration is sold out"')+'>'+(recommended?'<span class="plan-recommendation">RECOMMENDED</span>':'')+'<div class="dur">'+esc(label)+'</div><div class="price">'+fmtNgn(p.price_ngn)+'</div>'+(available?'':'<span class="stock-status">Sold out</span>')+'</div>';
   }).join('');
   var carHtml='<option value="">Any carrier</option>';
   if(carriers&&carriers.length){ carHtml+=carriers.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join(''); }
@@ -1172,7 +1172,7 @@ async function doRent(){
       try{vsStored=JSON.parse(sessionStorage.getItem('mj_virtualsms_rent_request')||'null');}catch(e){}
       if(vsStored&&vsStored.id&&vsStored.signature!==vsSignature){
         unlockFail();
-        var vsPendingMsg='A previous VirtualSMS rental is still being reconciled. Retry that request or contact support before starting another rental.';
+        var vsPendingMsg='A previous rental is still being reconciled. Retry that request or contact support before starting another rental.';
         if(errEl)errEl.textContent=vsPendingMsg;
         showRentToast(vsPendingMsg,false);
         return;

@@ -3320,7 +3320,7 @@ function filterVirtualSmsRentPlans(){
 async function syncVirtualSmsRentals(){
  const btn=document.getElementById('btnSyncVsRent'),p=document.getElementById('vsRentSyncProgress');
  setBtnBusy(btn,true,'Syncing…');
- let offset=0,total=0,plans=0,inserted=0,updated=0,available=0,errors=[],countries=0,round=0;
+ let offset=0,total=0,plans=0,inserted=0,updated=0,available=0,errors=[],countries=0,round=0,idsResolved=0,idsMissing=new Set();
  try{
   const h=await authHeaders();
   do{
@@ -3330,15 +3330,16 @@ async function syncVirtualSmsRentals(){
    const d=await res.json();
    if(!res.ok||!d.success)throw new Error(d.message||'VirtualSMS sync failed');
    total=Number(d.total_countries||total);plans+=Number(d.plans_seen||0);inserted+=Number(d.inserted||0);
-   updated+=Number(d.updated||0);available+=Number(d.available_plans||0);countries+=Number(d.countries_synced||0);
+   updated+=Number(d.updated||0);available+=Number(d.available_plans||0);countries+=Number(d.countries_synced||0);idsResolved+=Number(d.country_ids_resolved||0);
+   (d.country_ids_missing||[]).forEach(function(code){idsMissing.add(String(code));});
    errors=errors.concat(d.errors||[]);
    offset=Number(d.next_country_offset||total);
    if(p)p.textContent='Synced '+Math.min(offset,total)+' / '+total+' supplier countries · '+plans+' plans found';
    if(d.done)break;
    if(round>250)throw new Error('Sync paused for safety after 250 country batches. Run Sync again to continue.');
   }while(offset<total);
-  if(p)p.textContent='Global VirtualSMS sync finished · '+countries+' countries · '+plans+' plans · '+inserted+' new · '+updated+' updated'+(errors.length?' · '+errors.length+' warnings':'');
-  showAdminToast('VirtualSMS sync finished · '+countries+' countries'+(errors.length?' with warnings':''),errors.length?'error':'success');
+  if(p)p.textContent='Global rental sync finished · '+countries+' countries · '+plans+' plans · '+inserted+' new · '+updated+' updated · '+idsResolved+' country IDs verified · '+idsMissing.size+' unresolved'+(errors.length?' · '+errors.length+' warnings':'');
+  showAdminToast('Global rental sync finished · '+countries+' countries · '+idsMissing.size+' country IDs unresolved'+(errors.length?' with warnings':''),idsMissing.size||errors.length?'error':'success');
   await loadVirtualSmsRentPlans();
  }catch(e){if(p)p.textContent=e.message||'Sync failed';showAdminToast(e.message||'Sync failed','error');}
  finally{setBtnBusy(btn,false,'<i class="fas fa-sync"></i> Sync VirtualSMS');}
