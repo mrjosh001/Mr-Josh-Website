@@ -362,6 +362,7 @@ const GOTSMS_WEBHOOK_SECRET = process.env.GOTSMS_WEBHOOK_SECRET || process.env.G
 async function readRawBody(req) {
   if (typeof req.rawBody === 'string' && req.rawBody) return req.rawBody;
   if (Buffer.isBuffer(req.rawBody) && req.rawBody.length) return req.rawBody.toString('utf8');
+  if (req.rawBody instanceof Uint8Array && req.rawBody.length) return Buffer.from(req.rawBody).toString('utf8');
   if (typeof req.body === 'string') return req.body;
   if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
   // Body may already be parsed by the runtime — stream if still available
@@ -383,8 +384,9 @@ function gotsmsVerifyWebhookSignature(rawBody, headers) {
   const sig = String(lower['x-gotsms-signature'] || '').trim();
   const ts = String(lower['x-gotsms-timestamp'] || '').trim();
   if (!sig || !ts) return { ok: false, reason: 'missing_headers' };
+  if (!/^\d+$/.test(ts) || !Number.isSafeInteger(Number(ts))) return { ok: false, reason: 'invalid_timestamp' };
   const age = Math.abs(Math.floor(Date.now() / 1000) - Number(ts));
-  if (!Number.isFinite(age) || age > 300) return { ok: false, reason: 'stale_timestamp' };
+  if (age > 300) return { ok: false, reason: 'stale_timestamp' };
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(String(ts) + '.' + String(rawBody || '')).digest('hex');
   try {
     const a = Buffer.from(expected);
