@@ -1203,9 +1203,9 @@ async function handleOrder(req, res) {
     await supabase.from('transactions').insert({
       user_id: user.id,
       customer_id: profile.customer_id || null,
-      type: 'booster',
-      category: 'booster',
-      title: service.name || 'MJ Booster',
+      type: isTg ? 'telegram' : 'booster',
+      category: isTg ? 'telegram' : 'booster',
+      title: service.name || (isTg ? 'MJ Telegram' : 'MJ Booster'),
       subtitle: `${quantity.toLocaleString()} · ${link.slice(0, 60)}`,
       amount: `₦${totalNgn.toLocaleString()}`,
       amount_ngn: debit.ngn_debited,
