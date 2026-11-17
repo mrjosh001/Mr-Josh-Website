@@ -5531,33 +5531,33 @@ async function expireStalePocketFiDeposits(rows) {
     const now = Date.now();
     const updates = [];
     for (const tx of rows) {
-        const isPendingPocket =
-            String(tx.payment_provider || '').toLowerCase() === 'pocketfi' &&
+        const isPendingDeposit =
+            String(tx.type || '').toLowerCase() === 'deposit' &&
             String(tx.status || '').toLowerCase() === 'pending' &&
-            String(tx.type || '').toLowerCase() === 'deposit';
-        if (!isPendingPocket) continue;
+            /deposit/i.test(String(tx.title || ''));
+        if (!isPendingDeposit) continue;
         const created = new Date(tx.created_at).getTime();
         if (!created || now - created < POCKETFI_PENDING_TIMEOUT_MS) continue;
         updates.push(tx.id);
     }
     if (!updates.length) return rows;
     try {
-        await supabaseClient
+        const { error } = await supabaseClient
             .from('transactions')
             .update({
                 status: 'failed',
                 title: 'Deposit (expired)',
-                subtitle: 'Payment not completed in time',
-                channel: 'Bank Transfer'
+                subtitle: 'Payment not completed in time'
             })
             .in('id', updates);
+        if (error) throw error;
         return rows.map((tx) =>
             updates.includes(tx.id)
-                ? { ...tx, status: 'failed', title: 'Deposit (expired)', subtitle: 'Payment not completed in time', channel: 'Bank Transfer' }
+                ? { ...tx, status: 'failed', title: 'Deposit (expired)', subtitle: 'Payment not completed in time' }
                 : tx
         );
     } catch (e) {
-        console.warn('expireStalePocketFiDeposits', e);
+        console.warn('expireStalePocketFiDeposits', e?.message || e);
         return rows;
     }
 }
