@@ -1405,84 +1405,125 @@ async function smsOrdersInboxCountHandle(body = {}) {
 }
 
 async function wipeUnusedSmsNumbersHandle() {
-  // Remove cancelled/expired SMS number orders older than 15 days with no received code.
-  // Completed / waiting / recent rows stay. Also drop matching transaction history rows.
-  // Note: number_orders uses `code` only — do not select missing columns (sms_code etc).
   const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
-  const deadStatuses = ['expired', 'cancelled', 'canceled', 'refunded', 'failed'];
+  const deadStatuses = ['expired', 'cancelled', 'canceled', 'refunded'];
+  const smsSources = ['herosms', 'grizzlysms', 'virtualsms', 'gotsms', 'smsbus', 'smsbus_rent', 'virtualsms_rent'];
+  const rentalSources = new Set(['gotsms', 'smsbus_rent', 'virtualsms_rent']);
 
-  const { data: rows, error: selErr } = await supabase
-    .from('number_orders')
-    .select('id, status, code, created_at, user_id')
+  const parseNotes = (value) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+    const raw = String(value || '');
+    for (const part of [raw, raw.split('|')[0].trim()]) {
+      try {
+        const parsed = JSON.parse(part);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+    return {};
+  };
+
+  const hasReceivedCode = (order) => {
+    if (/sms\s*received/i.test(String(order.service_name || ''))) return true;
+    const meta = parseNotes(order.notes);
+    if (Array.isArray(meta.inbox) && meta.inbox.length) return true;
+    // Rental rows store active_till/expiry in code, not the received OTP.
+    if (rentalSources.has(String(order.source || '').toLowerCase())) return false;
+    return !!String(order.code || '').trim();
+  };
+
+  const transactionMatchesOrder = (tx, order) => {
+    if (String(tx.user_id) !== String(order.user_id)) return false;
+    const source = String(order.source || '').toLowerCase();
+    const orderMeta = parseNotes(order.notes);
+    const orderId = String(order.order_id || '');
+    const debitId = order.wallet_debit_id == null ? '' : String(order.wallet_debit_id);
+    const key = String(order.idempotency_key || '');
+    const txMeta = tx.meta && typeof tx.meta === 'object' ? tx.meta : {};
+    const notes = String(tx.notes || '').split('|').map((v) => v.trim()).filter(Boolean);
+    const externalRef = String(tx.external_reference || '');
+    const has = (marker, value, suffix) => !!value && notes.some((v) =>
+      v === marker + ':' + value || (suffix && v.startsWith(marker + ':' + value + ':' + suffix))
+    );
+
+    if (String(txMeta.number_order_id || '') === String(order.id)) return true;
+    if (debitId && (String(txMeta.wallet_debit_id || '') === debitId || externalRef === debitId || has('wallet_debit_id', debitId))) return true;
+    if (orderId && (externalRef === orderId || has('sms_order', orderId) || has('order_id', orderId) || has('smsbus_rent_order', orderId))) return true;
+
+    if (source === 'gotsms' && key.startsWith('gotsms-') && externalRef === key.slice(7)) return true;
+    if (source === 'virtualsms_rent' && key.startsWith('virtualsms_rent_req:')) {
+      const requestId = key.slice('virtualsms_rent_req:'.length);
+      if (externalRef === 'PENDING-' + requestId) return true;
+    }
+
+    const requestId = String(orderMeta.request_id || '');
+    if (source === 'virtualsms_rent' && requestId && has('virtualsms_rent_request', requestId)) return true;
+    if (source === 'gotsms' && requestId) {
+      if (String(orderMeta.request_kind || '').toLowerCase() === 'bulk') {
+        const unit = Number(orderMeta.unit);
+        if (Number.isInteger(unit) && unit > 0 && has('gotsms_bulk_request', requestId, 'unit:' + unit)) return true;
+      } else if (has('gotsms_single_request', requestId)) return true;
+    }
+    return false;
+  };
+
+  const { data: rows, error: selErr } = await supabase.from('number_orders')
+    .select('id, source, status, code, service_name, notes, created_at, user_id, order_id, idempotency_key, wallet_debit_id')
     .lt('created_at', cutoff)
     .in('status', deadStatuses)
+    .in('source', smsSources)
     .limit(5000);
 
-  if (selErr) {
-    return { status: 500, body: { success: false, message: 'Could not scan SMS orders: ' + selErr.message } };
+  if (selErr) return { status: 500, body: { success: false, message: 'Could not scan SMS orders: ' + selErr.message } };
+  const toWipe = (rows || []).filter((order) => !hasReceivedCode(order));
+  if (!toWipe.length) return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, message: 'Nothing to remove.' } };
+
+  // transactions has external_reference, notes and meta. It has no order_id/reference columns.
+  const txRows = [];
+  for (let offset = 0; offset < 50000; offset += 1000) {
+    const { data: page, error } = await supabase.from('transactions')
+      .select('id, user_id, external_reference, notes, meta')
+      .eq('category', 'MJ SMS').eq('type', 'purchase')
+      .order('id', { ascending: true }).range(offset, offset + 999);
+    if (error) return { status: 500, body: { success: false, message: 'Could not load SMS transactions: ' + error.message } };
+    txRows.push(...(page || []));
+    if (!page || page.length < 1000) break;
+    if (offset === 49000) return { status: 503, body: { success: false, message: 'SMS transaction scan reached its safety limit. No rows were deleted.' } };
   }
 
-  const toWipe = (rows || []).filter((r) => {
-    const code = String(r.code || r.sms || r.message || '').trim();
-    return !code;
-  });
-
-  if (!toWipe.length) {
-    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, message: 'Nothing to remove.' } };
+  const txIds = new Set();
+  let ordersWithoutTransaction = 0;
+  for (const order of toWipe) {
+    const matches = txRows.filter((tx) => transactionMatchesOrder(tx, order));
+    if (!matches.length) ordersWithoutTransaction += 1;
+    matches.forEach((tx) => { if (tx.id != null) txIds.add(String(tx.id)); });
   }
 
-  const ids = toWipe.map((r) => r.id).filter(Boolean);
-  let wiped = 0;
+  // Remove linked history first. If this fails, leave number orders intact for retry.
   let transactions_removed = 0;
+  const txList = [...txIds];
+  for (let i = 0; i < txList.length; i += 200) {
+    const { error, count } = await supabase.from('transactions').delete({ count: 'exact' }).in('id', txList.slice(i, i + 200));
+    if (error) return { status: 500, body: { success: false, message: 'Could not remove matching SMS transactions: ' + error.message, wiped: 0, transactions_removed } };
+    transactions_removed += typeof count === 'number' ? count : Math.min(200, txList.length - i);
+  }
 
-  // Delete in chunks to avoid URL/body limits
+  let wiped = 0;
+  const ids = toWipe.map((order) => order.id).filter(Boolean);
   for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200);
-    const { error: delErr, count } = await supabase
-      .from('number_orders')
-      .delete({ count: 'exact' })
-      .in('id', chunk);
-    if (delErr) {
-      return {
-        status: 500,
-        body: {
-          success: false,
-          message: 'Partial wipe failed: ' + delErr.message,
-          wiped,
-          transactions_removed
-        }
-      };
-    }
-    wiped += typeof count === 'number' ? count : chunk.length;
-
-    // Best-effort: remove related transaction rows (order id / reference)
-    try {
-      const { count: txCount } = await supabase
-        .from('transactions')
-        .delete({ count: 'exact' })
-        .in('order_id', chunk.map(String));
-      if (typeof txCount === 'number') transactions_removed += txCount;
-    } catch (_) {}
-    try {
-      const { count: txCount2 } = await supabase
-        .from('transactions')
-        .delete({ count: 'exact' })
-        .in('reference', chunk.map(String));
-      if (typeof txCount2 === 'number') transactions_removed += txCount2;
-    } catch (_) {}
+    const { error, count } = await supabase.from('number_orders').delete({ count: 'exact' })
+      .in('id', ids.slice(i, i + 200)).lt('created_at', cutoff).in('status', deadStatuses);
+    if (error) return { status: 500, body: { success: false, message: 'SMS order deletion failed after transaction cleanup: ' + error.message, wiped, transactions_removed } };
+    wiped += typeof count === 'number' ? count : Math.min(200, ids.length - i);
   }
 
   return {
     status: 200,
     body: {
-      success: true,
-      wiped,
-      transactions_removed,
-      message: wiped + ' unused number(s) removed.'
+      success: true, wiped, transactions_removed, orders_without_transaction: ordersWithoutTransaction,
+      message: wiped + ' unused number(s) and ' + transactions_removed + ' matching transaction(s) removed.'
     }
   };
 }
-
 
 async function listBoosterOrdersHandle() {
   let { data, error } = await supabase
