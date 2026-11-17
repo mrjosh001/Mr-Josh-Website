@@ -2057,19 +2057,29 @@ async function reclaimAndCompleteSmsBus(order, userId, code) {
 
 async function markTxStatus(userId, orderId, phone, status) {
   try {
-    const { data } = await supabase
-      .from('transactions')
-      .select('id, subtitle, notes, status, title')
+    // Resolve the purchase through its owned number_orders row. Searching the
+    // latest 25 SMS transactions by phone/order substring can update another
+    // purchase when a number is reused or order IDs overlap.
+    const { data: order, error: orderError } = await supabase.from('number_orders')
+      .select('wallet_debit_id')
+      .eq('user_id', userId)
+      .eq('source', 'smsbus')
+      .eq('order_id', String(orderId))
+      .maybeSingle();
+    if (orderError || !order?.wallet_debit_id) return false;
+    const { data, error } = await supabase.from('transactions')
+      .update({ status })
       .eq('user_id', userId)
       .eq('category', 'MJ SMS')
-      .order('created_at', { ascending: false })
-      .limit(25);
-    const hit = (data || []).find((tx) => {
-      const blob = `${tx.subtitle || ''} ${tx.notes || ''}`;
-      return blob.includes(String(orderId)) || (phone && blob.includes(String(phone)));
-    });
-    if (hit) await supabase.from('transactions').update({ status }).eq('id', hit.id);
-  } catch (_) {}
+      .eq('type', 'purchase')
+      .eq('external_reference', String(order.wallet_debit_id))
+      .select('id');
+    if (error) throw error;
+    return !!(data && data.length);
+  } catch (error) {
+    console.warn('[sms-bus transaction status update]', error?.message || error);
+    return false;
+  }
 }
 
 
