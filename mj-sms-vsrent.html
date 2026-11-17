@@ -138,7 +138,7 @@ async function chooseCountry(code){
  $('countryStep').classList.add('hidden');$('planStep').classList.remove('hidden');
  $('planContext').innerHTML='<span class="plan-context-service">'+esc(selectedService.service_name)+'</span><span class="plan-context-dot">·</span>'+flag(code)+'<span class="plan-context-country">'+esc(selectedCountry.country_name)+'</span>';
  $('plans').innerHTML='<div class="empty">Checking live supplier availability…</div>';
- $('buyBtn').classList.add('hidden');$('selectedPrice').textContent='';
+ $('rentActionBar').classList.add('hidden');$('buyBtn').classList.remove('hidden');$('selectedPrice').textContent='';
  try{
   const result=await api('catalog',{query:'scope=global&country_code='+encodeURIComponent(code)});
   if(!result.success||!Array.isArray(result.data))throw new Error(result.message||'Live availability is temporarily unavailable.');
@@ -153,7 +153,7 @@ async function chooseCountry(code){
 }
 function renderPlans(){
  const list=plans.filter(p=>p.service_id===selectedService.service_id&&p.country_code===selectedCountry.country_code).sort((a,b)=>a.duration_hours-b.duration_hours);
- selectedPlan=null;$('rentActionBar').classList.add('hidden');$('buyBtn').disabled=false;$('buyBtn').textContent='Rent Number';$('selectedPrice').textContent='';
+ selectedPlan=null;$('rentActionBar').classList.add('hidden');$('buyBtn').classList.remove('hidden');$('buyBtn').disabled=false;$('buyBtn').textContent='Rent Number';$('selectedPrice').textContent='';
  $('plans').innerHTML=list.map((p,i)=>{
   const available=p.is_available===true&&p.availability_known===true;
   const status=available?'Available':'Out of stock';
