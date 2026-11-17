@@ -141,6 +141,16 @@ function supplierDescription(product, category) {
 }
 
 async function handleSync(req, res) {
+  // Temporary customer-catalog suspension: keep every ClassyTee product hidden
+  // and prevent scheduled/manual syncs from inserting or re-enabling products.
+  // Re-enable only after an explicit admin decision that supplier support is active.
+  return res.status(200).json({
+    success: true,
+    source: 'classy',
+    suspended: true,
+    message: 'ClassyTee catalog sync is temporarily paused.'
+  });
+
   const adminHiddenSet = new Set();
   if (!API_KEY) {
     return res.status(500).json({ success: false, message: 'CLASSYTEE_API_KEY not configured' });
