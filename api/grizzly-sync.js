@@ -1834,6 +1834,15 @@ async function handleExpireStale(req, res) {
     }
   }
 
+  // Reconcile completed rental transactions across GotSMS, SMS-BUS and VirtualSMS.
+  // Rental expiry is distinct from OTP code receipt; the database function is idempotent.
+  try {
+    const { error: rentalExpiryError } = await supabase.rpc('mj_complete_expired_sms_rentals');
+    if (rentalExpiryError) console.warn('[sms rental expiry reconciliation]', rentalExpiryError.message);
+  } catch (e) {
+    console.warn('[sms rental expiry reconciliation]', e?.message || e);
+  }
+
   const cutoff = new Date(Date.now() - EXPIRY_MS).toISOString();
   let q = supabase
     .from('number_orders')
