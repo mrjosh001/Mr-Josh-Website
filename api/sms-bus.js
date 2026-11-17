@@ -353,7 +353,7 @@ function assertSmsSaleCoversCost(priceNgn, supplierUsd) {
   return { ok: true };
 }
 
-const GOTSMS_BASE = 'https://app.gotsms.org';
+const GOTSMS_BASE = 'https://app.gotsms.com';
 
 const GOTSMS_TOKEN = process.env.GOTSMS_API_TOKEN || process.env.GOT_SMS_TOKEN || '';
 /** HMAC secret from PUT /api/webhook response — store as GOTSMS_WEBHOOK_SECRET in Vercel */
@@ -370,9 +370,7 @@ async function readRawBody(req) {
     for await (const c of req) chunks.push(c);
     return Buffer.concat(chunks).toString('utf8');
   }
-  if (req.body && typeof req.body === 'object') {
-    try { return JSON.stringify(req.body); } catch (_) { return ''; }
-  }
+  // A parsed object is not the signed raw payload. Never reconstruct JSON for HMAC verification.
   return '';
 }
 
@@ -438,6 +436,7 @@ function gotsmsNotesMeta(notes) {
     if (s.startsWith('{')) {
       const o = JSON.parse(s);
       return {
+        ...o,
         inbox: Array.isArray(o.inbox) ? o.inbox : parseRentInboxNotes(notes),
         wh_ids: Array.isArray(o.wh_ids) ? o.wh_ids.map(String) : [],
         linked_rent_ids: Array.isArray(o.linked_rent_ids) ? o.linked_rent_ids.map(String) : [],
@@ -452,6 +451,7 @@ function gotsmsNotesMeta(notes) {
 function gotsmsSerializeNotes(meta) {
   const m = meta || {};
   return JSON.stringify({
+    ...m,
     inbox: Array.isArray(m.inbox) ? m.inbox : [],
     wh_ids: Array.isArray(m.wh_ids) ? m.wh_ids.map(String) : [],
     linked_rent_ids: Array.isArray(m.linked_rent_ids) ? m.linked_rent_ids.map(String) : [],
@@ -488,14 +488,18 @@ async function gotsmsResolveLinkedRentIds(userId, rentId, order) {
   return [...ids].filter(Boolean);
 }
 
-function gotsmsPackNotes(inbox, whIds) {
+function gotsmsPackNotes(inbox, whIds, extraMeta = {}) {
   const ids = (whIds || []).map(String).slice(-80);
-  return JSON.stringify({ inbox: mergeRentInbox([], inbox || []).slice(0, 100), wh_ids: ids });
+  return gotsmsSerializeNotes({
+    ...(extraMeta || {}),
+    inbox: mergeRentInbox([], inbox || []).slice(0, 100),
+    wh_ids: ids
+  });
 }
 
 /**
  * GotSMS webhook (beta): POST events with HMAC signature.
- * Docs: https://app.gotsms.org/docs/api/v1#api-webhooks
+ * Docs: https://app.gotsms.com
  * Endpoint: POST /api/sms-bus?action=gotsms_webhook
  */
 async function gotsmsHandleWebhook(req, res) {
@@ -561,17 +565,14 @@ async function gotsmsHandleWebhook(req, res) {
       };
       if (!msg.code && msg.body) msg.code = extractRentOtp(msg.body);
       const inbox = mergeRentInbox(meta.inbox, [msg]);
-      const notes = gotsmsPackNotes(inbox, meta.wh_ids);
+      const notes = gotsmsPackNotes(inbox, meta.wh_ids, meta);
 
       const patch = { notes };
-      // First SMS on an active rental → completed (keeps code field = active_till)
+      // Preserve terminal wallet states if a delayed message webhook arrives.
+      const terminalWalletState = ['refunded', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()) || !!order.refunded;
       const sn = String(order.service_name || '');
-      if (!/sms\s*received/i.test(sn) && order.status !== 'completed') {
-        patch.status = 'completed';
-        patch.service_name = (sn || 'USA rental') + ' · SMS received';
-      } else if (!/sms\s*received/i.test(sn)) {
-        patch.service_name = (sn || 'USA rental') + ' · SMS received';
-      }
+      if (!/sms\s*received/i.test(sn)) patch.service_name = (sn || 'USA rental') + ' · SMS received';
+      if (!terminalWalletState && order.status !== 'completed') patch.status = 'completed';
       await supabase.from('number_orders').update(patch).eq('id', order.id);
       try {
         const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
@@ -596,9 +597,9 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids) };
+      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
       if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
-      if (['expired', 'finished', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
+      if (['expired', 'finished', 'cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase()) || order.refunded) {
         // do not resurrect cancelled
       } else if (order.status !== 'completed') {
         patch.status = 'active';
@@ -613,11 +614,18 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
-      const patch = {
-        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
-        status: order.status === 'completed' ? 'completed' : 'active'
-      };
-      if (data.active_till) patch.code = String(data.active_till);
+      const currentStatus = String(order.status || '').toLowerCase();
+      const terminalWalletState = ['refunded', 'cancelled', 'canceled'].includes(currentStatus) || !!order.refunded;
+      const incomingTill = data.active_till ? Date.parse(String(data.active_till)) : 0;
+      const storedTill = order.code ? Date.parse(String(order.code)) : 0;
+      const newerExpiry = incomingTill > 0 && (!storedTill || incomingTill > storedTill + 60000);
+      const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
+      if (!terminalWalletState && (currentStatus === 'active' || newerExpiry)) {
+        patch.status = currentStatus === 'completed' ? 'completed' : 'active';
+      } else if (currentStatus === 'completed') {
+        patch.status = 'completed';
+      }
+      if (!terminalWalletState && newerExpiry) patch.code = new Date(incomingTill).toISOString();
       await supabase.from('number_orders').update(patch).eq('id', order.id);
       return json(res, 200, { success: true, event });
     }
@@ -629,8 +637,9 @@ async function gotsmsHandleWebhook(req, res) {
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
       // Flag in notes only — no wallet change (supplier-side balance)
-      const notesObj = { inbox: meta.inbox, wh_ids: meta.wh_ids, renewal_failed_at: new Date().toISOString() };
-      await supabase.from('number_orders').update({ notes: JSON.stringify(notesObj) }).eq('id', order.id);
+      await supabase.from('number_orders').update({
+        notes: gotsmsSerializeNotes({ ...meta, renewal_failed_at: new Date().toISOString() })
+      }).eq('id', order.id);
       await notifyUserPush(
         order.user_id,
         'Auto-renew failed',
@@ -648,6 +657,10 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
+      const currentStatus = String(order.status || '').toLowerCase();
+      if (order.refunded || ['refunded', 'cancelled', 'canceled'].includes(currentStatus)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'terminal_wallet_state' });
+      }
 
       let supplierMessagesVerified = false;
       let supplierHasSms = false;
@@ -673,7 +686,7 @@ async function gotsmsHandleWebhook(req, res) {
 
       // Paid multi/primary only — skip ₦0 linked rows for wallet credit
       const orderPrice = Number(order.price) || 0;
-      const alreadyRefunded = !!(order.refunded || order.status === 'refunded' || order.status === 'cancelled');
+      const alreadyRefunded = !!(order.refunded || ['refunded', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase()));
 
       let nextStatus = hadSms ? 'completed' : 'expired';
       let refundedNow = false;
@@ -725,7 +738,7 @@ async function gotsmsHandleWebhook(req, res) {
       }
 
       const patch = {
-        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids),
+        notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta),
         status: nextStatus
       };
       if (refundedNow) patch.refunded = true;
@@ -1011,7 +1024,8 @@ async function gotsmsPreExpireCancelSweep({ userId = null, windowMinutes = 10 } 
 /** Normalize supplier list responses across plain arrays and nested data envelopes. */
 function gotsmsListPayload(payload) {
   const candidates = [payload, payload && payload.data, payload && payload.data && payload.data.data,
-    payload && payload.data && payload.data.items, payload && payload.items, payload && payload.results,
+    payload && payload.data && payload.data.items, payload && payload.data && payload.data.services,
+    payload && payload.services, payload && payload.items, payload && payload.results,
     payload && payload.rentals];
   for (const value of candidates) if (Array.isArray(value)) return value;
   return [];
@@ -1019,6 +1033,29 @@ function gotsmsListPayload(payload) {
 function gotsmsMetaPayload(payload) {
   return (payload && payload.meta) || (payload && payload.data && payload.data.meta) ||
     (payload && payload.pagination) || (payload && payload.data && payload.data.pagination) || {};
+}
+
+// The documented GET /api/rents collection is the source of live rental state.
+// Do not call an undocumented GET /api/rents/{id} detail route.
+async function gotsmsLoadRentIndex() {
+  const rows = [];
+  for (let page = 1; page <= 100; page++) {
+    const g = await gotsmsFetch(`/api/rents?per_page=100&page=${page}`);
+    if (!g.ok) return { ok: false, status: g.status || 503, rows: [] };
+    const chunk = gotsmsListPayload(g.data);
+    rows.push(...chunk);
+    const meta = gotsmsMetaPayload(g.data);
+    const lastPage = Number(meta.last_page || meta.lastPage || meta.total_pages || meta.pages || 0);
+    if (!chunk.length || (lastPage > 0 ? page >= lastPage : chunk.length < 100)) {
+      return { ok: true, rows };
+    }
+  }
+  return { ok: false, status: 503, rows: [] };
+}
+
+function gotsmsFindRentInIndex(index, rentId) {
+  const id = String(rentId || '');
+  return (index?.rows || []).find((r) => String(r.id ?? r.rent_id ?? '') === id) || null;
 }
 
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
@@ -1101,20 +1138,18 @@ function gotsmsPlanUnavailable(plan) {
   return false;
 }
 
-/** Switch-plan options live on the rental detail endpoint; the list endpoint may omit them. Short cache keeps polling cheap. */
+/** Switch-plan options are supplied on the documented GET /api/rents collection. */
 const _gotsmsTransCache = new Map();
 async function gotsmsLoadTransitionOptions(rentId, listRent) {
   const rid = String(rentId || '');
   if (!rid) return [];
-  if (listRent && Array.isArray(listRent.transition_options) && listRent.transition_options.length) return listRent.transition_options;
+  if (listRent && Array.isArray(listRent.transition_options)) return listRent.transition_options;
   const hit = _gotsmsTransCache.get(rid);
   if (hit && Date.now() - hit.t < 60000) return hit.opts;
-  let opts = [];
-  try {
-    const cur = await gotsmsFetch('/api/rents/' + encodeURIComponent(rid));
-    const d = (cur.data && (cur.data.data || cur.data)) || null;
-    if (d && Array.isArray(d.transition_options)) opts = d.transition_options;
-  } catch (_) {}
+  const index = await gotsmsLoadRentIndex();
+  if (!index.ok) return [];
+  const live = gotsmsFindRentInIndex(index, rid);
+  const opts = Array.isArray(live?.transition_options) ? live.transition_options : [];
   _gotsmsTransCache.set(rid, { t: Date.now(), opts });
   return opts;
 }
@@ -4389,15 +4424,8 @@ export default async function handler(req, res) {
         // Resolve plan from supplier — never only the first global page (that caused false "out of stock")
         let plan = null;
         const service_id = String(body.service_id || '').trim();
-        // 1) Direct plan endpoint if supported
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
-          }
-        }
-        // 2) Filter by service_id and paginate until found
+        // Resolve through the documented, paginated plans collection only.
+        // Filter by service_id first and paginate until the requested plan is found.
         if (!plan && service_id) {
           for (let page = 1; page <= 10 && !plan; page++) {
             const qs = new URLSearchParams({
@@ -4667,21 +4695,9 @@ export default async function handler(req, res) {
               (tg.data.data && tg.data.data.is_included_for_next_renewal === true) ||
               /enabled/i.test(String(tg.data.message || ''))
             ));
-            // If response shape unclear, verify with GET rent
-            if (!autoRenew) {
-              const check = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent.id)}`);
-              const r = check.data?.data || check.data;
-              if (r && r.is_included_for_next_renewal === true) autoRenew = true;
-              else if (r && r.is_included_for_next_renewal === false) {
-                // still off — toggle again once
-                const tg2 = await gotsmsFetch(
-                  `/api/rents/${encodeURIComponent(rent.id)}/renewal/toggle`,
-                  { method: 'POST' }
-                );
-                const r2 = tg2.data?.data;
-                autoRenew = !!(r2 && r2.is_included_for_next_renewal === true) || /enabled/i.test(String(tg2.data?.message || ''));
-              }
-            }
+            // Trust one successful documented toggle response. Never issue
+            // a second flip based on an unsupported detail read.
+            autoRenew = !!(tg.ok && tg.data && tg.data.success !== false);
           } catch (e) {
             console.error('[gotsms] auto_renew', e.message || e);
           }
@@ -4920,10 +4936,8 @@ export default async function handler(req, res) {
         if (!g2.ok || !g2.data?.success) {
           // The attach request may have succeeded even if its response was lost.
           // Read the supplier rental before deciding whether to cancel/refund.
-          const detail = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}`);
-          const detailRent = detail.data?.data || detail.data?.rent || detail.data;
-          const detailServices = Array.isArray(detailRent?.services) ? detailRent.services
-            : (Array.isArray(detailRent?.service_ids) ? detailRent.service_ids : null);
+          const detail = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/services`);
+          const detailServices = gotsmsListPayload(detail.data);
           const secondAttached = Array.isArray(detailServices) && detailServices.some((x) =>
             String(x?.id ?? x?.service_id ?? x) === String(secondId)
           );
@@ -5112,13 +5126,7 @@ export default async function handler(req, res) {
 
         let plan = null;
         const service_id = String(body.service_id || '').trim();
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
-          }
-        }
+        // Resolve through the documented, paginated plans collection only.
         if (!plan && service_id) {
           for (let page = 1; page <= 10 && !plan; page++) {
             const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: '1' });
