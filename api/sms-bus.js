@@ -5562,7 +5562,7 @@ export default async function handler(req, res) {
             pr.transition_options = await gotsmsApplyAdminPlanPrices(pr.transition_options);
           }
         }
-        return json(res, 200, { success: true, data: publicRents, meta: gotsmsMetaPayload(g.data) });
+        return json(res, 200, { success: true, data: publicRents, meta: { count: publicRents.length } });
       }
 
       if (method === 'POST' && ga === 'gotsms_wake') {
