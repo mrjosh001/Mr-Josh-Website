@@ -83,7 +83,7 @@ select.f{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.or
 
 
 
-/* Purchase modal — same style as Server 1 / Server 2 */
+/* Purchase modal. same style as Server 1 / Server 2 */
 .purchase-modal{display:none;position:fixed;inset:0;z-index:2000;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:12px}
 .purchase-modal.open,.purchase-modal.active{display:flex}
 .purchase-sheet{background:#fff;color:#0f172a;width:100%;max-width:420px;border-radius:24px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35);animation:sheetUp .28s ease;padding-bottom:8px}
@@ -370,7 +370,7 @@ function serviceLogoHtml(name){
   return '<div class="svc-icon" style="background:'+bg+'"><i class="'+fa+'"></i></div>';
 }
 
-/* Area codes: no supplier catalogue — optional digit filter only */
+/* Area codes: no supplier catalogue. optional digit filter only */
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
 function fmtNgn(n){return '₦'+Number(n||0).toLocaleString('en-NG');}
@@ -755,7 +755,7 @@ async function loadPlans(){
   renderDetailForm();
 }
 function buildAreaOptions(){
-  /* GotSMS has no area-code catalogue API — area_code is an optional filter on rent
+  /* GotSMS has no area-code catalogue API. area_code is an optional filter on rent
      (2–6 digits). Keep a free input so users only request codes the supplier can match. */
   return '';
 }
@@ -915,7 +915,7 @@ async function confirmRentAvailability(){
   if(rb){ rb.disabled=true; rb.textContent='Checking stock…'; }
   try{
     // GotSMS docs: WITHOUT include_unavailable only plans WITH numbers in stock are returned.
-    // If our plan is missing from that list, it is sold out — block before checkout/wallet.
+    // If our plan is missing from that list, it is sold out. block before checkout/wallet.
     var j=await api('plans',{query:'service_id='+encodeURIComponent(selectedService.id)+'&per_page=100'});
     var list=(j&&j.data)||[];
     var fresh=list.find(function(p){ return String(p.id)===String(selectedPlan.id); });
@@ -1039,7 +1039,7 @@ function showSuccess(rent){
   var till=rent.active_till?new Date(rent.active_till).getTime():0;
   var rid=rent.id||rent.rent_id;
   box.style.display='';
-  box.innerHTML='<div style="font-weight:800;margin-bottom:6px">Number ready</div><div style="font-size:20px;font-weight:800">'+esc(rent.phone||'')+'</div><div class="helper-text">'+esc((rent.service&&rent.service.name)||selectedService.name)+'</div>'+(till?'<div class="helper-text">Time remaining</div><div class="countdown" id="cdMain">—</div>':'')+(rent.auto_renew?'<div class="helper-text" style="color:var(--ok);font-weight:700">Auto-renew is on</div>':(document.getElementById('autoRenewChk')&&document.getElementById('autoRenewChk').checked?'<div class="helper-text" style="color:var(--danger);font-weight:700">Auto-renew could not be enabled — turn it on in the inbox</div>':''))+'<div class="actions"><a class="primary" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rid)+'">Open inbox</a><a href="mj-sms-history.html?view=rent">My numbers</a></div>';
+  box.innerHTML='<div style="font-weight:800;margin-bottom:6px">Number ready</div><div style="font-size:20px;font-weight:800">'+esc(rent.phone||'')+'</div><div class="helper-text">'+esc((rent.service&&rent.service.name)||selectedService.name)+'</div>'+(till?'<div class="helper-text">Time remaining</div><div class="countdown" id="cdMain">—</div>':'')+(rent.auto_renew?'<div class="helper-text" style="color:var(--ok);font-weight:700">Auto-renew is on</div>':(document.getElementById('autoRenewChk')&&document.getElementById('autoRenewChk').checked?'<div class="helper-text" style="color:var(--danger);font-weight:700">Auto-renew could not be enabled. turn it on in the inbox</div>':''))+'<div class="actions"><a class="primary" href="mj-sms-usa-number.html?rent_id='+encodeURIComponent(rid)+'">Open inbox</a><a href="mj-sms-history.html?view=rent">My numbers</a></div>';
   if(till){(function tick(){var left=till-Date.now();var el=document.getElementById('cdMain');if(!el)return;if(left<=0){el.textContent='Expired';return;}var h=Math.floor(left/3600000),m=Math.floor((left%3600000)/60000),s=Math.floor((left%60000)/1000);el.textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');setTimeout(tick,1000);})();}
   try{box.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}
 }
@@ -1063,7 +1063,7 @@ function openPurchaseModal(){
   document.getElementById('psArea').textContent=isVs?'Not included with this plan':(_ad2.areaAmt?(_areaTxt+' · +'+fmtNgn(_ad2.areaAmt)):_areaTxt);
   document.getElementById('psQty').textContent=isVs?'1':String(qty);
   var ar=document.getElementById('autoRenewChk'),arEl=document.getElementById('psAutoRenew');
-  if(arEl)arEl.textContent=isVs?'Not included with this plan':((ar&&ar.checked)?'On — renews when period ends':'Off');
+  if(arEl)arEl.textContent=isVs?'Not included with this plan':((ar&&ar.checked)?'On. renews when period ends':'Off');
   document.getElementById('psUnitPrice').textContent=fmtNgn(selectedPlan.price_ngn);
   updateTotal(); var ta=document.getElementById('totalAmt'); document.getElementById('psTotal').textContent=ta?ta.textContent:fmtNgn(selectedPlan.price_ngn*qty);
   document.getElementById('psErr').textContent='';
@@ -1282,7 +1282,10 @@ async function doRent(){
       if(selectedPlan.source==='virtualsms_rent' && j && j.data && j.data.out_of_stock) await refreshVirtualSmsCatalog();
       unlockFail();
       var msg2=(j&&j.message)||'Rental failed';
+      var statusPending=!!(j&&j.reconciliation_required);
       if(/gotsms|unknown.*action|supplier|api\s*key/i.test(msg2)) msg2='Purchase could not be completed. Please refresh and try again.';
+      if(statusPending) msg2='Rental status is being confirmed. Please check Number History before trying again.';
+      else msg2='Rental declined. '+msg2;
       if(psErr) psErr.textContent=msg2;
       if(errEl) errEl.textContent=msg2;
       showRentToast(msg2, false);
@@ -1304,7 +1307,7 @@ async function doRent(){
     var rentObj=Array.isArray(j.data)?j.data[0]:j.data;
     var rid=rentObj&&(rentObj.id||rentObj.rent_id||rentObj.order_id||(j.data&&j.data.id));
     if(okEl) okEl.textContent=j.message||'Number rented successfully';
-    showRentToast(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'Your number is ready.':(j.message||(multiMode?'Both services ready on one number':'Number ready'+(rentObj&&rentObj.phone?': '+rentObj.phone:''))), true);
+    showRentToast('Rental accepted. '+(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'Your number is ready.':(j.message||(multiMode?'Both services are ready on one number':'Your number is ready'+(rentObj&&rentObj.phone?': '+rentObj.phone:'')))), true);
     if(rid){
       setTimeout(function(){
         location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(String(rid))+(selectedPlan&&selectedPlan.source==='virtualsms_rent'?'&source=virtualsms_rent':'');
@@ -1347,7 +1350,7 @@ function syncMultiPicks(){
   var p=document.getElementById('multiPicks');
   if(!p) return;
   if(!multiSelected.length){ p.textContent='No services selected yet.'; return; }
-  p.textContent=multiSelected.map(function(s){return s.name;}).join(' + ') + (multiSelected.length<2?' — select '+(2-multiSelected.length)+' more service'+(multiSelected.length===0?'s':'')+'':' — next: choose 1 hour or 1 day');
+  p.textContent=multiSelected.map(function(s){return s.name;}).join(' + ') + (multiSelected.length<2?'. select '+(2-multiSelected.length)+' more service'+(multiSelected.length===0?'s':'')+'':'. next: choose 1 hour or 1 day');
 }
 function toggleMultiService(svc){
   if(!svc||!svc.id) return;
