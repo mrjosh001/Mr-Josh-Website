@@ -1033,9 +1033,7 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
       'Content-Type': 'application/json',
       Accept: 'application/json'
     },
-    // Bound each supplier request so a stalled connection cannot consume the
-    // entire serverless execution window.
-    signal: AbortSignal.timeout(12000)
+    // Each retry receives its own timeout signal inside the request loop.
   };
   if (body != null) opts.body = JSON.stringify(body);
 
@@ -1045,7 +1043,7 @@ async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await fetch(`${GOTSMS_BASE}${path}`, opts);
+      const res = await fetch(`${GOTSMS_BASE}${path}`, { ...opts, signal: AbortSignal.timeout(20000) });
       const raw = await res.text();
       let data = null;
       try { data = raw ? JSON.parse(raw) : {}; }
