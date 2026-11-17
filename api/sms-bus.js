@@ -784,7 +784,7 @@ async function gotsmsHandleWebhook(req, res) {
             .eq('phone_number', order.phone_number)
             .eq('price', 0)
             .neq('id', order.id);
-          if (linkedUpdateError) throw linkedUpdateError;
+          if (linkedUpdateError) console.warn('[gotsms webhook] linked rental rows update failed:', linkedUpdateError.message);
         }
       } catch (_) {}
 
