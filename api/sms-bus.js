@@ -1058,6 +1058,75 @@ function gotsmsFindRentInIndex(index, rentId) {
   return (index?.rows || []).find((r) => String(r.id ?? r.rent_id ?? '') === id) || null;
 }
 
+async function gotsmsSetRenewalState(userId, rentId, order, requestedEnabled) {
+  const linkedIds = await gotsmsResolveLinkedRentIds(userId, rentId, order);
+  if (!linkedIds.length) return { ok: false, status: 404, message: 'Rental not found' };
+
+  const index = await gotsmsLoadRentIndex();
+  if (!index.ok) return { ok: false, status: 503, message: 'Could not verify the live rental state. No renewal setting was changed.' };
+
+  const liveById = new Map();
+  for (const id of linkedIds) {
+    const live = gotsmsFindRentInIndex(index, id);
+    if (!live || live.is_included_for_next_renewal == null) {
+      return { ok: false, status: 503, message: 'Could not verify auto-renewal for every linked rental. No renewal setting was changed.' };
+    }
+    liveById.set(String(id), live);
+  }
+
+  const primaryLive = liveById.get(String(rentId));
+  const currentlyOn = !!primaryLive.is_included_for_next_renewal;
+  const wantOn = requestedEnabled === undefined || requestedEnabled === null || requestedEnabled === ''
+    ? !currentlyOn
+    : (requestedEnabled === true || requestedEnabled === 'true' || requestedEnabled === 1 || requestedEnabled === '1');
+  const renewPrice = gotsmsRenewPriceNgn(order);
+
+  if (wantOn && linkedIds.some((id) => !liveById.get(String(id)).is_included_for_next_renewal)) {
+    if (!(renewPrice > 0)) {
+      return { ok: false, status: 400, message: 'Cannot enable auto-renew: rental price missing on order.' };
+    }
+    const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', userId).maybeSingle();
+    const balanceNgn = Number(prof?.balance) || 0;
+    const balanceUsd = Number(prof?.balance_usd) || 0;
+    const combined = balanceNgn + balanceUsd * WALLET_USD_RATE;
+    if (combined + 0.0001 < renewPrice) {
+      return {
+        ok: false, status: 400,
+        message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
+        data: { required_ngn: renewPrice, balance_ngn: balanceNgn, balance_usd: balanceUsd, combined_value_ngn: combined }
+      };
+    }
+  }
+
+  const failed = [];
+  for (const id of linkedIds) {
+    const live = liveById.get(String(id));
+    if (!!live.is_included_for_next_renewal === wantOn) continue;
+    const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}/renewal/toggle`, { method: 'POST' });
+    if (!toggle.ok || toggle.data?.success === false) failed.push(String(id));
+  }
+
+  const verify = await gotsmsLoadRentIndex();
+  const after = verify.ok ? gotsmsFindRentInIndex(verify, rentId) : null;
+  const enabled = after && after.is_included_for_next_renewal != null
+    ? !!after.is_included_for_next_renewal
+    : (failed.length === 0 ? wantOn : currentlyOn);
+  const allMatch = verify.ok
+    ? linkedIds.every((id) => {
+        const live = gotsmsFindRentInIndex(verify, id);
+        return live && !!live.is_included_for_next_renewal === wantOn;
+      })
+    : failed.length === 0;
+
+  if (!allMatch) {
+    return {
+      ok: false, status: 502, enabled, partial: true, message: 'Auto-renewal could not be confirmed for every linked rental. Refresh Number History before trying again.',
+      data: { auto_renew: enabled, renew_price_ngn: renewPrice, failed_rent_ids: failed }
+    };
+  }
+  return { ok: true, enabled: wantOn, renew_price_ngn: renewPrice };
+}
+
 async function gotsmsFetch(path, { method = 'GET', body } = {}) {
   if (!GOTSMS_TOKEN) {
     return { ok: false, status: 503, data: { success: false, message: 'Service temporarily unavailable. Please try again shortly.' } };
@@ -5698,93 +5767,26 @@ if (method === 'GET' && ga === 'gotsms_messages') {
 if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
 
-        let live = null;
-        try {
-          const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          live = (cur.data && (cur.data.data || cur.data)) || null;
-        } catch (_) {}
-        const currentlyOn = !!(live && (live.is_included_for_next_renewal || live.auto_renew));
-        let wantOn = body.enabled;
-        if (wantOn === undefined || wantOn === null || wantOn === '') {
-          wantOn = !currentlyOn;
-        } else {
-          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
-        }
-
-        const renewPrice = gotsmsRenewPriceNgn(order);
-        if (wantOn && !currentlyOn) {
-          if (!(renewPrice > 0)) {
-            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
-          }
-          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
-          const bal = Number(prof && prof.balance) || 0;
-          const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
-          if (combined + 0.0001 < renewPrice) {
-            return json(res, 400, {
-              success: false,
-              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: Number(prof && prof.balance_usd) || 0, combined_value_ngn: combined }
-            });
-          }
-        }
-
-        if (wantOn === currentlyOn) {
-          return json(res, 200, {
-            success: true,
-            message: wantOn
-              ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet each renewal (same as this rental).')
-              : 'Auto-renew is off',
-            data: { auto_renew: wantOn, renew_price_ngn: renewPrice }
+        const state = await gotsmsSetRenewalState(auth.userId, rent_id, order, body.enabled);
+        if (!state.ok) {
+          return json(res, state.status || 400, {
+            success: false, message: state.message || 'Could not update auto-renewal',
+            data: state.data || { auto_renew: !!state.enabled, renew_price_ngn: state.renew_price_ngn || gotsmsRenewPriceNgn(order), partial: !!state.partial }
           });
         }
-
-        const linkedRenewIds = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
-        let g = { ok: false, data: {} };
-        let anyToggleOk = false;
-        for (const rid of linkedRenewIds) {
-          try {
-            // Toggle each linked rent until state matches desired (GotSMS toggle flips)
-            let liveR = null;
-            try {
-              const curR = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}`);
-              liveR = curR.data && (curR.data.data || curR.data);
-            } catch (_) {}
-            const onNow = !!(liveR && (liveR.is_included_for_next_renewal || liveR.auto_renew));
-            if (onNow === wantOn) { anyToggleOk = true; continue; }
-            const gg = await gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
-            g = gg;
-            if (gg.ok) anyToggleOk = true;
-          } catch (_) {}
-        }
-        if (!anyToggleOk && !g.ok) {
-          return json(res, g.status || 400, {
-            success: false,
-            message: gotsmsSafeMsg(g.data && g.data.message, 'Could not update auto-renewal'),
-            data: (g.data && g.data.data) || null
-          });
-        }
-        let afterOn = wantOn;
-        try {
-          const again = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}`);
-          const d = again.data && (again.data.data || again.data);
-          if (d) afterOn = !!(d.is_included_for_next_renewal || d.auto_renew);
-        } catch (_) {}
-
         return json(res, 200, {
           success: true,
-          message: afterOn
-            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
+          message: state.enabled
+            ? ('Auto-renew is on. ₦' + state.renew_price_ngn.toLocaleString() + ' will be charged from your wallet when the period renews (same price as this rental).')
             : 'Auto-renew is off',
-          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+          data: { auto_renew: state.enabled, renew_price_ngn: state.renew_price_ngn }
         });
-
       }
 
       if (method === 'POST' && ga === 'gotsms_refund') {
@@ -5894,126 +5896,28 @@ if (method === 'POST' && ga === 'gotsms_toggle_renewal') {
       if (method === 'POST' && ga === 'gotsms_renewal_toggle') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-
         const body = await readBody(req);
         const rent_id = String(body.rent_id || '').trim();
         if (!rent_id) return json(res, 400, { success: false, message: 'rent_id required' });
         const order = await gotsmsAssertOwns(auth.userId, rent_id);
         if (!order) return json(res, 403, { success: false, message: 'Rental not found' });
 
-        // Prefer list endpoint — single-rent GET is unreliable on provider
-        async function readRenewOn(rid) {
-          const id = String(rid);
-          try {
-            const cur = await gotsmsFetch(`/api/rents/${encodeURIComponent(id)}`);
-            if (cur.ok) {
-              const d = cur.data && (cur.data.data || cur.data);
-              if (d && (d.id || d.is_included_for_next_renewal !== undefined || d.auto_renew !== undefined)) {
-                return !!(d.is_included_for_next_renewal || d.auto_renew);
-              }
-            }
-          } catch (_) {}
-          for (const st of ['active', 'finished']) {
-            try {
-              const list = await gotsmsFetch(`/api/rents?status=${st}&per_page=100`);
-              const rows = Array.isArray(list.data?.data) ? list.data.data : [];
-              const hit = rows.find((r) => String(r.id) === id || String(r.rent_id || '') === id);
-              if (hit) return !!(hit.is_included_for_next_renewal || hit.auto_renew);
-            } catch (_) {}
-          }
-          return null;
-        }
-        async function toggleRenew(rid) {
-          return gotsmsFetch(`/api/rents/${encodeURIComponent(rid)}/renewal/toggle`, { method: 'POST' });
-        }
-        function messageImpliesOn(msg) {
-          const s = String(msg || '').toLowerCase();
-          if (/disabled|turned off|is off|deactivated/.test(s)) return false;
-          if (/enabled|turned on|is on|activated/.test(s)) return true;
-          return null;
-        }
-        async function ensureRenew(rid, want) {
-          let on = await readRenewOn(rid);
-          if (on === want) return { ok: true, on: !!on };
-          const t1 = await toggleRenew(rid);
-          const implied1 = messageImpliesOn(t1.data && t1.data.message);
-          if (t1.ok) {
-            on = await readRenewOn(rid);
-            if (on === want) return { ok: true, on: !!on };
-            if (on === null && implied1 === want) return { ok: true, on: want };
-            if (on === null && t1.data && t1.data.success) return { ok: true, on: want };
-            // second flip only if we can read state and it is still wrong
-            if (on !== null && on !== want) {
-              const t2 = await toggleRenew(rid);
-              on = await readRenewOn(rid);
-              if (on === want) return { ok: true, on: !!on };
-              const implied2 = messageImpliesOn(t2.data && t2.data.message);
-              if (t2.ok && on === null && (implied2 === want || t2.data?.success)) return { ok: true, on: want };
-            }
-            if (t1.ok && on === null) return { ok: true, on: want };
-          }
-          on = await readRenewOn(rid);
-          return { ok: on === want, on: on === null ? want : !!on };
-        }
-
-        const currentlyOn = (await readRenewOn(rent_id)) === true;
-        let wantOn = body.enabled;
-        if (wantOn === undefined || wantOn === null || wantOn === '') {
-          wantOn = !currentlyOn;
-        } else {
-          wantOn = wantOn === true || wantOn === 'true' || wantOn === 1 || wantOn === '1';
-        }
-
-        const renewPrice = gotsmsRenewPriceNgn(order);
-        if (wantOn && !currentlyOn) {
-          if (!(renewPrice > 0)) {
-            return json(res, 400, { success: false, message: 'Cannot enable auto-renew: rental price missing on order.' });
-          }
-          const { data: prof } = await supabase.from('profiles').select('balance,balance_usd').eq('id', auth.userId).maybeSingle();
-          const bal = Number(prof && prof.balance) || 0;
-          const balUsd = Number(prof && prof.balance_usd) || 0;
-          const combined = bal + balUsd * WALLET_USD_RATE;
-          if (combined + 0.0001 < renewPrice) {
-            return json(res, 400, {
-              success: false,
-              message: 'Insufficient balance to enable auto-renew. You need ₦' + renewPrice.toLocaleString() + ' (same as this rental). Fund your wallet and try again.',
-              data: { required_ngn: renewPrice, balance_ngn: bal, balance_usd: balUsd, combined_value_ngn: combined }
-            });
-          }
-        }
-
-        const primary = await ensureRenew(rent_id, wantOn);
-        try {
-          const linked = await gotsmsResolveLinkedRentIds(auth.userId, rent_id, order);
-          for (const rid of linked) {
-            if (String(rid) === String(rent_id)) continue;
-            await ensureRenew(rid, wantOn);
-          }
-        } catch (_) {}
-
-        // Prefer live read; if unreadable after successful toggle, trust wantOn when ok
-        let afterOn = await readRenewOn(rent_id);
-        if (afterOn === null) afterOn = primary.ok ? wantOn : false;
-        else afterOn = !!afterOn;
-
-        if (!primary.ok && afterOn !== wantOn) {
-          return json(res, 400, {
-            success: false,
-            message: 'Could not update auto-renew. Please try again.',
-            data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+        const state = await gotsmsSetRenewalState(auth.userId, rent_id, order, body.enabled);
+        if (!state.ok) {
+          return json(res, state.status || 400, {
+            success: false, message: state.message || 'Could not update auto-renewal',
+            data: state.data || { auto_renew: !!state.enabled, renew_price_ngn: state.renew_price_ngn || gotsmsRenewPriceNgn(order), partial: !!state.partial }
           });
         }
-
         return json(res, 200, {
           success: true,
-          message: afterOn
-            ? ('Auto-renew is on. ₦' + renewPrice.toLocaleString() + ' will be charged when this period renews.')
+          message: state.enabled
+            ? ('Auto-renew is on. ₦' + state.renew_price_ngn.toLocaleString() + ' will be charged when this period renews.')
             : 'Auto-renew is off.',
-          data: { auto_renew: afterOn, renew_price_ngn: renewPrice }
+          data: { auto_renew: state.enabled, renew_price_ngn: state.renew_price_ngn }
         });
       }
 
-      
       if ((method === 'POST' || method === 'GET') && (ga === 'gotsms_preexpire_cancel' || ga === 'gotsms_preexpire_sweep')) {
         const authHeader = String(req.headers['authorization'] || '');
         const cronSecret = process.env.CRON_SECRET;
