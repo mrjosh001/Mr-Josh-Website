@@ -591,11 +591,24 @@ async function gotsmsHandleWebhook(req, res) {
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
       const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids) };
-      if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
-      if (['expired', 'finished', 'cancelled', 'canceled'].includes(String(order.status || '').toLowerCase())) {
-        // do not resurrect cancelled
-      } else if (order.status !== 'completed') {
+      const expiryValue = data.wake_till || data.active_till;
+      if (expiryValue) patch.code = String(expiryValue);
+      const supplierStatus = String(data.status || data.state || '').toLowerCase();
+      const expiryMs = expiryValue ? new Date(expiryValue).getTime() : 0;
+      const naturallyEnded = ['expired', 'finished', 'ended'].includes(supplierStatus) ||
+        (Number.isFinite(expiryMs) && expiryMs > 0 && expiryMs <= Date.now());
+      if (['cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase())) {
+        // Never resurrect a cancelled or refunded rental.
+      } else if (naturallyEnded) {
+        patch.status = 'completed';
+        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending', 'active'], 'completed');
+      } else {
+        // "completed" may only mean that an SMS was delivered. A rental remains
+        // active until its paid-through expiry, even when it receives many codes.
         patch.status = 'active';
+        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['completed'], 'pending');
       }
       await supabase.from('number_orders').update(patch).eq('id', order.id);
       return json(res, 200, { success: true, event });
