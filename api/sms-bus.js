@@ -400,12 +400,13 @@ function gotsmsVerifyWebhookSignature(rawBody, headers) {
 async function gotsmsFindOrderByRentId(rentId) {
   const key = `gotsms-${String(rentId || '').trim()}`;
   if (key === 'gotsms-') return null;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('number_orders')
     .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
     .eq('source', 'gotsms')
     .eq('idempotency_key', key)
     .maybeSingle();
+  if (error) throw error;
   return data || null;
 }
 
@@ -414,12 +415,13 @@ async function gotsmsFindOrderByPhone(phone) {
   if (digits.length < 7) return null;
   // Match last 10 digits (US numbers)
   const tail = digits.length > 10 ? digits.slice(-10) : digits;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('number_orders')
     .select('id, user_id, customer_id, order_id, phone_number, service_name, status, notes, code, price, refunded, idempotency_key')
     .eq('source', 'gotsms')
     .order('created_at', { ascending: false })
     .limit(40);
+  if (error) throw error;
   const rows = data || [];
   const matches = rows.filter((r) => {
     const p = String(r.phone_number || '').replace(/\D/g, '');
@@ -428,6 +430,11 @@ async function gotsmsFindOrderByPhone(phone) {
   // Phone-only correlation is safe only when exactly one order matches.
   // Reused numbers can have multiple rentals; never attach an SMS to an arbitrary latest row.
   return matches.length === 1 ? matches[0] : null;
+}
+
+async function gotsmsWebhookUpdateOrder(orderId, patch) {
+  const { error } = await supabase.from('number_orders').update(patch).eq('id', orderId);
+  if (error) throw error;
 }
 
 function gotsmsNotesMeta(notes) {
@@ -584,11 +591,13 @@ async function gotsmsHandleWebhook(req, res) {
       const sn = String(order.service_name || '');
       if (!/sms\s*received/i.test(sn)) patch.service_name = (sn || 'USA rental') + ' · SMS received';
       if (!terminalWalletState && order.status !== 'completed') patch.status = 'completed';
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
-      try {
-        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
-        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
-      } catch (_) {}
+      await gotsmsWebhookUpdateOrder(order.id, patch);
+      if (!terminalWalletState) {
+        try {
+          const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
+          if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['pending'], 'completed');
+        } catch (_) {}
+      }
       {
         const push = buildSmsCodePush({
           phone: order.phone_number,
@@ -612,13 +621,14 @@ async function gotsmsHandleWebhook(req, res) {
         return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
       }
       const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
-      if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
-      if (['expired', 'finished', 'cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase()) || order.refunded) {
+      const terminalWalletState = ['expired', 'finished', 'cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase()) || order.refunded;
+      if (!terminalWalletState && (data.wake_till || data.active_till)) patch.code = String(data.wake_till || data.active_till);
+      if (terminalWalletState) {
         // do not resurrect cancelled
       } else if (order.status !== 'completed') {
         patch.status = 'active';
       }
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await gotsmsWebhookUpdateOrder(order.id, patch);
       return json(res, 200, { success: true, event });
     }
 
@@ -643,7 +653,7 @@ async function gotsmsHandleWebhook(req, res) {
         patch.status = 'completed';
       }
       if (!terminalWalletState && newerExpiry) patch.code = new Date(incomingTill).toISOString();
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await gotsmsWebhookUpdateOrder(order.id, patch);
       return json(res, 200, { success: true, event });
     }
 
@@ -654,9 +664,9 @@ async function gotsmsHandleWebhook(req, res) {
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
       // Flag in notes only — no wallet change (supplier-side balance)
-      await supabase.from('number_orders').update({
+      await gotsmsWebhookUpdateOrder(order.id, {
         notes: gotsmsSerializeNotes({ ...meta, renewal_failed_at: new Date().toISOString() })
-      }).eq('id', order.id);
+      });
       await notifyUserPush(
         order.user_id,
         'Auto-renew failed',
@@ -762,18 +772,19 @@ async function gotsmsHandleWebhook(req, res) {
         status: nextStatus
       };
       if (refundedNow) patch.refunded = true;
-      await supabase.from('number_orders').update(patch).eq('id', order.id);
+      await gotsmsWebhookUpdateOrder(order.id, patch);
 
       // Mark ₦0 multi-pack link rows for same phone as expired/refunded too
       try {
         if (order.phone_number) {
-          await supabase.from('number_orders')
+          const { error: linkedUpdateError } = await supabase.from('number_orders')
             .update({ status: refundedNow ? 'refunded' : nextStatus, refunded: refundedNow || undefined })
             .eq('user_id', order.user_id)
             .eq('source', 'gotsms')
             .eq('phone_number', order.phone_number)
             .eq('price', 0)
             .neq('id', order.id);
+          if (linkedUpdateError) throw linkedUpdateError;
         }
       } catch (_) {}
 
@@ -4453,8 +4464,8 @@ export default async function handler(req, res) {
           if (v) qs.set(k, v);
         });
         qs.set('per_page', String(Math.min(100, Number(url.searchParams.get('per_page') || 100))));
-        const includeUnavailable = url.searchParams.get('include_unavailable') === '1';
-        if (includeUnavailable) qs.set('include_unavailable', '1');
+        const includeUnavailable = ['1', 'true'].includes(String(url.searchParams.get('include_unavailable') || '').toLowerCase());
+        if (includeUnavailable) qs.set('include_unavailable', 'true');
         let page = 1;
         const all = [];
         let lastPage = 1;
@@ -4521,7 +4532,7 @@ export default async function handler(req, res) {
               service_id,
               per_page: '100',
               page: String(page),
-              include_unavailable: '1'
+              include_unavailable: 'true'
             });
             const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
             if (!g.ok) break;
@@ -4856,7 +4867,7 @@ export default async function handler(req, res) {
         // The API documents only the paginated plans collection, not a plan-detail route.
         for (const sid of serviceIds) {
           for (let page = 1; page <= 10 && !plan; page++) {
-            const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: '1' });
+            const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: 'true' });
             const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
             if (!pg.ok) break;
             const rows = gotsmsListPayload(pg.data);
@@ -5215,7 +5226,7 @@ export default async function handler(req, res) {
         // Resolve through the documented, paginated plans collection only.
         if (!plan && service_id) {
           for (let page = 1; page <= 10 && !plan; page++) {
-            const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: '1' });
+            const qs = new URLSearchParams({ service_id, per_page: '100', page: String(page), include_unavailable: 'true' });
             const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
             if (!g.ok) break;
             plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
