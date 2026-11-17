@@ -5881,14 +5881,32 @@ async function fetchUserTransactions(userId) {
         const findUniqueLedgerMatch = (order, windowMs = 120000) => {
             const orderTime = new Date(order.created_at || 0).getTime();
             const orderAmount = amountValue(order);
-            if (!orderTime || !orderAmount) return null;
-            let candidates = fromTx.filter((tx) => {
+            if (!orderTime) return null;
+            const timeCandidates = fromTx.filter((tx) => {
                 if (matchedLedgerIds.has(String(tx.id))) return false;
                 if (String(tx.type || '') !== String(order.type || '')) return false;
                 const txTime = new Date(tx.created_at || 0).getTime();
-                const txAmount = amountValue(tx);
-                return txTime && Math.abs(txTime - orderTime) <= windowMs && Math.abs(txAmount - orderAmount) < 1;
+                return txTime && Math.abs(txTime - orderTime) <= windowMs;
             });
+
+            // eSIM and MJ Mails can debit either wallet currency. Their NGN amount
+            // may therefore differ from the displayed plan/retail price, while the
+            // order and ledger insert share the same database transaction timestamp.
+            if (order.type === 'email' || order.type === 'esim') {
+                if (timeCandidates.length === 1) return timeCandidates[0];
+                const wanted = comparableTitle(order.title);
+                const titleMatches = timeCandidates.filter((tx) => {
+                    const actual = comparableTitle(tx.title);
+                    return wanted && actual && (actual === wanted || actual.includes(wanted) || wanted.includes(actual));
+                });
+                if (titleMatches.length === 1) return titleMatches[0];
+                const amountMatches = timeCandidates.filter((tx) => Math.abs(amountValue(tx) - orderAmount) < 1);
+                if (amountMatches.length === 1) return amountMatches[0];
+                return null;
+            }
+
+            if (!orderAmount) return null;
+            const candidates = timeCandidates.filter((tx) => Math.abs(amountValue(tx) - orderAmount) < 1);
             if (candidates.length === 1) return candidates[0];
             if (candidates.length > 1) {
                 const wanted = comparableTitle(order.title);
