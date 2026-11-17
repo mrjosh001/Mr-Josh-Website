@@ -37,7 +37,7 @@ set title = case
   else title
 end,
 subtitle = case
-  when subtitle ilike '%grizzlysms%' then regexp_replace(subtitle, '(?i)\\s*\\(GrizzlySMS\\)', '', 'g')
+  when subtitle ilike '%grizzlysms%' then regexp_replace(subtitle, '(?i)[[:space:]]*\\(GrizzlySMS\\)', '', 'g')
   when subtitle ilike '%gotsms-renew-%' then 'Rental renewal'
   when subtitle ilike '%order failed at supplier%' then 'Purchase failed. Balance restored.'
   else subtitle
