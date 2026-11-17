@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
-// regardless of the viewer's device timezone — keeps order timestamps
+// regardless of the viewer's device timezone. keeps order timestamps
 // consistent for admins and users everywhere, so orders sort/display
 // the same way no matter where someone is looking from.
 (function () {
@@ -258,7 +258,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 
 <div class="content-card" id="poolStep" style="display:none;">
 <h2><i class="fa-solid fa-layer-group" style="color:var(--primary)"></i> Choose a Pool</h2>
-<p class="helper-text">This country has more than one number pool — each has its own price and stock. Pick one below.</p>
+<p class="helper-text">This country has more than one number pool. each has its own price and stock. Pick one below.</p>
 <div class="selected-service-bar">
 <span class="name" id="selectedPoolContext"></span>
 <button type="button" id="changePoolCountryBtn">Change</button>
@@ -333,13 +333,13 @@ function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
   const low = n.toLowerCase();
-  // "Any other" is a real catch-all — never treat as junk
+  // "Any other" is a real catch-all. never treat as junk
   if(/^any\s*other$/i.test(n) || low === 'other') return false;
   if(SHORT_BRANDS_KEEP.indexOf(low) !== -1) return false;
   if(/^[0-9]+$/.test(n)) return true;
   if(n.length <= 1) return true;
   // Server 3 sends real names. A bare 2–3 letter ALL-CAPS value is just the supplier code
-  // echoed back (e.g. "WA", "ABX") — hide those, but keep real brands like Uber, Line, Bolt, eBay.
+  // echoed back (e.g. "WA", "ABX"). hide those, but keep real brands like Uber, Line, Bolt, eBay.
   if(/^[A-Z0-9]{2,3}$/.test(n)) return true;
   return false;
 }
@@ -490,7 +490,7 @@ function serviceDomain(name){
 
 
 function serviceLogo(name){
-  // Same as Server 2 — Google favicon — but never map junk codes to x.com
+  // Same as Server 2. Google favicon. but never map junk codes to x.com
   const n = String(name||'').toLowerCase().trim();
   if(isJunkService(String(name||'').trim())) return null;
   let domain = serviceDomain(name);
@@ -563,7 +563,7 @@ function serviceIconFa(name){
 }
 
 // --- Country flags. Server 3 stores each country as 1000 + ISO-2 letters (see grizzly-sync.js
-// vsIsoToId), so the exact flag can be decoded straight from country_id — no name guessing.
+// vsIsoToId), so the exact flag can be decoded straight from country_id. no name guessing.
 // Older rows / unknown ids fall back to a name→ISO lookup, then a globe. ---
 const COUNTRY_ISO = {
   russia:'ru',ukraine:'ua',kazakhstan:'kz',china:'cn',philippines:'ph',myanmar:'mm',indonesia:'id',
@@ -622,7 +622,7 @@ async function initSession(){
 // Surfaces an in-progress order right on this page (so a customer who
 // already has a number waiting for a code doesn't accidentally buy a
 // second one, and can easily get back to it). Deliberately does NOT show
-// a general history/recent-numbers list here — this page is for buying a
+// a general history/recent-numbers list here. this page is for buying a
 // new number, not browsing past ones; that's what mj-sms-history.html is for.
 async function loadRecentActivity(){
   const area = document.getElementById('recentActivityArea');
@@ -644,11 +644,11 @@ async function loadRecentActivity(){
       <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
       <div class="pb-text">
         <div class="pb-title">You have a number waiting for a code</div>
-        <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')} — tap to view</div>
+        <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')}. tap to view</div>
       </div>
       <i class="fa-solid fa-chevron-right" style="color:var(--muted);"></i>
     </a>`;
-  }catch(e){ /* non-critical — the main order flow below still works fine without this */ }
+  }catch(e){ /* non-critical. the main order flow below still works fine without this */ }
 }
 
 async function refreshBalance(){
@@ -680,7 +680,7 @@ var __smsSearchTimer = null;
 var currentPoolList = [];
 var selectedProviderId = null;
 
-/** Match server salePriceFromUsd (fixed 80% band) for display only — server re-prices on order */
+/** Match server salePriceFromUsd (fixed 80% band) for display only. server re-prices on order */
 function salePriceFromUsdClient(usd){
   var rate = 1500;
   var percent = 80;
@@ -705,7 +705,7 @@ function providersToPoolOptions(providersRaw, poolPriceOverrides){
     if(!nums.length) return;
     var usd = Math.min.apply(null, nums);
     var pid = p.provider_id != null ? String(p.provider_id) : String(key);
-    // Admin's custom price for this exact pool wins — matches what the
+    // Admin's custom price for this exact pool wins. matches what the
     // server actually charges (see grizzly-sync.js handleOrder). Falls
     // back to the fixed-formula price only when no override is set.
     var overridden = Number(overrides[pid]);
@@ -726,7 +726,7 @@ function providersToPoolOptions(providersRaw, poolPriceOverrides){
 // Server 3 catalog loader.
 // WHY THIS WAS SHOWING "ONLY A FEW SERVICES / COUNTRIES": Supabase returns at most 1000 rows per
 // request no matter what .limit() says, and the old loader asked for "8000 countries" / "3000 rows
-// per batch" in single calls — so every call was silently cut to 1000 rows, and that partial result
+// per batch" in single calls. so every call was silently cut to 1000 rows, and that partial result
 // was then cached as "complete" for the whole day. This loader pages through everything with
 // .range() (1000 rows per page, a few pages in parallel) until a page comes back short.
 // ---------------------------------------------------------------------------------------
@@ -735,7 +735,7 @@ async function loadServiceCatalog(opts){
   var force = !!opts.force;
   try{
     if(!sbClient){
-      if(!window.supabase) throw new Error('Supabase not loaded — refresh the page');
+      if(!window.supabase) throw new Error('Supabase not loaded. refresh the page');
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
       });
@@ -898,7 +898,7 @@ async function loadServiceCatalog(opts){
   }
 }
 
-// Soft refresh after a complete cache — no skeleton, silent
+// Soft refresh after a complete cache. no skeleton, silent
 async function softRefreshCatalogFull(){
   // Intentionally no automatic refresh same day (saves egress).
   // Pass loadServiceCatalog({ force: true }) only on explicit Retry.
@@ -989,7 +989,7 @@ function renderServiceCatalog(list, searchQ){
     }
   }
   var matchedTotal = filtered.length;
-  // Default grid: popular-first and capped so the page paints instantly — "Show all" reveals the rest
+  // Default grid: popular-first and capped so the page paints instantly. "Show all" reveals the rest
   var capped = false;
   if(!q && !__showAllServices && filtered.length > SERVICE_GRID_DEFAULT_CAP){
     filtered = filtered.slice(0, SERVICE_GRID_DEFAULT_CAP);
@@ -1282,7 +1282,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
     setTimeout(() => window.location.href = 'auth.html', 900);
     return;
   }
-  // Lock immediately — before any await — so rapid taps cannot start a second buy
+  // Lock immediately. before any await. so rapid taps cannot start a second buy
   isBuying = true;
   const btn = this;
   btn.disabled = true;
@@ -1339,7 +1339,7 @@ document.getElementById('psBuyBtn').addEventListener('click', async function(){
       isBuying = false; btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.style.filter = ''; btn.removeAttribute('aria-busy'); btn.innerHTML = originalLabel;
       return;
     }
-    // Success: clear the replay key and navigate — do not re-enable (prevents second buy)
+    // Success: clear the replay key and navigate. do not re-enable (prevents second buy)
     try{if(window.__mjSmsBuyStorageKey)sessionStorage.removeItem(window.__mjSmsBuyStorageKey);}catch(e){}
     showToast('Number purchased! Redirecting…', 'success');
     const oid = data.data && data.data.order_id;
