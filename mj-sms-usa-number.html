@@ -438,7 +438,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       btn.innerHTML = '<i class="fa-solid fa-spinner spin"></i> Refreshing…';
       await loadMessages(true);
       btn.classList.remove('is-busy'); btn.disabled = false; btn.innerHTML = prev;
-      setFlash(hasReceivedCode ? 'Inbox updated' : 'Inbox refreshed. no SMS yet', true);
+      setFlash(hasReceivedCode ? 'Inbox updated' : 'No SMS received yet', true);
     };
     var ar = document.getElementById('autoRenew');
     if(ar) ar.onchange = async function(){
