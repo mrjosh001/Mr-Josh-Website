@@ -318,7 +318,7 @@ function startCountdown(createdAt){
       bar.style.transform = 'scaleX(' + frac + ')';
     }
     if(remaining <= 0){
-      label.textContent = 'Expired — refunding…';
+      label.textContent = 'Expired. refunding…';
       if(bar) bar.style.transform = 'scaleX(0)';
       if(!autoRefundStarted && !cancelling){
         autoRefundStarted = true;
@@ -349,11 +349,11 @@ async function autoRefundOnExpiry(){
     });
     const data = await res.json();
     if(res.ok && data.success){
-      showToast('Time expired — balance restored', 'success');
+      showToast('Time expired. balance restored', 'success');
       renderCancelled('Time ran out with no SMS. Your balance has been restored.');
       return;
     }
-    // Supplier may have auto-expired the order already — check can refund it
+    // Supplier may have auto-expired the order already. check can refund it
     const check = await fetch(API + '?action=check', {
       method: 'POST',
       headers: await getAuthHeaders(),
@@ -627,9 +627,9 @@ async function cancelOrder(){
     const data = await res.json();
     if(!res.ok || !data.success){
       if(data.code === 'EARLY_CANCEL_DENIED'){
-        showToast(data.message || 'Cancel not available yet — wait a bit longer.', 'error');
+        showToast(data.message || 'Cancel not available yet. wait a bit longer.', 'error');
       } else if(data.code === 'NUMBER_CODE_ALREADY_RECEIVED'){
-        showToast('Code already received — cannot cancel.', 'error');
+        showToast('Code already received. cannot cancel.', 'error');
         cancelling = false;
         await checkStatus();
         return;
@@ -641,7 +641,7 @@ async function cancelOrder(){
       pollTimer = setTimeout(checkStatus, 2500);
       return;
     }
-    showToast('Cancelled — balance restored', 'success');
+    showToast('Cancelled. balance restored', 'success');
     renderCancelled('Number cancelled. Your balance has been restored.');
   }catch(err){
     showToast('Network error: ' + (err.message || err), 'error');
