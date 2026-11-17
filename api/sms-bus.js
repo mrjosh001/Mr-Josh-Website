@@ -4536,20 +4536,23 @@ export default async function handler(req, res) {
             });
             const g = await gotsmsFetch(`/api/rents/plans?${qs}`);
             if (!g.ok) break;
-            const chunk = g.data?.data || [];
+            const chunk = gotsmsListPayload(g.data);
             plan = chunk.find((p) => String(p.id) === plan_id) || null;
-            const last = Number(g.data?.meta?.last_page || 1);
-            if (page >= last) break;
+            const meta = gotsmsMetaPayload(g.data);
+            const last = Number(meta.last_page || meta.lastPage || meta.total_pages || 1);
+            if (!chunk.length || page >= last) break;
           }
         }
         // 3) Fallback: search plans by plan id across a few pages
         if (!plan) {
           for (let page = 1; page <= 5 && !plan; page++) {
-            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=true`);
             if (!g.ok) break;
-            const chunk = g.data?.data || [];
+            const chunk = gotsmsListPayload(g.data);
             plan = chunk.find((p) => String(p.id) === plan_id) || null;
-            if (page >= Number(g.data?.meta?.last_page || 1)) break;
+            const meta = gotsmsMetaPayload(g.data);
+            const last = Number(meta.last_page || meta.lastPage || meta.total_pages || 1);
+            if (!chunk.length || page >= last) break;
           }
         }
         if (!plan || gotsmsPlanUnavailable(plan)) {
@@ -5235,7 +5238,7 @@ export default async function handler(req, res) {
         }
         if (!plan) {
           for (let page = 1; page <= 5 && !plan; page++) {
-            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=1`);
+            const g = await gotsmsFetch(`/api/rents/plans?per_page=100&page=${page}&include_unavailable=true`);
             if (!g.ok) break;
             plan = (g.data?.data || []).find((p) => String(p.id) === plan_id) || null;
             if (page >= Number(g.data?.meta?.last_page || 1)) break;
@@ -6054,7 +6057,7 @@ if (method === 'GET' && ga === 'gotsms_my_orders') {
 
         while (pagesDone < maxPages) {
           const g = await gotsmsFetch(
-            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=1`
+            `/api/rents/plans?per_page=${perPage}&page=${page}&include_unavailable=true`
           );
           if (!g.ok) {
             return json(res, g.status || 400, {
