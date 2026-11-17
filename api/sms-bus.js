@@ -607,8 +607,6 @@ async function gotsmsHandleWebhook(req, res) {
         // "completed" may only mean that an SMS was delivered. A rental remains
         // active until its paid-through expiry, even when it receives many codes.
         patch.status = 'active';
-        const rid = rentId || String(order.idempotency_key || '').replace(/^gotsms-/, '');
-        if (rid) await gotsmsSetPurchaseTxStatus(order.user_id, rid, ['completed'], 'pending');
       }
       await supabase.from('number_orders').update(patch).eq('id', order.id);
       return json(res, 200, { success: true, event });
