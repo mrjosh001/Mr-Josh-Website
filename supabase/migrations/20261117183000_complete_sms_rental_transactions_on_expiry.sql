@@ -17,7 +17,7 @@ begin
      where source in ('gotsms', 'smsbus_rent', 'virtualsms_rent')
        and coalesce(refunded, false) = false
        and lower(coalesce(status, '')) in ('active', 'pending', 'waiting', 'processing', 'completed')
-       and code ~ '^\\d{4}-\\d{2}-\\d{2}T'
+       and code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
        and code::timestamptz <= now()
      order by created_at
      limit 500
@@ -74,7 +74,7 @@ update public.number_orders
  where source in ('gotsms','smsbus_rent','virtualsms_rent')
    and coalesce(refunded,false)=false
    and lower(coalesce(status,''))='completed'
-   and code ~ '^\\d{4}-\\d{2}-\\d{2}T'
+   and code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
    and code::timestamptz > now();
 
 update public.transactions t
@@ -88,7 +88,7 @@ update public.transactions t
         and n.source in ('gotsms','smsbus_rent','virtualsms_rent')
         and coalesce(n.refunded,false)=false
         and lower(coalesce(n.status,''))='active'
-        and n.code ~ '^\\d{4}-\\d{2}-\\d{2}T'
+        and n.code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
         and n.code::timestamptz > now()
         and t.external_reference = case
           when n.source='gotsms' then regexp_replace(coalesce(n.idempotency_key,''),'^gotsms-','')
