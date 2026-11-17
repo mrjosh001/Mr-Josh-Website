@@ -1414,7 +1414,7 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 
     const debit = await debitWallet(supabase, userId, price);
     if (!debit.ok) {
-      let disabled = false;
+      let disabled = !autoOn;
       if (autoOn) {
         try {
           const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
