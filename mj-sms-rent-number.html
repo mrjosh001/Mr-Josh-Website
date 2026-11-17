@@ -582,7 +582,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(br.classList.contains('is-busy')) return;
       br.classList.add('is-busy'); br.disabled=true;
       var prev=br.innerHTML; br.innerHTML='<i class="fa-solid fa-spinner spin"></i> Checking…';
-      try{ await loadMessages(); toast(hasSms?'Inbox updated':'No SMS yet. still waiting','ok'); }
+      try{ await loadMessages(); toast(hasSms?'Inbox updated':'No SMS received yet','ok'); }
       catch(e){ toast('Could not check SMS','err'); }
       br.innerHTML=prev; br.classList.remove('is-busy'); br.disabled=false;
     };
