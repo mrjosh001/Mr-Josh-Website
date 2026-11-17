@@ -4833,24 +4833,21 @@ export default async function handler(req, res) {
         }
 
         let plan = null;
-        {
-          const one = await gotsmsFetch(`/api/rents/plans/${encodeURIComponent(plan_id)}`);
-          if (one.ok && one.data) {
-            plan = one.data.data || one.data;
-            if (Array.isArray(plan)) plan = plan.find((p) => String(p.id) === plan_id) || plan[0] || null;
+        // The API documents only the paginated plans collection, not a plan-detail route.
+        for (const sid of serviceIds) {
+          for (let page = 1; page <= 10 && !plan; page++) {
+            const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: '1' });
+            const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
+            if (!pg.ok) break;
+            const rows = gotsmsListPayload(pg.data);
+            const hit = rows.find((p) => String(p.id) === plan_id);
+            if (hit) { plan = hit; break; }
+            const meta = gotsmsMetaPayload(pg.data);
+            const lastPage = Number(meta.last_page || meta.lastPage || meta.total_pages || 0);
+            if (lastPage > 0 && page >= lastPage) break;
+            if (!rows.length) break;
           }
-        }
-        if (!plan) {
-          for (const sid of serviceIds) {
-            for (let page = 1; page <= 5 && !plan; page++) {
-              const qs = new URLSearchParams({ service_id: sid, per_page: '100', page: String(page), include_unavailable: '1' });
-              const pg = await gotsmsFetch('/api/rents/plans?' + qs.toString());
-              const rows = pg.data?.data || [];
-              const hit = rows.find((p) => String(p.id) === plan_id);
-              if (hit) { plan = hit; break; }
-            }
-            if (plan) break;
-          }
+          if (plan) break;
         }
         if (!plan) return json(res, 400, { success: false, message: 'Plan not found. Refresh and try again.' });
         if (typeof gotsmsPlanUnavailable === 'function' && gotsmsPlanUnavailable(plan)) {
