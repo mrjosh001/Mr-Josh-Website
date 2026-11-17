@@ -1351,7 +1351,7 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
   const price = gotsmsRenewPriceNgn(order);
   const liveTill = liveRent.active_till ? Date.parse(String(liveRent.active_till)) : 0;
   const storedTill = order.code && !isNaN(Date.parse(String(order.code))) ? Date.parse(String(order.code)) : 0;
-  const autoOn = !!(liveRent.is_included_for_next_renewal || liveRent.auto_renew);
+  const autoOn = liveRent.is_included_for_next_renewal === true;
 
   if (autoOn && price > 0) {
     try {
@@ -1359,16 +1359,27 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
       const bal = Number(prof && prof.balance) || 0;
       const combined = bal + (Number(prof && prof.balance_usd) || 0) * WALLET_USD_RATE;
       if (combined + 0.0001 < price) {
-        try {
-          await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
-        } catch (_) {}
+        const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+        if (!toggle.ok || toggle.data?.success === false) {
+          return {
+            charged: false,
+            disabled: false,
+            message: 'Wallet balance is insufficient and the supplier did not confirm auto-renew was turned off. Contact support before the renewal time.'
+          };
+        }
         return {
           charged: false,
           disabled: true,
           message: 'Auto-renew turned off — need ₦' + price.toLocaleString() + ' in wallet (same as this rental).'
         };
       }
-    } catch (_) {}
+    } catch (_) {
+      return {
+        charged: false,
+        disabled: false,
+        message: 'Could not verify wallet balance or update auto-renewal. Please retry or contact support.'
+      };
+    }
   }
 
   if (liveTill && storedTill && liveTill > storedTill + 60 * 1000 && price > 0) {
@@ -1403,13 +1414,19 @@ async function gotsmsSyncAutorenewCharges(userId, rentId, liveRent) {
 
     const debit = await debitWallet(supabase, userId, price);
     if (!debit.ok) {
-      try {
-        if (autoOn) await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
-      } catch (_) {}
+      let disabled = false;
+      if (autoOn) {
+        try {
+          const toggle = await gotsmsFetch(`/api/rents/${encodeURIComponent(rentId)}/renewal/toggle`, { method: 'POST' });
+          disabled = !!(toggle.ok && toggle.data?.success !== false);
+        } catch (_) {}
+      }
       return {
         charged: false,
-        disabled: true,
-        message: 'Renewal blocked because your combined wallet balance is insufficient. Auto-renew is off.'
+        disabled,
+        message: disabled
+          ? 'Renewal blocked because your combined wallet balance is insufficient. Auto-renew is off.'
+          : 'Renewal could not be charged and auto-renew could not be confirmed off. Contact support before the next renewal.'
       };
     }
     try {
