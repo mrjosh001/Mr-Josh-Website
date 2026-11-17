@@ -21,6 +21,11 @@
     if (!r.is_available) return { t: 'OUT', on: false };
     return { t: 'ACTIVE', on: true };
   }
+  function stockDiagnostic(r) {
+    if (r.availability_known === true) return '';
+    var fields = r.stock_fields && typeof r.stock_fields === 'object' ? Object.keys(r.stock_fields) : [];
+    return fields.length ? 'Supplier fields: ' + fields.slice(0, 8).join(', ') : 'Supplier returned no recognised stock field';
+  }
   function renderVsRent() {
     var q = String((document.getElementById('vsRentSearch') || {}).value || '').toLowerCase().trim();
     var rows = (window._vsRentPlans || []).filter(function (r) {
@@ -55,6 +60,7 @@
             '<span style="font-weight:800;text-align:right;">' + profit(r.supplier_price_usd, r.price_ngn) + '</span>' +
             '<span style="color:var(--muted);">Stock</span>' +
             '<span style="font-weight:700;text-align:right;">' + (r.availability_known ? (r.stock_count == null ? (r.is_available ? 'Available' : 0) : Number(r.stock_count)) : 'Not reported') + '</span>' +
+            (!r.availability_known ? '<span style="grid-column:1/-1;font-size:11px;color:#f59e0b;line-height:1.4;">' + esc(stockDiagnostic(r)) + '</span>' : '') +
           '</div>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
             '<button type="button" class="btn btn-ghost btn-sm" data-act="edit"><i class="fas fa-pen"></i> Edit Price</button>' +
@@ -73,7 +79,8 @@
           '<td>' + usd(r.supplier_price_usd) + '</td>' +
           '<td>₦' + Number(r.price_ngn || 0).toLocaleString() + (admin ? ' <span style="font-size:10px;color:#fbbf24;">admin</span>' : '') + '</td>' +
           '<td>' + profit(r.supplier_price_usd, r.price_ngn) + '</td>' +
-          '<td>' + (st.on ? '<span style="color:#34d399;font-weight:700">ACTIVE</span>' : st.t) + '</td>' +
+          '<td>' + (st.on ? '<span style="color:#34d399;font-weight:700">ACTIVE</span>' : st.t) +
+            (!r.availability_known ? '<div style="font-size:10px;color:#f59e0b;max-width:220px;white-space:normal;margin-top:4px;">' + esc(stockDiagnostic(r)) + '</div>' : '') + '</td>' +
           '<td><button type="button" class="btn btn-ghost btn-sm" data-act="edit">Edit</button> ' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="hide">' + (r.admin_hidden ? 'Show' : 'Hide') + '</button> ' +
           '<button type="button" class="btn btn-ghost btn-sm" data-act="auto">Auto</button></td>' +
