@@ -5699,13 +5699,18 @@ if (method === 'GET' && ga === 'gotsms_messages') {
         }
         // Only after the number has received at least one SMS/code
         try {
-          const msgRes = await gotsmsFetch('/api/messages?rent_id=' + encodeURIComponent(rent_id) + '&per_page=5');
-          const msgs = (msgRes.data && (msgRes.data.data || msgRes.data)) || [];
-          if (!Array.isArray(msgs) || msgs.length < 1) {
+          // Use the documented per-number inbox endpoint. The global messages
+          // collection does not document a rent_id query filter.
+          const msgRes = await gotsmsFetch(`/api/numbers/${encodeURIComponent(rent_id)}/messages`);
+          if (!msgRes.ok) {
+            return json(res, 503, { success: false, message: 'Could not verify SMS history with GotSMS. No charge was made. Please retry shortly.' });
+          }
+          const msgs = gotsmsListPayload(msgRes.data);
+          if (!msgs.length) {
             return json(res, 400, { success: false, message: 'Add service is available after this number has received at least one code.' });
           }
         } catch (_) {
-          return json(res, 400, { success: false, message: 'Could not verify SMS history for this number.' });
+          return json(res, 503, { success: false, message: 'Could not verify SMS history with GotSMS. No charge was made. Please retry shortly.' });
         }
         const listG = await gotsmsFetch(`/api/rents/${encodeURIComponent(rent_id)}/services`);
         const svc = (listG.data?.data || []).find((s) => String(s.service_id) === service_id && s.is_available !== false);
