@@ -105,7 +105,26 @@ async function api(action,opts){const h=await authHeaders();if(!h)return{success
 function renderServices(){const q=$('serviceSearch').value.trim().toLowerCase();const list=services.filter(s=>!q||(s.service_name+' '+s.service_id).toLowerCase().includes(q));$('services').innerHTML=list.length?list.map((s,i)=>'<button type="button" class="item service-item" data-i="'+i+'">'+serviceLogoHtml(s.service_name,s.icon_url)+'<span class="name">'+esc(s.service_name)+'</span><span class="meta">'+s.country_count+' countries</span></button>').join(''):'<div class="empty">No matching services are currently available.</div>';Array.from($('services').querySelectorAll('[data-i]')).forEach(btn=>btn.addEventListener('click',()=>chooseService(list[Number(btn.dataset.i)])));}
 function renderCountries(){const q=$('countrySearch').value.trim().toLowerCase();const list=plans.filter(p=>p.service_id===selectedService.service_id&&(!q||(p.country_name+' '+p.country_code).toLowerCase().includes(q)));const by=new Map(),counts=new Map();list.forEach(p=>{if(!by.has(p.country_code))by.set(p.country_code,p);counts.set(p.country_code,(counts.get(p.country_code)||0)+1);});const countries=Array.from(by.values()).sort((a,b)=>a.country_name.localeCompare(b.country_name));$('countries').innerHTML=countries.length?countries.map(c=>'<button type="button" class="item" data-code="'+esc(c.country_code)+'"><span class="name"><span aria-hidden="true" style="font-size:21px">'+flag(c.country_code)+'</span>'+esc(c.country_name)+'</span><span class="meta">'+counts.get(c.country_code)+' plans</span></button>').join(''):'<div class="empty">No plans are currently available for this service in this country.</div>';Array.from($('countries').querySelectorAll('[data-code]')).forEach(btn=>btn.addEventListener('click',()=>chooseCountry(btn.dataset.code)));}
 function chooseService(service){selectedService=service;selectedCountry=null;selectedPlan=null;$('serviceStep').classList.add('hidden');$('countryStep').classList.remove('hidden');$('planStep').classList.add('hidden');$('serviceContext').textContent=service.service_name;$('countrySearch').value='';renderCountries();}
-function chooseCountry(code){selectedCountry=plans.find(p=>p.service_id===selectedService.service_id&&p.country_code===code);if(!selectedCountry)return;selectedPlan=null;$('countryStep').classList.add('hidden');$('planStep').classList.remove('hidden');$('planContext').innerHTML='<span class="plan-context-service">'+esc(selectedService.service_name)+'</span><span class="plan-context-dot">·</span>'+flag(code)+'<span class="plan-context-country">'+esc(selectedCountry.country_name)+'</span>';renderPlans();}
+async function chooseCountry(code){
+ const cachedCountry=plans.find(p=>p.service_id===selectedService.service_id&&p.country_code===code);
+ if(!cachedCountry)return;
+ selectedCountry=cachedCountry;selectedPlan=null;
+ $('countryStep').classList.add('hidden');$('planStep').classList.remove('hidden');
+ $('planContext').innerHTML='<span class="plan-context-service">'+esc(selectedService.service_name)+'</span><span class="plan-context-dot">·</span>'+flag(code)+'<span class="plan-context-country">'+esc(selectedCountry.country_name)+'</span>';
+ $('plans').innerHTML='<div class="empty">Checking live supplier availability…</div>';
+ $('buyBtn').classList.add('hidden');$('selectedPrice').textContent='';
+ try{
+  const result=await api('catalog',{query:'scope=global&country_code='+encodeURIComponent(code)});
+  if(!result.success||!Array.isArray(result.data))throw new Error(result.message||'Live availability is temporarily unavailable.');
+  plans=plans.filter(p=>p.country_code!==code).concat(result.data);
+  selectedCountry=plans.find(p=>p.service_id===selectedService.service_id&&p.country_code===code)||cachedCountry;
+  renderPlans();
+  if(!result.data.length)$('plans').innerHTML='<div class="empty">The supplier currently has no rental services or plans for this country.</div>';
+ }catch(error){
+  $('plans').innerHTML='<div class="empty">Live availability could not be confirmed. Please try again shortly.</div>';
+  msg(String(error.message||error),true);
+ }
+}
 function renderPlans(){
  const list=plans.filter(p=>p.service_id===selectedService.service_id&&p.country_code===selectedCountry.country_code).sort((a,b)=>a.duration_hours-b.duration_hours);
  selectedPlan=null;$('buyBtn').classList.add('hidden');$('buyBtn').textContent='Rent this number';$('selectedPrice').textContent='';
@@ -122,7 +141,7 @@ function renderPlans(){
   $('selectedPrice').textContent='';
  }));
 }
-const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v2';
+const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v3';
 const RENT_CACHE_TTL=7*24*60*60*1000;
 const POPULAR_SERVICE_ORDER=['whatsapp','telegram','facebook','instagram','google','tiktok','twitter','discord','gmail','paypal','snapchat','linkedin'];
 function popularServiceRank(name){const n=String(name||'').toLowerCase();const i=POPULAR_SERVICE_ORDER.findIndex(key=>n===key||n.includes(key));return i<0?POPULAR_SERVICE_ORDER.length:i;}
