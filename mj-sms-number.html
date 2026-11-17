@@ -163,7 +163,7 @@ let orderCreatedAt = null;
 
 // Reservation window (~20 min). After this with no code → auto refund (matches Grizzly + Hero rules).
 const EXPIRY_SECONDS = 20 * 60;
-// Cancel lock defaults — Grizzly 5 min; Hero SMS supplier unlocks at 2 min.
+// Cancel lock defaults. Grizzly 5 min; Hero SMS supplier unlocks at 2 min.
 const GRIZZLY_CANCEL_COOLDOWN_SECONDS = 5 * 60;
 const HERO_CANCEL_COOLDOWN_SECONDS = 2 * 60;
 let CANCEL_COOLDOWN_SECONDS = GRIZZLY_CANCEL_COOLDOWN_SECONDS;
@@ -335,7 +335,7 @@ function startCountdown(createdAt){
       bar.style.transform = 'scaleX(' + frac + ')';
     }
     if(remaining <= 0){
-      label.textContent = 'Expired — refunding…';
+      label.textContent = 'Expired. refunding…';
       if(bar) bar.style.transform = 'scaleX(0)';
       if(!autoRefundStarted && !cancelling){
         autoRefundStarted = true;
@@ -366,7 +366,7 @@ async function autoRefundOnExpiry(){
     });
     const data = await res.json();
     if(res.ok && data.success){
-      showToast('Time expired — balance restored', 'success');
+      showToast('Time expired. balance restored', 'success');
       renderCancelled('Time ran out with no SMS. Your balance has been restored.');
       return;
     }
@@ -640,9 +640,9 @@ async function cancelOrder(){
     const data = await res.json();
     if(!res.ok || !data.success){
       if(data.code === 'EARLY_CANCEL_DENIED'){
-        showToast(data.message || 'Cancel not available yet — wait a bit longer.', 'error');
+        showToast(data.message || 'Cancel not available yet. wait a bit longer.', 'error');
       } else if(data.code === 'NUMBER_CODE_ALREADY_RECEIVED'){
-        showToast('Code already received — cannot cancel.', 'error');
+        showToast('Code already received. cannot cancel.', 'error');
         cancelling = false;
         await checkStatus();
         return;
@@ -660,7 +660,7 @@ async function cancelOrder(){
       pollTimer = setTimeout(checkStatus, 5000);
       return;
     }
-    showToast('Cancelled — balance restored', 'success');
+    showToast('Cancelled. balance restored', 'success');
     renderCancelled('Number cancelled. Your balance has been restored.');
   }catch(err){
     showToast('Network error: ' + (err.message || err), 'error');
