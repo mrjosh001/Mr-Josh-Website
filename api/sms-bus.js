@@ -4266,9 +4266,12 @@ export default async function handler(req, res) {
       if (method === 'GET' && ga === 'gotsms_carriers') {
         const auth = await requireAuth(req);
         if (!auth.ok) return json(res, auth.status, { success: false, message: auth.message });
-        const r = await fetch(`${GOTSMS_BASE}/api/carriers`, { headers: { Accept: 'application/json' } });
-        const data = await r.json().catch(() => ({}));
-        return json(res, r.ok ? 200 : 400, { success: !!data.success, data: data.data || [], message: data.message });
+        // Use the authenticated, bounded supplier client. The old direct fetch
+        // omitted the GotSMS Bearer token and let DNS/network errors escape to
+        // the route-level handler.
+        const g = await gotsmsFetch('/api/carriers');
+        if (!g.ok) return json(res, g.status || 503, { success: false, data: [], message: gotsmsSafeMsg(g.data?.message, 'Could not load GotSMS carriers. Please retry shortly.') });
+        return json(res, 200, { success: !!g.data?.success, data: g.data?.data || [], message: g.data?.message || 'Carriers loaded' });
       }
 
       if (method === 'GET' && ga === 'gotsms_services') {
