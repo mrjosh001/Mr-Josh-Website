@@ -137,7 +137,7 @@ async function chooseCountry(code){
  selectedCountry=cachedCountry;selectedPlan=null;
  $('countryStep').classList.add('hidden');$('planStep').classList.remove('hidden');
  $('planContext').innerHTML='<span class="plan-context-service">'+esc(selectedService.service_name)+'</span><span class="plan-context-dot">·</span>'+flag(code)+'<span class="plan-context-country">'+esc(selectedCountry.country_name)+'</span>';
- $('plans').innerHTML='<div class="empty">Checking live supplier availability…</div>';
+ $('plans').innerHTML='<div class="empty">Loading available rental plans…</div>';
  $('rentActionBar').classList.add('hidden');$('buyBtn').classList.remove('hidden');$('selectedPrice').textContent='';
  try{
   const result=await api('catalog',{query:'scope=global&country_code='+encodeURIComponent(code)});
@@ -145,7 +145,7 @@ async function chooseCountry(code){
   plans=plans.filter(p=>p.country_code!==code).concat(result.data);
   selectedCountry=plans.find(p=>p.service_id===selectedService.service_id&&p.country_code===code)||cachedCountry;
   renderPlans();
-  if(!result.data.length)$('plans').innerHTML='<div class="empty">The supplier currently has no rental services or plans for this country.</div>';
+  if(!result.data.length)$('plans').innerHTML='<div class="empty">No rental plans are currently available for this country.</div>';
  }catch(error){
   $('plans').innerHTML='<div class="empty">Live availability could not be confirmed. Please try again shortly.</div>';
   msg(String(error.message||error),true);
@@ -156,9 +156,9 @@ function renderPlans(){
  selectedPlan=null;$('rentActionBar').classList.add('hidden');$('buyBtn').classList.remove('hidden');$('buyBtn').disabled=false;$('buyBtn').textContent='Rent Number';$('selectedPrice').textContent='';
  $('plans').innerHTML=list.map((p,i)=>{
   const available=p.is_available===true&&(p.availability_known===true||p.availability_status==='verify_at_checkout');
-  const status=available?(p.availability_known===true?'Available':'Check stock at checkout'):'Out of stock';
+  const status=available?'Available':'Unavailable';
   return '<button type="button" class="item plan-option" data-i="'+i+'" '+(available?'':'disabled')+'><span class="name">'+esc(p.duration_label)+'</span><span class="meta">'+status+'</span><span class="price">'+money(p.price_ngn)+'</span></button>';
- }).join('')||'<div class="empty">No supplier plans are listed for this service and country.</div>';
+ }).join('')||'<div class="empty">No rental plans are currently available for this service and country.</div>';
  Array.from($('plans').querySelectorAll('[data-i]:not([disabled])')).forEach(btn=>btn.addEventListener('click',()=>{
   selectedPlan=list[Number(btn.dataset.i)];
   Array.from($('plans').querySelectorAll('.item')).forEach(x=>x.style.borderColor='var(--border)');
@@ -167,7 +167,7 @@ function renderPlans(){
   $('selectedPrice').textContent=selectedPlan.country_name+' · '+selectedService.service_name+' · '+selectedPlan.duration_label+' · '+money(selectedPlan.price_ngn);
  }));
 }
-const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v3';
+const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v4';
 const RENT_CACHE_TTL=7*24*60*60*1000;
 const POPULAR_SERVICE_ORDER=['whatsapp','telegram','facebook','instagram','google','tiktok','twitter','discord','gmail','paypal','snapchat','linkedin'];
 function popularServiceRank(name){const n=String(name||'').toLowerCase();const i=POPULAR_SERVICE_ORDER.findIndex(key=>n===key||n.includes(key));return i<0?POPULAR_SERVICE_ORDER.length:i;}
