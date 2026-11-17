@@ -497,6 +497,17 @@ function gotsmsPackNotes(inbox, whIds, extraMeta = {}) {
   });
 }
 
+// State webhooks may arrive out of order. Keep the newest provider event time
+// so an older rent.online / rent.renewed / rent.ended delivery cannot regress state.
+function gotsmsAcceptRentStateEvent(meta, payload) {
+  const incoming = Date.parse(String(payload?.created_at || payload?.data?.created_at || ''));
+  const previous = Date.parse(String(meta?.rent_state_event_at || ''));
+  if (!Number.isFinite(incoming) || incoming <= 0) return true;
+  if (Number.isFinite(previous) && previous > 0 && incoming < previous) return false;
+  meta.rent_state_event_at = new Date(incoming).toISOString();
+  return true;
+}
+
 /**
  * GotSMS webhook (beta): POST events with HMAC signature.
  * Docs: https://app.gotsms.com
@@ -597,6 +608,9 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
       const patch = { notes: gotsmsPackNotes(meta.inbox, meta.wh_ids, meta) };
       if (data.wake_till || data.active_till) patch.code = String(data.wake_till || data.active_till);
       if (['expired', 'finished', 'cancelled', 'canceled', 'refunded'].includes(String(order.status || '').toLowerCase()) || order.refunded) {
@@ -614,6 +628,9 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
       const currentStatus = String(order.status || '').toLowerCase();
       const terminalWalletState = ['refunded', 'cancelled', 'canceled'].includes(currentStatus) || !!order.refunded;
       const incomingTill = data.active_till ? Date.parse(String(data.active_till)) : 0;
@@ -657,6 +674,9 @@ async function gotsmsHandleWebhook(req, res) {
       const meta = gotsmsNotesMeta(order.notes);
       if (deliveryId && meta.wh_ids.includes(deliveryId)) return json(res, 200, { success: true, duplicate: true });
       if (deliveryId) meta.wh_ids.push(deliveryId);
+      if (!gotsmsAcceptRentStateEvent(meta, payload)) {
+        return json(res, 200, { success: true, ignored: true, reason: 'stale_event' });
+      }
       const currentStatus = String(order.status || '').toLowerCase();
       if (order.refunded || ['refunded', 'cancelled', 'canceled'].includes(currentStatus)) {
         return json(res, 200, { success: true, ignored: true, reason: 'terminal_wallet_state' });
