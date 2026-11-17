@@ -13,7 +13,7 @@
 :root[data-theme="dark"]{--bg:#06080f;--card:rgba(15,21,36,.82);--text:#f1f5f9;--muted:#8b9bb4;--border:rgba(148,163,184,.12);--primary:#5b8af5;--soft:rgba(91,138,245,.13);--primary-glow:rgba(91,138,245,.28);--bad:#f87171;--ok:#34d399;--shadow:0 18px 50px rgba(0,0,0,.35)}
 :root[data-theme="light"]{--bg:#f4f6fb;--card:rgba(255,255,255,.88);--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--primary:#3b6ef5;--soft:rgba(59,110,245,.1);--primary-glow:rgba(59,110,245,.18);--bad:#dc2626;--ok:#059669;--shadow:0 16px 40px rgba(15,23,42,.08)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:90px;-webkit-font-smoothing:antialiased}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:130px;-webkit-font-smoothing:antialiased}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 80% 50% at 10% -10%,rgba(91,138,245,.12),transparent 50%),radial-gradient(ellipse 60% 40% at 100% 0%,rgba(167,139,250,.08),transparent 45%)}
 .header,main{position:relative;z-index:1}
 .header{padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
@@ -59,6 +59,20 @@ main{max-width:700px;margin:0 auto;padding:16px 16px 60px}
 .bar button,.secondary{border:1px solid var(--primary);background:transparent;color:var(--primary);border-radius:9px;padding:7px 10px;font:700 11px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer}
 .primary{width:100%;border:0;border-radius:13px;padding:14px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font:800 14px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;margin-top:12px;box-shadow:0 8px 20px rgba(37,99,235,.2)}
 .primary:disabled{opacity:.55;cursor:not-allowed}
+.rent-action-bar{position:fixed;left:0;right:0;bottom:0;z-index:120;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--border)}
+.rent-action-bar .primary{display:block;max-width:668px;margin:0 auto;box-shadow:0 8px 24px rgba(37,99,235,.3)}
+.rent-modal{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(2,6,23,.72);backdrop-filter:blur(8px)}
+.rent-modal.hidden{display:none!important}
+.rent-modal-card{width:min(100%,430px);padding:22px;border:1px solid var(--border);border-radius:20px;background:var(--card);box-shadow:0 24px 70px rgba(0,0,0,.42)}
+.rent-modal-card h2{font-size:18px;font-weight:800;margin-bottom:7px}
+.rent-modal-copy{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:16px}
+.rent-confirm-summary{padding:14px;border:1px solid var(--border);border-radius:13px;background:var(--bg);font-size:13px;font-weight:800;line-height:1.6;overflow-wrap:anywhere}
+.rent-confirm-price{display:block;color:var(--primary);font-size:20px;margin-top:6px}
+.rent-modal-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:9px;margin-top:18px}
+.rent-modal-actions button{min-width:0;border-radius:12px;padding:13px 10px;font:800 12px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer}
+.rent-cancel-btn{border:1px solid var(--border);background:transparent;color:var(--text)}
+.rent-confirm-btn{border:0;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+.rent-modal-actions button:disabled{opacity:.55;cursor:not-allowed}
 .empty,.message{padding:18px;text-align:center;border:1px dashed var(--border);border-radius:13px;color:var(--muted);font-size:12px;line-height:1.5;grid-column:1/-1}
 .err{color:var(--bad);font-size:12px;margin-top:10px}.ok{color:var(--ok);font-size:12px;margin-top:10px}
 .hidden{display:none!important}
@@ -81,9 +95,21 @@ main{max-width:700px;margin:0 auto;padding:16px 16px 60px}
 <p class="intro">Choose a service, country and rental duration.</p>
 <section class="card" id="serviceStep"><h2>1. Choose a service</h2><p class="sub">Available services and countries are updated automatically.</p><input class="search" id="serviceSearch" placeholder="Search services"><div class="grid" id="services" aria-live="polite"></div></section>
 <section class="card hidden" id="countryStep"><h2>2. Choose a country</h2><div class="bar"><span id="serviceContext"></span><button type="button" id="backServices">Change</button></div><input class="search" id="countrySearch" placeholder="Search countries"><div class="grid" id="countries"></div></section>
-<section class="card hidden" id="planStep"><h2>3. Choose a duration</h2><div class="bar"><span id="planContext"></span><button type="button" id="backCountries">Change</button></div><div class="grid" id="plans"></div><button type="button" class="primary hidden" id="buyBtn">Rent this number</button><div id="selectedPrice" class="sub" style="margin-top:8px;text-align:center"></div></section>
+<section class="card hidden" id="planStep"><h2>3. Choose a duration</h2><div class="bar"><span id="planContext"></span><button type="button" id="backCountries">Change</button></div><div class="grid" id="plans"></div><div id="selectedPrice" class="sub" style="margin-top:8px;text-align:center"></div></section>
 <div class="message hidden" id="message"></div><div class="err" id="error"></div>
 </main>
+<div id="rentActionBar" class="rent-action-bar hidden"><button type="button" class="primary" id="buyBtn">Rent Number</button></div>
+<div id="rentConfirmModal" class="rent-modal hidden" role="dialog" aria-modal="true" aria-labelledby="rentConfirmTitle">
+ <div class="rent-modal-card">
+  <h2 id="rentConfirmTitle">Confirm your rental</h2>
+  <p class="rent-modal-copy">Review the number rental details before continuing. Your wallet will only be charged after you confirm.</p>
+  <div class="rent-confirm-summary" id="rentConfirmSummary"></div>
+  <div class="rent-modal-actions">
+   <button type="button" class="rent-cancel-btn" id="cancelRentBtn">Go back</button>
+   <button type="button" class="rent-confirm-btn" id="confirmRentBtn">Confirm and Rent</button>
+  </div>
+ </div>
+</div>
 <script>
 (function(){
 'use strict';
@@ -127,7 +153,7 @@ async function chooseCountry(code){
 }
 function renderPlans(){
  const list=plans.filter(p=>p.service_id===selectedService.service_id&&p.country_code===selectedCountry.country_code).sort((a,b)=>a.duration_hours-b.duration_hours);
- selectedPlan=null;$('buyBtn').classList.add('hidden');$('buyBtn').textContent='Rent this number';$('selectedPrice').textContent='';
+ selectedPlan=null;$('rentActionBar').classList.add('hidden');$('buyBtn').disabled=false;$('buyBtn').textContent='Rent Number';$('selectedPrice').textContent='';
  $('plans').innerHTML=list.map((p,i)=>{
   const available=p.is_available===true&&p.availability_known===true;
   const status=available?'Available':'Out of stock';
@@ -136,9 +162,9 @@ function renderPlans(){
  Array.from($('plans').querySelectorAll('[data-i]:not([disabled])')).forEach(btn=>btn.addEventListener('click',()=>{
   selectedPlan=list[Number(btn.dataset.i)];
   Array.from($('plans').querySelectorAll('.item')).forEach(x=>x.style.borderColor='var(--border)');
-  btn.style.borderColor='var(--primary)';$('buyBtn').classList.remove('hidden');
-  $('buyBtn').textContent='Rent this number\n'+selectedPlan.country_name+' · '+selectedService.service_name+' · '+selectedPlan.duration_label+' · '+money(selectedPlan.price_ngn);
-  $('selectedPrice').textContent='';
+  btn.style.borderColor='var(--primary)';$('rentActionBar').classList.remove('hidden');
+  $('buyBtn').textContent='Rent Number';
+  $('selectedPrice').textContent=selectedPlan.country_name+' · '+selectedService.service_name+' · '+selectedPlan.duration_label+' · '+money(selectedPlan.price_ngn);
  }));
 }
 const RENT_CACHE_KEY='mj_virtualsms_global_rental_catalog_v3';
@@ -153,7 +179,41 @@ function rentalServiceSkeleton(){let html='';for(let i=0;i<12;i++)html+='<div cl
 async function load(){msg('',false);const cached=readRentalCache();if(cached){applyRentalCatalog(cached.plans);$('services').removeAttribute('aria-busy');return;}$('services').innerHTML=rentalServiceSkeleton();$('services').setAttribute('aria-busy','true');
 try{const j=await api('catalog',{query:'scope=global'});if(!j.success||!Array.isArray(j.data)){msg(j.message||'Could not load global rental plans. Please try again.',true);$('services').innerHTML='<div class="empty">Catalogue unavailable.</div>';$('services').removeAttribute('aria-busy');return;}const fresh=j.data.filter(p=>String(p.country_code||'').toUpperCase()!=='US');applyRentalCatalog(fresh);writeRentalCache(fresh);$('services').removeAttribute('aria-busy');}catch(e){msg('Could not load rental catalogue: '+String(e.message||e),true);$('services').innerHTML='<div class="empty">Catalogue unavailable.</div>';$('services').removeAttribute('aria-busy');}}
 $('serviceSearch').addEventListener('input',renderServices);$('countrySearch').addEventListener('input',renderCountries);$('backServices').onclick=()=>{$('countryStep').classList.add('hidden');$('serviceStep').classList.remove('hidden');};$('backCountries').onclick=()=>{$('planStep').classList.add('hidden');$('countryStep').classList.remove('hidden');};
-$('buyBtn').onclick=async function(){if(busy||!selectedPlan)return;const h=await authHeaders();if(!h)return;const signature=[selectedPlan.country_code,selectedPlan.service_id,selectedPlan.duration_hours].join('|');let stored=null;try{stored=JSON.parse(sessionStorage.getItem('mj_virtualsms_global_rent_request')||'null');}catch(_){}if(stored&&stored.id&&stored.signature!==signature){msg('A previous rental is still being reconciled. Open Number History or contact support before starting another purchase.',true);return;}const requestId=stored&&stored.id?stored.id:((crypto.randomUUID&&crypto.randomUUID())||('mjvsg-'+Date.now()+'-'+Math.random().toString(36).slice(2)));try{sessionStorage.setItem('mj_virtualsms_global_rent_request',JSON.stringify({id:requestId,signature}));}catch(_){}busy=true;this.disabled=true;this.textContent='Processing…';msg('',false);let j;try{j=await api('order',{method:'POST',body:{service_id:selectedPlan.service_id,service_name:selectedService.service_name,duration_hours:selectedPlan.duration_hours,country_code:selectedPlan.country_code,quoted_price_ngn:selectedPlan.price_ngn,request_id:requestId}});}catch(e){busy=false;this.disabled=false;this.textContent='Rent this number';msg('We could not confirm the rental result yet. Do not submit another rental. Check Number History or contact support.',true);return;}busy=false;this.disabled=false;this.textContent='Rent this number';if(j.success&&j.data){try{sessionStorage.removeItem('mj_virtualsms_global_rent_request');}catch(_){}const id=j.data.order_id||j.data.rent_id;if(id){location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(id)+'&source=virtualsms_rent';return;}msg('Rental created but its reference is missing. Check Number History before retrying.',true);return;}if(j.reconciliation_required){msg(j.message||'Purchase status is being checked. Do not retry.',true);return;}if(j.refunded===true){try{sessionStorage.removeItem('mj_virtualsms_global_rent_request');}catch(_){}}msg(j.message||'Could not complete this rental.',true);};
+function closeRentConfirm(){if(!busy)$('rentConfirmModal').classList.add('hidden');}
+$('buyBtn').onclick=function(){
+ if(busy||!selectedPlan)return;
+ $('rentConfirmSummary').innerHTML=esc(selectedPlan.country_name)+' · '+esc(selectedService.service_name)+' · '+esc(selectedPlan.duration_label)+'<span class="rent-confirm-price">'+money(selectedPlan.price_ngn)+'</span>';
+ $('rentConfirmModal').classList.remove('hidden');
+};
+$('cancelRentBtn').onclick=closeRentConfirm;
+$('rentConfirmModal').addEventListener('click',function(event){if(event.target===this)closeRentConfirm();});
+$('confirmRentBtn').onclick=async function(){
+ if(busy||!selectedPlan)return;
+ const h=await authHeaders();if(!h)return;
+ const signature=[selectedPlan.country_code,selectedPlan.service_id,selectedPlan.duration_hours].join('|');
+ let stored=null;try{stored=JSON.parse(sessionStorage.getItem('mj_virtualsms_global_rent_request')||'null');}catch(_){}
+ if(stored&&stored.id&&stored.signature!==signature){msg('A previous rental is still being reconciled. Open Number History or contact support before starting another purchase.',true);closeRentConfirm();return;}
+ const requestId=stored&&stored.id?stored.id:((crypto.randomUUID&&crypto.randomUUID())||('mjvsg-'+Date.now()+'-'+Math.random().toString(36).slice(2)));
+ try{sessionStorage.setItem('mj_virtualsms_global_rent_request',JSON.stringify({id:requestId,signature}));}catch(_){}
+ busy=true;$('confirmRentBtn').disabled=true;$('buyBtn').disabled=true;$('confirmRentBtn').textContent='Processing…';msg('',false);
+ let j;
+ try{
+  j=await api('order',{method:'POST',body:{service_id:selectedPlan.service_id,service_name:selectedService.service_name,duration_hours:selectedPlan.duration_hours,country_code:selectedPlan.country_code,quoted_price_ngn:selectedPlan.price_ngn,request_id:requestId}});
+ }catch(e){
+  busy=false;$('confirmRentBtn').disabled=false;$('buyBtn').disabled=false;$('confirmRentBtn').textContent='Confirm and Rent';
+  msg('We could not confirm the rental result yet. Do not submit another rental. Check Number History or contact support.',true);return;
+ }
+ busy=false;$('confirmRentBtn').disabled=false;$('buyBtn').disabled=false;$('confirmRentBtn').textContent='Confirm and Rent';$('rentConfirmModal').classList.add('hidden');
+ if(j.success&&j.data){
+  try{sessionStorage.removeItem('mj_virtualsms_global_rent_request');}catch(_){}
+  const id=j.data.order_id||j.data.rent_id;
+  if(id){location.href='mj-sms-usa-number.html?rent_id='+encodeURIComponent(id)+'&source=virtualsms_rent';return;}
+  msg('Rental created but its reference is missing. Check Number History before retrying.',true);return;
+ }
+ if(j.reconciliation_required){msg(j.message||'Purchase status is being checked. Do not retry.',true);return;}
+ if(j.refunded===true){try{sessionStorage.removeItem('mj_virtualsms_global_rent_request');}catch(_){}}
+ msg(j.message||'Could not complete this rental.',true);
+};
 load().catch(e=>msg('Could not load rental catalogue: '+String(e.message||e),true));
 })();
 </script>
