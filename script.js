@@ -753,15 +753,34 @@ async function fetchUserTransactions(userId) {
             .order('created_at', { ascending: false });
 
         if (data && !error) {
-            transactions = data.map(tx => ({
-                id: tx.id,
-                category: tx.category || tx.type || 'deposit',
-                title: tx.title || (tx.type === 'deposit' ? 'Wallet Deposit' : 'Currency Conversion'),
-                subtitle: tx.subtitle || '',
-                amount: tx.amount || (tx.amount_ngn ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
-                date: new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                status: tx.status || 'Success'
-            }));
+            transactions = data.map(tx => {
+                const rawType = String(tx.type || '').trim().toLowerCase();
+                const rawCategory = String(tx.category || '').trim().toLowerCase();
+                const searchable = (String(tx.title || '') + ' ' + String(tx.subtitle || '')).toLowerCase();
+                let category = rawCategory || rawType || 'other';
+
+                // Canonical categories keep legacy rows and newer service rows
+                // under the same customer-facing filter.
+                if (rawType === 'deposit' || rawCategory === 'deposit') category = 'deposit';
+                else if (rawType === 'conversion' || rawCategory === 'conversion' || rawCategory === 'general' && /convert|swap|exchange/.test(searchable)) category = 'conversion';
+                else if (rawType === 'esim' || rawCategory === 'esim') category = 'esim';
+                else if (rawType === 'telegram' || rawCategory === 'telegram' || /telegram/.test(searchable) && (rawType === 'booster' || rawCategory === 'booster')) category = 'telegram';
+                else if (rawType === 'booster' || rawCategory === 'booster' || rawCategory === 'boost') category = 'booster';
+                else if (rawType === 'log' || rawCategory === 'log') category = 'log';
+                else if (rawType === 'sms' || rawCategory === 'sms' || rawCategory === 'mj sms') category = 'sms';
+                else if (rawType === 'email' || rawCategory === 'email') category = 'email';
+
+                return {
+                    id: tx.id,
+                    type: rawType,
+                    category,
+                    title: tx.title || (category === 'deposit' ? 'Wallet Deposit' : category === 'conversion' ? 'Currency Conversion' : 'Transaction'),
+                    subtitle: tx.subtitle || '',
+                    amount: tx.amount || (tx.amount_ngn ? '₦' + Number(tx.amount_ngn).toLocaleString() : '₦0.00'),
+                    date: new Date(tx.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
+                    status: tx.status || 'Success'
+                };
+            });
             renderTransactionsList();
         }
     } catch (err) {
@@ -799,9 +818,13 @@ function renderTransactionsList() {
     container.innerHTML = '';
     filtered.forEach(tx => {
         let icon = '💳';
-        if (tx.category === 'sms' || tx.type === 'sms') icon = '📱';
-        else if (tx.category === 'log' || tx.type === 'log') icon = '📦';
-        else if (tx.category === 'booster' || tx.type === 'booster') icon = '⚡';
+        if (tx.category === 'sms') icon = '📱';
+        else if (tx.category === 'log') icon = '📦';
+        else if (tx.category === 'booster') icon = '⚡';
+        else if (tx.category === 'telegram') icon = '✈️';
+        else if (tx.category === 'esim') icon = '📶';
+        else if (tx.category === 'conversion') icon = '🔄';
+        else if (tx.category === 'deposit') icon = '💰';
 
         let statusLower = (tx.status || '').toLowerCase();
         let statusClass = 'status-success';
