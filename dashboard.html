@@ -5654,8 +5654,13 @@ function normalizeTxType(tx) {
     }
     if (type === 'purchase' || type === 'order') return 'log';
 
+    // Refund and failed-purchase rows for account/log products use the product name
+    // as category in older records. After the specific SMS, mail, eSIM, deposit,
+    // conversion, Telegram and booster checks above, these belong under Log Orders.
+    if (type === 'refund' || type === 'purchase_failed') return 'log';
+
     // Already-normalized kinds from a prior pass
-    if (['telegram','booster','deposit','conversion','sms','log','logs'].includes(type)) return type;
+    if (['telegram','booster','deposit','conversion','sms','log','logs','esim','email'].includes(type)) return type;
 
     return type || 'log';
 }
@@ -5841,8 +5846,8 @@ async function fetchUserTransactions(userId) {
             let title = tx.title || 'Transaction';
             // Legacy processor labels may remain in older titles. Hide them in customer history.
             title = title
-                .replace(/PocketFi deposit \\(pending\\)/gi, 'Deposit (pending)')
-                .replace(/PocketFi deposit \\(expired\\)/gi, 'Deposit (expired)')
+                .replace(/PocketFi deposit [(]pending[)]/gi, 'Deposit (pending)')
+                .replace(/PocketFi deposit [(]expired[)]/gi, 'Deposit (expired)')
                 .replace(/PocketFi deposit/gi, 'Deposit')
                 .replace(/PocketFi/gi, 'Deposit')
                 .replace(/Paystack/gi, 'Deposit');
@@ -8230,7 +8235,7 @@ function renderHistoryList(filterType = 'all') {
             if (filterType === 'booster') return kind === 'booster';
             if (filterType === 'conversion') return kind === 'conversion';
             if (filterType === 'telegram') return kind === 'telegram';
-            if (filterType === 'esim') return kind === 'esim' && String(t._source || 'transactions') === 'transactions';
+            if (filterType === 'esim') return kind === 'esim';
             return kind === filterType;
         });
     }
