@@ -17,8 +17,7 @@ begin
      where source in ('gotsms', 'smsbus_rent', 'virtualsms_rent')
        and coalesce(refunded, false) = false
        and lower(coalesce(status, '')) in ('active', 'pending', 'waiting', 'processing', 'completed')
-       and code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
-       and code::timestamptz <= now()
+       and case when code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then code::timestamptz <= now() else false end
      order by created_at
      limit 500
      for update skip locked
@@ -74,8 +73,7 @@ update public.number_orders
  where source in ('gotsms','smsbus_rent','virtualsms_rent')
    and coalesce(refunded,false)=false
    and lower(coalesce(status,''))='completed'
-   and code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
-   and code::timestamptz > now();
+   and case when code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then code::timestamptz > now() else false end;
 
 update public.transactions t
    set status='pending',
@@ -88,8 +86,7 @@ update public.transactions t
         and n.source in ('gotsms','smsbus_rent','virtualsms_rent')
         and coalesce(n.refunded,false)=false
         and lower(coalesce(n.status,''))='active'
-        and n.code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
-        and n.code::timestamptz > now()
+        and case when n.code ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then n.code::timestamptz > now() else false end
         and t.external_reference = case
           when n.source='gotsms' then regexp_replace(coalesce(n.idempotency_key,''),'^gotsms-','')
           when n.source='smsbus_rent' then coalesce(n.wallet_debit_id::text,'')
