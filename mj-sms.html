@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
-// regardless of the viewer's device timezone — keeps order timestamps
+// regardless of the viewer's device timezone. keeps order timestamps
 // consistent for admins and users everywhere, so orders sort/display
 // the same way no matter where someone is looking from.
 (function () {
@@ -250,7 +250,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 
 <div class="content-card" id="poolStep" style="display:none;">
 <h2><i class="fa-solid fa-layer-group" style="color:var(--primary)"></i> Choose a Pool</h2>
-<p class="helper-text">This country has more than one number pool — each has its own price and stock. Pick one below.</p>
+<p class="helper-text">This country has more than one number pool. each has its own price and stock. Pick one below.</p>
 <div class="selected-service-bar">
 <span class="name" id="selectedPoolContext"></span>
 <button type="button" id="changePoolCountryBtn">Change</button>
@@ -346,7 +346,7 @@ function isJunkService(name){
   const n = String(name||'').trim();
   if(!n) return true;
   const low = n.toLowerCase().replace(/_/g,' ').replace(/\s+/g,' ').trim();
-  // "Any other" is a real catch-all — never treat as junk
+  // "Any other" is a real catch-all. never treat as junk
   if(/^any\s*other$/i.test(low) || low === 'other') return false;
   // Grizzly internal codes: "gr au", "gr_aw", "gr bg", "gm69", etc.
   if(/^gr[\s_\-]?[a-z0-9]{1,6}$/i.test(low)) return true;
@@ -446,7 +446,7 @@ function serviceDomain(name){
 
 
 function serviceLogo(name){
-  // Same as Server 2 — Google favicon — but never map junk codes to x.com
+  // Same as Server 2. Google favicon. but never map junk codes to x.com
   const n = String(name||'').toLowerCase().trim();
   if(isJunkService(n)) return null;
   let domain = serviceDomain(name);
@@ -518,7 +518,7 @@ function serviceIconFa(name){
   return null;
 }
 
-// --- Country flags. Grizzly's site shows flags too — same story as above,
+// --- Country flags. Grizzly's site shows flags too. same story as above,
 // the reseller API only returns country names, not flag images, so this
 // renders a Unicode flag emoji from a name→ISO lookup. Unmatched names
 // (spelling variants we haven't seen) fall back to a globe icon instead of
@@ -584,7 +584,7 @@ async function initSession(){
 // Surfaces an in-progress order right on this page (so a customer who
 // already has a number waiting for a code doesn't accidentally buy a
 // second one, and can easily get back to it). Deliberately does NOT show
-// a general history/recent-numbers list here — this page is for buying a
+// a general history/recent-numbers list here. this page is for buying a
 // new number, not browsing past ones; that's what mj-sms-history.html is for.
 async function loadRecentActivity(){
   const area = document.getElementById('recentActivityArea');
@@ -606,11 +606,11 @@ async function loadRecentActivity(){
       <div class="pb-icon"><i class="fa-solid fa-hourglass-half"></i></div>
       <div class="pb-text">
         <div class="pb-title">You have a number waiting for a code</div>
-        <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')} — tap to view</div>
+        <div class="pb-sub" style="text-transform:capitalize;">${escapeHtml(name)} · ${escapeHtml(pending.phone_number||'')}. tap to view</div>
       </div>
       <i class="fa-solid fa-chevron-right" style="color:var(--muted);"></i>
     </a>`;
-  }catch(e){ /* non-critical — the main order flow below still works fine without this */ }
+  }catch(e){ /* non-critical. the main order flow below still works fine without this */ }
 }
 
 async function refreshBalance(){
@@ -646,7 +646,7 @@ var __smsSearchTimer = null;
 var currentPoolList = [];
 var selectedProviderId = null;
 
-/** Match server salePriceFromUsd (fixed 80% band) for display only — server re-prices on order */
+/** Match server salePriceFromUsd (fixed 80% band) for display only. server re-prices on order */
 function salePriceFromUsdClient(usd){
   var rate = 1500;
   var percent = 80;
@@ -671,7 +671,7 @@ function providersToPoolOptions(providersRaw, poolPriceOverrides){
     if(!nums.length) return;
     var usd = Math.min.apply(null, nums);
     var pid = p.provider_id != null ? String(p.provider_id) : String(key);
-    // Admin's custom price for this exact pool wins — matches what the
+    // Admin's custom price for this exact pool wins. matches what the
     // server actually charges (see grizzly-sync.js handleOrder). Falls
     // back to the fixed-formula price only when no override is set.
     var overridden = Number(overrides[pid]);
@@ -693,13 +693,13 @@ async function loadServiceCatalog(opts){
   var force = !!opts.force;
   try{
     if(!sbClient){
-      if(!window.supabase) throw new Error('Supabase not loaded — refresh the page');
+      if(!window.supabase) throw new Error('Supabase not loaded. refresh the page');
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
       });
     }
 
-    // Cache while logged in / same browser tab session — do not reload from scratch
+    // Cache while logged in / same browser tab session. do not reload from scratch
     var CACHE_KEY = 'mj_sms1_catalog_v5';
     function lagosDay(){
       try{ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }); }
@@ -846,7 +846,7 @@ async function loadServiceCatalog(opts){
       return (res && res.data) ? res.data : [];
     }
 
-    // Phase 1a — ultra-fast: up to 2 pages without per-country loops
+    // Phase 1a. ultra-fast: up to 2 pages without per-country loops
     if(!opts.skipPriority){
       try{
         var fastJobs = [0,1].map(function(pg){
@@ -871,7 +871,7 @@ async function loadServiceCatalog(opts){
       }catch(e){ console.warn('fast path', e); }
     }
 
-    // Phase 1b — priority countries fill gaps (still one .in() call)
+    // Phase 1b. priority countries fill gaps (still one .in() call)
     var priorityIds = ids.slice(0, 16);
     if(priorityIds.length && !opts.skipPriority){
       var rows = await fetchByCountryIds(priorityIds);
@@ -882,7 +882,7 @@ async function loadServiceCatalog(opts){
       saveCache(false);
     }
 
-    // Phase 2 — load ALL remaining countries fast: parallel batches of 25
+    // Phase 2. load ALL remaining countries fast: parallel batches of 25
     var rest = ids.slice(16);
     var bgBatch = 30;
     var parallel = 5; // more parallel = faster full load
@@ -911,7 +911,7 @@ async function loadServiceCatalog(opts){
     __smsCatalogLoading = false;
 
     if(!catalogMap.size && !(allServiceCatalog && allServiceCatalog.length)){
-      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry — catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
+      serviceGrid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📵</div><h4>No Services Found</h4><p>Try Retry. catalog may still be syncing.</p><button type="button" class="btn btn-primary" style="margin-top:12px;width:auto;padding:10px 16px" onclick="loadServiceCatalog({force:true})">Retry</button></div>';
     }
   }catch(err){
     __smsCatalogLoading = false;
@@ -922,7 +922,7 @@ async function loadServiceCatalog(opts){
   }
 }
 
-// Soft refresh after a complete cache — no skeleton, silent
+// Soft refresh after a complete cache. no skeleton, silent
 async function softRefreshCatalogFull(){
   // Intentionally no automatic refresh same day (saves egress).
   // Pass loadServiceCatalog({ force: true }) only on explicit Retry.
@@ -1006,7 +1006,7 @@ function niceServiceName(name, serviceId){
   if(KNOWN[n.toLowerCase()]) return KNOWN[n.toLowerCase()];
   // Never show gr_/gm_ codes as the customer label
   if(/^gr[\s_\-]?[a-z0-9]+$/i.test(n) || /^gm[\s_\-]?[a-z0-9]+$/i.test(n) || /^gr_/i.test(id) || /^gm/i.test(id)){
-    return ''; // treat as junk — filtered out of grid
+    return ''; // treat as junk. filtered out of grid
   }
   // Title-case readable names
   if(n && n.length > 2 && /[a-zA-Z]{3,}/.test(n) && !/^[a-z0-9]{1,5}$/i.test(n)){
@@ -1111,7 +1111,7 @@ async function selectService(svc){
   let rows = (serviceCountryIndex[key] || []).slice();
 
   // Always refresh from DB: Grizzly rows + Hero rows listed separately
-  // (same country name can appear 2–3 times — each row calls its own API).
+  // (same country name can appear 2–3 times. each row calls its own API).
   try{
     if(!sbClient) await loadServiceCatalog();
     var cols = 'service_id, service_name, country_id, country_name, price, available_quantity, providers_raw, supplier_price, pool_price_overrides, source';
@@ -1175,7 +1175,7 @@ async function selectService(svc){
     }
   }catch(e){ console.warn('country refresh', e); }
 
-  // One list entry per source+country — duplicates (2× Canada) are intentional
+  // One list entry per source+country. duplicates (2× Canada) are intentional
   var byKey = new Map();
   rows.forEach(function(c){
     var src = String(c.source || 'grizzlysms').toLowerCase();
@@ -1404,14 +1404,14 @@ async function loadHeroOptionsForPurchase(svc){
         : 'Any operator';
     }
 
-    // Flash price only — never overwrite SMS catalog total
+    // Flash price only. never overwrite SMS catalog total
     var flashP = Number(data.price_ngn_flash);
     var flashOk = !!data.flash_available && flashP > 0;
     // Only treat as a real flash upsell if it is meaningfully above SMS
     if (flashOk && flashP > window.__heroPriceSms + 1) {
       window.__heroPriceFlash = flashP;
     } else if (flashOk) {
-      // Supplier says flash available but same/lower price — still allow toggle, keep same total
+      // Supplier says flash available but same/lower price. still allow toggle, keep same total
       window.__heroPriceFlash = Math.max(window.__heroPriceSms, flashP);
     } else {
       window.__heroPriceFlash = null;
@@ -1431,7 +1431,7 @@ async function loadHeroOptionsForPurchase(svc){
     updateHeroDisplayedPrice();
   } catch (e) {
     console.warn('loadHeroOptionsForPurchase', e);
-    if (opStatus) opStatus.textContent = 'Could not load operators — Any is fine';
+    if (opStatus) opStatus.textContent = 'Could not load operators. Any is fine';
     if (verifyHint) verifyHint.textContent = 'SMS only.';
     updateHeroDisplayedPrice();
   }
