@@ -253,3 +253,9 @@ end;
 $function$;
 revoke all on function public.smsbus_rent_refund_current_owner(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.smsbus_rent_refund_current_owner(uuid,uuid) to service_role;
+
+-- The live duplicate audit returned no duplicate keys. This index makes the
+-- one-purchase-row rule concurrency-safe for every SMS supplier and rental.
+create unique index if not exists transactions_mj_sms_purchase_reference_uidx
+  on public.transactions(user_id, category, type, external_reference)
+  where category='MJ SMS' and type='purchase' and external_reference is not null;
