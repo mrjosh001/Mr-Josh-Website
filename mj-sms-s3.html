@@ -40,6 +40,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .header-right{margin-left:auto;}
 .hist-link{font-size:12px;font-weight:700;color:var(--primary);text-decoration:none;display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;}
 .main-content{padding:16px;max-width:700px;margin:0 auto}
+.mode-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px;margin:0 0 16px;background:var(--card);border:1px solid var(--border);border-radius:15px}
+.mode-tab{min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;padding:12px 8px;border:1px solid transparent;border-radius:11px;text-decoration:none;color:var(--muted);font-size:12px;font-weight:800;text-align:center;line-height:1.25}
+.mode-tab.active{color:var(--primary);background:var(--primary-glow);border-color:rgba(91,138,245,.22)}
+.mode-tab i{font-size:12px;flex-shrink:0}
+@media(max-width:360px){.mode-tab{font-size:11px;padding:11px 5px;gap:5px}}
 .content-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-bottom:16px}
 .content-card h2{font-size:16px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .helper-text{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.45}
@@ -225,11 +230,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 
 <div id="recentActivityArea"></div>
 
-<a class="content-card" href="mj-sms-vsrent.html" style="display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;border-color:var(--primary);background:linear-gradient(120deg,var(--card),var(--primary-glow));">
- <span style="width:46px;height:46px;flex-shrink:0;border-radius:14px;display:grid;place-items:center;background:var(--primary-glow);color:var(--primary);font-size:20px;"><i class="fa-solid fa-calendar-days"></i></span>
- <span style="flex:1;min-width:0;"><strong style="display:block;font-size:14px;font-weight:800;">Rent for 1, 3 or 7 days</strong><small style="display:block;color:var(--muted);font-size:12px;margin-top:3px;">Global rentals · Choose service, country and duration</small></span>
- <i class="fa-solid fa-chevron-right" style="color:var(--primary);"></i>
-</a>
+<nav class="mode-tabs" aria-label="Server 3 SMS mode">
+ <a class="mode-tab active" href="mj-sms-s3.html" aria-current="page"><i class="fa-solid fa-key"></i> One time verification</a>
+ <a class="mode-tab" href="mj-sms-vsrent.html"><i class="fa-solid fa-calendar-days"></i> Long term Rental</a>
+</nav>
 
 <div class="content-card" id="serviceStep">
 <h2><i class="fa-solid fa-mobile-screen" style="color:var(--primary)"></i> Choose a Service</h2>
