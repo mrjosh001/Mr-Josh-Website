@@ -16,6 +16,8 @@ declare
   v_title text;
 begin
   if coalesce(old.refunded,false)=true or coalesce(new.refunded,false)<>true then return new; end if;
+  -- Rentals use dedicated ownership-aware refund RPCs. Never refund them here.
+  if new.source in ('smsbus_rent','virtualsms_rent') then return new; end if;
   if coalesce(new.price,0)<=0 then return new; end if;
   if new.source='gotsms' and (old.status='completed'
     or coalesce(old.service_name,'') ~* 'sms[[:space:]]*received'
