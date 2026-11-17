@@ -582,7 +582,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
       if(br.classList.contains('is-busy')) return;
       br.classList.add('is-busy'); br.disabled=true;
       var prev=br.innerHTML; br.innerHTML='<i class="fa-solid fa-spinner spin"></i> Checking…';
-      try{ await loadMessages(); toast(hasSms?'Inbox updated':'No SMS yet — still waiting','ok'); }
+      try{ await loadMessages(); toast(hasSms?'Inbox updated':'No SMS yet. still waiting','ok'); }
       catch(e){ toast('Could not check SMS','err'); }
       br.innerHTML=prev; br.classList.remove('is-busy'); br.disabled=false;
     };
@@ -661,7 +661,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
     if(list.length && !hasSms){
       hasSms=true;
       var slot=document.getElementById('cancelSlot');
-      if(slot) slot.outerHTML='<div class="locked" id="cancelSlot">Cancel unavailable — a message was already received on this number.</div>';
+      if(slot) slot.outerHTML='<div class="locked" id="cancelSlot">Cancel unavailable. a message was already received on this number.</div>';
     }
     if(best && best!==lastCodeShown){ if(lastCodeShown) toast('New code received','ok'); lastCodeShown=best; }
     if(!list.length){
@@ -878,7 +878,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
   /* ---------- cancel ---------- */
   function openCancel(){
-    if(hasSms){ toast('Cancel unavailable — a message was already received on this number.','err'); return; }
+    if(hasSms){ toast('Cancel unavailable. a message was already received on this number.','err'); return; }
     document.getElementById('cmPhone').textContent=(rent&&(rent.phone_number||rent.number))||'—';
     var p=Number(rent&&(rent.price||rent.price_ngn)||0);
     document.getElementById('cmAmt').textContent=p>0?('₦'+p.toLocaleString()):'Rental fee';
@@ -886,7 +886,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   }
   async function doCancel(){
     if(cancelBusy||!orderId) return;
-    if(hasSms){ hideModal('cancelModal'); toast('Cancel unavailable — a message was already received on this number.','err'); return; }
+    if(hasSms){ hideModal('cancelModal'); toast('Cancel unavailable. a message was already received on this number.','err'); return; }
     cancelBusy=true;
     var btn=document.getElementById('cmConfirm'); var prev=btn.textContent; btn.disabled=true; btn.textContent='Cancelling…';
     var j=await api('rent_cancel',{ method:'POST', body:{ order_id: orderId } });
