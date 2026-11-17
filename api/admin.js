@@ -1442,7 +1442,7 @@ async function wipeUnusedSmsNumbersHandle() {
     const notes = String(tx.notes || '').split('|').map((v) => v.trim()).filter(Boolean);
     const externalRef = String(tx.external_reference || '');
     const has = (marker, value, suffix) => !!value && notes.some((v) =>
-      v === marker + ':' + value || (suffix && v.startsWith(marker + ':' + value + ':' + suffix))
+      v === (marker + ':' + value + (suffix ? ':' + suffix : ''))
     );
 
     if (String(txMeta.number_order_id || '') === String(order.id)) return true;
