@@ -1008,14 +1008,16 @@ function parseAdminStyleCredentialLines(text) {
     else if (label === 'recovery email') f.recovery = val;
     else if (label === 'email') f.email = val;
     else if (label === 'phone' || label === 'number') f.phone = val;
+    else if (label === '2fa url') f.twofa_url = val;
+    else if (label === 'profile url') f.profile_url = val;
     else if (label.indexOf('2fa') >= 0 || label === 'token') f.token = val;
     else if (label.indexOf('cookie') >= 0) f.token = val;
-    else if (label === 'profile' || label === 'page' || label === 'link') {
+    else if (label === 'profile' || label === 'page' || label === 'link' || label === 'login url') {
       f.link = f.link ? (f.link + '\n' + val) : val;
       // keep visible in extra too if multiple
       if (label === 'page') f.extra = (f.extra ? f.extra + '\n' : '') + 'Page: ' + val;
       else if (label === 'profile') f.extra = (f.extra ? f.extra + '\n' : '') + 'Profile: ' + val;
-    } else if (label === 'extra' || label === 'additional fields') f.extra = (f.extra ? f.extra + '\\n' : '') + val;
+    } else if (label === 'extra' || label === 'additional fields') f.extra = (f.extra ? f.extra + '\n' : '') + val;
   });
   return f;
 }
