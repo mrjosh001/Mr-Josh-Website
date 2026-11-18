@@ -995,7 +995,7 @@ function parseAdminStyleCredentialLines(text) {
     let lineT = String(line || '').trim();
     if (!lineT) return;
     lineT = lineT.replace(/^\d+\s*[.):\-]\s*/, '');
-    const m = lineT.match(/^(Facebook\s*UID|Email\s*Password|Recovery\s*Email|Username|Password|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Profile|Page|Link|Extra)\s*:\s*(.+)$/i);
+    const m = lineT.match(/^(Facebook\s*UID|Email\s*Password|Recovery\s*Email|2FA\s*URL|Profile\s*URL|Username|Password|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Profile|Page|Link|Login\s*URL|Extra|Additional\s*fields)\s*:\s*(.+)$/i);
     if (!m) return;
     const label = m[1].toLowerCase().replace(/\s+/g, ' ').trim();
     const val = m[2].trim();
@@ -1008,14 +1008,16 @@ function parseAdminStyleCredentialLines(text) {
     else if (label === 'recovery email') f.recovery = val;
     else if (label === 'email') f.email = val;
     else if (label === 'phone' || label === 'number') f.phone = val;
+    else if (label === '2fa url') f.twofa_url = val;
+    else if (label === 'profile url') f.profile_url = val;
     else if (label.indexOf('2fa') >= 0 || label === 'token') f.token = val;
     else if (label.indexOf('cookie') >= 0) f.token = val;
-    else if (label === 'profile' || label === 'page' || label === 'link') {
+    else if (label === 'profile' || label === 'page' || label === 'link' || label === 'login url') {
       f.link = f.link ? (f.link + '\n' + val) : val;
       // keep visible in extra too if multiple
       if (label === 'page') f.extra = (f.extra ? f.extra + '\n' : '') + 'Page: ' + val;
       else if (label === 'profile') f.extra = (f.extra ? f.extra + '\n' : '') + 'Profile: ' + val;
-    } else if (label === 'extra') f.extra = val;
+    } else if (label === 'extra' || label === 'additional fields') f.extra = (f.extra ? f.extra + '\n' : '') + val;
   });
   return f;
 }
@@ -1185,7 +1187,8 @@ function fieldLabel(key, val) {
     phone: 'Number',
     token: '2FA / Token',
     cookie: 'Cookie / Token',
-    link: 'Access link',
+    twofa_url: '2FA Generator',
+    profile_url: 'Profile URL',\n    link: 'Access link',
     extra: 'Extra'
   };
   if (key === 'token' && val && /c_user=|xs=|datr=|sb=|sessionid=|;.*=/.test(String(val))) {
@@ -1828,7 +1831,7 @@ async function openModal(kind, i) {
       }
       // Map labeled lines only — do NOT re-run the messy parseCredentialFields path
       const f = parseAdminStyleCredentialLines(adminView);
-      const hasField = f.username || f.password || f.email || f.token || f.phone || f.email_password || f.recovery || f.link || f.extra;
+      const hasField = f.username || f.password || f.email || f.token || f.twofa_url || f.profile_url || f.phone || f.email_password || f.recovery || f.link || f.extra;
       if (hasField) {
         // Preserve full text for Copy All / Download so it matches admin 1:1
         f._raw = adminView;
@@ -1849,7 +1852,7 @@ async function openModal(kind, i) {
           '</div>'
         );
       }
-      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'twofa_url', 'profile_url', 'link', 'extra'].filter((k) => f[k]);
       if (!keys.length) {
         const raw = f._raw || f.username || '';
         return (
@@ -1860,7 +1863,7 @@ async function openModal(kind, i) {
       const lines = keys.map((k) => {
         const val = String(f[k] || '');
         const passClass = k === 'password' || k === 'email_password' ? ' pass' : '';
-        if (k === 'link') {
+        if (['twofa_url', 'profile_url', 'link'].includes(k)) {
           return (
             '<div class="cred-line cred-link-line"><span class="cred-k">' + fieldLabel(k, f[k]) + '</span>' +
             '<span class="cred-v link-row">' +
@@ -1891,7 +1894,7 @@ async function openModal(kind, i) {
       if (f._raw && String(f._raw).trim()) {
         return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + String(f._raw).trim();
       }
-      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'link', 'extra'].filter((k) => f[k]);
+      const keys = ['phone', 'username', 'password', 'email', 'email_password', 'recovery', 'token', 'twofa_url', 'profile_url', 'link', 'extra'].filter((k) => f[k]);
       const body = keys.map((k) => fieldLabel(k, f[k]) + ': ' + f[k]).join('\n');
       return (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + body;
     }).join('\n\n');
