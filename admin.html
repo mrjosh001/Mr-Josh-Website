@@ -6520,7 +6520,11 @@ function openOrderModal(index) {
           const view = String(it.login_credentials || '');
           const raw = String(it.login_credentials_raw || '').trim();
           const hint = String(o.description || o.product_name || '');
-          // Prefer re-format from supplier raw so WA number/pass/email dumps stay correct
+          // Explicitly corrected customer-view records must take precedence over supplier raw.
+          // Raw is retained for audit, but rebuilding it here would overwrite admin-approved labels.
+          const hasExplicitCredentialLabels = /^(?:2FA Generator|2FA Secret Key|Instagram Profile|Facebook Profile|Additional Supplier Data):/im.test(view);
+          if (hasExplicitCredentialLabels) return view;
+          // Prefer re-format from supplier raw for legacy, unstructured records.
           if (raw && typeof window.formatCredentials === 'function') {
             try {
               const rebuilt = window.formatCredentials(raw, hint);
