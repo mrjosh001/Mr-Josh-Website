@@ -995,7 +995,7 @@ function parseAdminStyleCredentialLines(text) {
     let lineT = String(line || '').trim();
     if (!lineT) return;
     lineT = lineT.replace(/^\d+\s*[.):\-]\s*/, '');
-    const m = lineT.match(/^(Facebook\s*UID|Email\s*Password|Recovery\s*Email|Username|Password|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Profile|Page|Link|Extra)\s*:\s*(.+)$/i);
+    const m = lineT.match(/^(Facebook\s*UID|Email\s*Password|Recovery\s*Email|2FA\s*URL|Profile\s*URL|Username|Password|Email|Phone|Number|2FA\s*\/\s*Token|Cookie\s*\/\s*Token|Cookie|Token|Profile|Page|Link|Login\s*URL|Extra|Additional\s*fields)\s*:\s*(.+)$/i);
     if (!m) return;
     const label = m[1].toLowerCase().replace(/\s+/g, ' ').trim();
     const val = m[2].trim();
