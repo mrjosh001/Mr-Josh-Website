@@ -6532,16 +6532,38 @@ window.mjSupportOpenTicket = async function(id) {
 };
 
 window.mjSupportEnsureTicket = async function() {
-  if (window._mjSup.ticketId) return window._mjSup.ticketId;
-  if (!supabaseClient) return null;
-  var sess = await supabaseClient.auth.getSession();
-  var user = sess && sess.data && sess.data.session && sess.data.session.user;
-  if (!user) return null;
+  if (!supabaseClient) throw new Error('Support connection is unavailable. Refresh the page and try again.');
+  var sessionResult = await supabaseClient.auth.getSession();
+  var session = sessionResult && sessionResult.data && sessionResult.data.session;
+  if (!session || !session.user || !session.access_token) {
+    var refreshed = await supabaseClient.auth.refreshSession();
+    session = refreshed && refreshed.data && refreshed.data.session;
+  }
+  if (!session || !session.user || !session.access_token) {
+    throw new Error('Your sign-in session has expired. Sign in again before sending a support message.');
+  }
+  var user = session.user;
+
+  // Never trust a cached ticket ID without checking that it belongs to this signed-in user.
+  if (window._mjSup.ticketId) {
+    var cached = await supabaseClient.from('support_tickets').select('id').eq('id', window._mjSup.ticketId).eq('user_id', user.id).maybeSingle();
+    if (!cached.error && cached.data && cached.data.id) return cached.data.id;
+    console.warn('[support] discarded stale or inaccessible cached ticket', cached.error && cached.error.message);
+    window._mjSup.ticketId = null;
+  }
+
+  var existing = await supabaseClient.from('support_tickets').select('id').eq('user_id', user.id).neq('status', 'closed').order('created_at', { ascending: false }).limit(1);
+  if (existing.error) throw new Error('Could not check your support conversation: ' + existing.error.message);
+  if (existing.data && existing.data[0] && existing.data[0].id) {
+    window._mjSup.ticketId = existing.data[0].id;
+    return window._mjSup.ticketId;
+  }
+
   var cid = (document.getElementById('myCustomerId') || {}).value || '';
   var name = (document.getElementById('profileHeaderName') || {}).textContent || '';
   var email = (document.getElementById('profileHeaderEmail') || {}).textContent || user.email || '';
   if (name === 'Loading...') name = '';
-  var { data, error } = await supabaseClient.from('support_tickets').insert({
+  var created = await supabaseClient.from('support_tickets').insert({
     user_id: user.id,
     customer_id: cid || null,
     user_email: email,
@@ -6549,9 +6571,12 @@ window.mjSupportEnsureTicket = async function() {
     subject: 'Support request',
     status: 'open'
   }).select('id').single();
-  if (error || !data) return null;
-  window._mjSup.ticketId = data.id;
-  return data.id;
+  if (created.error || !created.data || !created.data.id) {
+    console.error('[support] ticket creation failed', created.error);
+    throw new Error('Could not open a support conversation: ' + (created.error && created.error.message || 'No ticket was returned.'));
+  }
+  window._mjSup.ticketId = created.data.id;
+  return created.data.id;
 };
 
 window.mjSupportStopPoll = function() {
@@ -6759,76 +6784,118 @@ window.mjSupportSend = async function(e) {
   var fileEl = document.getElementById('mjSupportFiles');
   if (!input) return false;
   var text = (input.value || '').trim();
-  var files = Array.from((fileEl && fileEl.files) || []).filter(function (f) {
+  var files = Array.from((fileEl && fileEl.files) || []).filter(function(f) {
     return f && String(f.type || '').indexOf('image/') === 0;
   }).slice(0, 3);
   if (!text && !files.length) return false;
-  input.value = '';
-  if (fileEl) fileEl.value = '';
-  for (var i = 0; i < files.length; i++) {
-    try {
-      var url = await window.mjUploadSupportShot(files[i]);
-      text += (text ? '\n' : '') + '[[MJURL]]' + url + '[[/MJURL]]';
-    } catch (err) {
-      mjSupportAppend('bot', 'Could not attach that photo. Try a smaller screenshot.');
+  if (window._mjSup && window._mjSup.sending) return false;
+  if (window._mjSup) window._mjSup.sending = true;
+  var sendButton = document.querySelector('#mjSupportPanel button[onclick*="mjSupportSend"], #mjSupportPanel button[type="submit"]');
+  if (sendButton) sendButton.disabled = true;
+  var originalText = text;
+  try {
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var url = await window.mjUploadSupportShot(files[i]);
+        text += (text ? '\n' : '') + '[[MJURL]]' + url + '[[/MJURL]]';
+      } catch (uploadError) {
+        console.warn('[support] attachment upload failed', uploadError);
+        throw new Error('The screenshot could not be uploaded. Please try a smaller image or send the message without it.');
+      }
     }
-  }
-  mjSupportAppend('user', text);
-  window.mjHydrateShots();
 
-  // Already with human → save only
-  if (window._mjSup.human) {
-    var tid = await mjSupportEnsureTicket();
-    if (!tid || !supabaseClient) {
-      mjSupportAppend('bot', 'Could not send. Please try again or use WhatsApp from the Help menu.');
+    // Human support messages must be persisted before showing them as sent.
+    if (window._mjSup.human) {
+      if (!supabaseClient) throw new Error('Support connection is unavailable. Refresh the page and try again.');
+      var sessionResult = await supabaseClient.auth.getSession();
+      var session = sessionResult && sessionResult.data && sessionResult.data.session;
+      if (!session || !session.user || !session.access_token) {
+        var refreshed = await supabaseClient.auth.refreshSession();
+        session = refreshed && refreshed.data && refreshed.data.session;
+      }
+      if (!session || !session.user || !session.access_token) {
+        throw new Error('Your sign-in session has expired. Sign in again before sending a support message.');
+      }
+      var tid = await window.mjSupportEnsureTicket();
+      if (!tid) throw new Error('Could not open your support conversation. Please try again.');
+      var ownership = await supabaseClient.from('support_tickets').select('id').eq('id', tid).eq('user_id', session.user.id).maybeSingle();
+      if (ownership.error || !ownership.data) {
+        window._mjSup.ticketId = null;
+        tid = await window.mjSupportEnsureTicket();
+        if (!tid) throw new Error('Your support conversation could not be verified. Please try again.');
+      }
+      var saved = await supabaseClient.from('support_messages').insert({
+        ticket_id: tid,
+        sender_type: 'user',
+        sender_id: session.user.id,
+        body: String(text || '').slice(0, 4000)
+      }).select('id,ticket_id,sender_type,created_at,delivered_at,read_at').single();
+      if (saved.error || !saved.data) {
+        console.error('[support] customer message insert failed', {
+          code: saved.error && saved.error.code,
+          message: saved.error && saved.error.message,
+          details: saved.error && saved.error.details,
+          hint: saved.error && saved.error.hint,
+          ticketId: tid,
+          userId: session.user.id
+        });
+        throw new Error(saved.error && saved.error.message ? 'Message could not be saved: ' + saved.error.message : 'Message could not be saved. Please retry.');
+      }
+
+      input.value = '';
+      if (fileEl) fileEl.value = '';
+      mjSupportAppend('user', text);
+      var sentBubble = document.querySelector('#mjSupportMessages .mj-support-msg.user:last-child');
+      if (sentBubble) {
+        sentBubble.setAttribute('data-mj-message-id', String(saved.data.id));
+        sentBubble.setAttribute('data-mj-sender-type', 'user');
+        var sentReceipt = document.createElement('span');
+        sentReceipt.className = 'mj-support-receipt sent';
+        sentReceipt.textContent = 'Sent';
+        sentBubble.appendChild(sentReceipt);
+      }
+      window.mjSupportNotifyMessage(saved.data.id).catch(function(err) {
+        console.warn('[support] admin push notification failed after message saved', err);
+      });
       return false;
     }
-    var sess = await supabaseClient.auth.getSession();
-    var user = sess && sess.data && sess.data.session && sess.data.session.user;
-    var { data: sentMessage, error } = await supabaseClient.from('support_messages').insert({
-      ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: String(text || '').slice(0, 4000)
-    }).select('id,ticket_id,sender_type,created_at,delivered_at,read_at').single();
-    if (error) mjSupportAppend('bot', 'Message failed. Please try again.');
-    else {
-      var sentBubble = document.querySelector('#mjSupportMessages .mj-support-msg.user:last-child');
-      if (sentBubble && sentMessage) {
-        sentBubble.setAttribute('data-mj-message-id', String(sentMessage.id));
-        sentBubble.setAttribute('data-mj-sender-type', 'user');
-        var sentReceipt = document.createElement('span'); sentReceipt.className = 'mj-support-receipt sent'; sentReceipt.textContent = 'Sent'; sentBubble.appendChild(sentReceipt);
-      }
-      if (sentMessage && sentMessage.id) {
-        window.mjSupportNotifyMessage(sentMessage.id).catch(function(e){ console.warn('Support push notification failed', e); });
-      }
-    }
-    return false;
-  }
 
-  // Bot phase: try FAQ
-  var ans = mjSupportFaqMatch(text);
-  if (ans) {
-    window._mjSup.faqAsked = true;
-    mjSupportAppend('bot', ans);
-    mjSupportAppend('bot', 'Did this resolve your issue?');
-    mjSupportSetActions([
-      { label: 'Yes, thanks', onClick: function() {
+    input.value = '';
+    if (fileEl) fileEl.value = '';
+    mjSupportAppend('user', text);
+    window.mjHydrateShots();
+    var ans = mjSupportFaqMatch(text);
+    if (ans) {
+      window._mjSup.faqAsked = true;
+      mjSupportAppend('bot', ans);
+      mjSupportAppend('bot', 'Did this resolve your issue?');
+      mjSupportSetActions([
+        { label: 'Yes, thanks', onClick: function() {
           mjSupportAppend('bot', 'Glad that helped. You can close this chat or start a new one anytime.');
           mjSupportSetActions([{ label: 'New chat', primary: true, onClick: function() { mjSupportStartNew(); } }]);
         }},
-      { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } }
-    ]);
-    return false;
-  }
-
-  // No FAQ match
-  mjSupportAppend('bot', 'I could not fully resolve that with our guides.');
-  mjSupportSetActions([
-    { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } },
-    { label: 'Try another question', onClick: function() {
+        { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } }
+      ]);
+      return false;
+    }
+    mjSupportAppend('bot', 'I could not fully resolve that with our guides.');
+    mjSupportSetActions([
+      { label: 'Speak to a human', primary: true, onClick: function() { mjSupportConnectHuman(); } },
+      { label: 'Try another question', onClick: function() {
         mjSupportAppend('bot', 'Sure — tell me more about the issue.');
         mjSupportSetActions([]);
       }}
-  ]);
-  return false;
+    ]);
+    return false;
+  } catch (sendError) {
+    console.error('[support] customer send failed', sendError);
+    input.value = originalText;
+    mjSupportAppend('bot', sendError && sendError.message ? sendError.message : 'Message failed to send. Please try again.');
+    return false;
+  } finally {
+    if (window._mjSup) window._mjSup.sending = false;
+    if (sendButton) sendButton.disabled = false;
+  }
 };
 
 window.openSupportLiveChatFromWidget = function() {
