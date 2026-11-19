@@ -17,7 +17,7 @@ self.addEventListener('push', (event) => {
     body: String(data.body || 'A customer sent a support message.').trim(),
     icon: data.icon || '/img/IMG_3027.png',
     badge: data.badge || '/img/IMG_3027.png',
-    data: { url: '/admin-support.html' },
+    data: { url: String(data.url || '/admin-support.html') },
     tag: data.tag || 'mjhub-admin-support',
     renotify: true
   };
@@ -26,12 +26,13 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  var target = '/admin-support.html';
+  var target = (event.notification.data && event.notification.data.url) || '/admin-support.html';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
       for (var i = 0; i < clients.length; i++) {
         var client = clients[i];
-        if (client.url && new URL(client.url).pathname === target && 'focus' in client) {
+        if (client.url && new URL(client.url).origin === self.location.origin && 'focus' in client) {
+          client.navigate(target);
           return client.focus();
         }
       }

@@ -8176,7 +8176,7 @@ window.enableAdminSupportPush = async function() {
  if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
  try {
    if (!window.MJHubPush) throw new Error('Push module is not loaded. Reload the admin page and try again.');
-   await window.MJHubPush.enable();
+   await window.MJHubPush.enable({ appId: 'admin_support' });
    if (btn) btn.textContent = 'Support Alerts Enabled';
    if (window.showToast) showToast('Admin support push notifications enabled', 'success');
  } catch (e) {
@@ -8188,7 +8188,7 @@ window.enableAdminSupportPush = async function() {
  const btn = document.getElementById('adminSupportPushBtn');
  if (!btn || !window.MJHubPush) return;
  try {
-   const state = await window.MJHubPush.status();
+   const state = await window.MJHubPush.status({ appId: 'admin_support' });
    if (state.subscribed && state.permission === 'granted') {
      btn.textContent = 'Support Alerts Enabled';
      btn.disabled = true;
