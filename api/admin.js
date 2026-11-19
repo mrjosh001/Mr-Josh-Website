@@ -952,7 +952,13 @@ async function productUpdate(body) {
   if (fields.display_description !== undefined) payload.display_description = fields.display_description;
   if (fields.price !== undefined) payload.price = Number(fields.price);
   if (fields.stock_quantity !== undefined) payload.stock_quantity = Number(fields.stock_quantity);
-  if (fields.is_available !== undefined) payload.is_available = !!fields.is_available;
+  // Admin visibility is an explicit override for supplier-managed products.
+  // Sujan sync respects admin_hidden, so update both flags atomically or an
+  // admin "Enable" action can leave the product permanently hidden.
+  if (fields.is_available !== undefined) {
+    payload.is_available = !!fields.is_available;
+    payload.admin_hidden = !payload.is_available;
+  }
   if (fields.is_shared !== undefined) payload.is_shared = !!fields.is_shared;
   if (fields.shared_credential !== undefined) payload.shared_credential = fields.shared_credential || null;
   // Preserve BulkMail supplier stock even when other product fields are edited.
