@@ -52,7 +52,7 @@
   function registrationConfig(options) {
     var appId = options && options.appId === 'admin_support' ? 'admin_support' : 'main';
     return appId === 'admin_support'
-      ? { script: '/admin-support-sw.js', scope: '/admin.html' }
+      ? { script: '/admin-support-sw.js', scope: '/admin-support.html' }
       : { script: '/sw.js', scope: '/' };
   }
 
