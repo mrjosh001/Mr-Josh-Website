@@ -70,7 +70,9 @@
     return Notification.permission;
   }
 
-  async function enable() {
+  async function enable(options) {
+    options = options || {};
+    var appId = options.appId === 'admin_support' ? 'admin_support' : 'main';
     if (!(await isSupported())) throw new Error('Push not supported. On iPhone: Add to Home Screen first, then open the app.');
     const reg = await ensureServiceWorker();
     let perm = Notification.permission;
@@ -91,7 +93,8 @@
     await apiPush('subscribe', {
       endpoint: json.endpoint,
       keys: json.keys || {},
-      user_agent: navigator.userAgent || ''
+      user_agent: navigator.userAgent || '',
+      app_id: appId
     });
     try { localStorage.setItem('mjhub_push_enabled', '1'); } catch (_) {}
     return { ok: true, endpoint: json.endpoint };
