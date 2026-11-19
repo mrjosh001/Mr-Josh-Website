@@ -2471,7 +2471,7 @@ async function handleLogin() {
  if (!adminLoginCaptchaToken) { errEl.textContent = 'Complete the security check before signing in.'; return; }
  if (btn) {
  if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
- btn.disabled = true;
+ btn.disabled = false;
  btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
  }
  try {
@@ -8190,7 +8190,7 @@ window.enableAdminSupportPush = async function() {
  try {
    const state = await window.MJHubPush.status({ appId: 'admin_support' });
    if (state.subscribed && state.permission === 'granted') {
-     btn.textContent = 'Support Alerts Enabled';
+     btn.textContent = 'Admin Alerts Enabled';
      btn.disabled = true;
    }
  } catch (_) {}
