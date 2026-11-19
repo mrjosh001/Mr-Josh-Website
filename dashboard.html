@@ -6934,12 +6934,15 @@ window.sendLiveChatMessage = async function(e) {
         if (window._liveChatTicketId && supabaseClient) {
           var sess0 = await supabaseClient.auth.getSession();
           var u0 = sess0 && sess0.data && sess0.data.session && sess0.data.session.user;
-          await supabaseClient.from('support_messages').insert({
+          var { data: faqSaved, error: faqSaveError } = await supabaseClient.from('support_messages').insert({
             ticket_id: window._liveChatTicketId,
             sender_type: 'user',
             sender_id: u0 && u0.id,
             body: text
-          });
+          }).select('id').single();
+          if (!faqSaveError && faqSaved && faqSaved.id && window.mjSupportNotifyMessage) {
+            window.mjSupportNotifyMessage(faqSaved.id).catch(function(e){ console.warn('Support FAQ push failed', e); });
+          }
         }
       } catch (err0) {}
       return false;
@@ -6962,15 +6965,18 @@ window.sendLiveChatMessage = async function(e) {
 
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
-    var { error } = await supabaseClient.from('support_messages').insert({
+    var { data: liveSentMessage, error } = await supabaseClient.from('support_messages').insert({
       ticket_id: window._liveChatTicketId,
       sender_type: 'user',
       sender_id: user && user.id,
       body: text
-    });
+    }).select('id').single();
     if (error) {
       window.appendLiveChatBubble('bot', 'Message could not be sent. Please try again in a moment.', false);
       return false;
+    }
+    if (liveSentMessage && liveSentMessage.id && window.mjSupportNotifyMessage) {
+      window.mjSupportNotifyMessage(liveSentMessage.id).catch(function(e){ console.warn('Live support push failed', e); });
     }
 
     if (!window._liveChatTransferred) {
