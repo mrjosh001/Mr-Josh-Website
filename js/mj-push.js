@@ -159,7 +159,10 @@
         subscribed = !!sub;
         // Reconcile the existing browser subscription with the server whenever
         // an authenticated admin visits. A signed-out visit must not disable it.
-        if (sub && options.sync !== false) {
+        // Never send an anonymous subscribe request for an existing account-bound
+        // subscription. The server would otherwise detach this device from its owner.
+        const accessToken = await getAccessToken();
+        if (sub && accessToken && options.sync !== false) {
           const json = sub.toJSON();
           try {
             await apiPush('subscribe', {
