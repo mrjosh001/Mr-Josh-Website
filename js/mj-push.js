@@ -145,19 +145,38 @@
   }
 
   async function status(options) {
+    options = options || {};
     const supported = await isSupported();
     const permission = await getPermission();
     let subscribed = false;
+    let syncError = null;
     try {
-      if (supported) {
-        const reg = await getAppRegistration(options);
-        if (reg) {
-          const sub = await reg.pushManager.getSubscription();
-          subscribed = !!sub;
+      if (supported && permission === 'granted') {
+        // Browser permission survives sign-out. Restore the admin worker if a
+        // browser discarded its registration, without prompting the user again.
+        const reg = await ensureServiceWorker(options);
+        const sub = await reg.pushManager.getSubscription();
+        subscribed = !!sub;
+        // Reconcile the existing browser subscription with the server whenever
+        // an authenticated admin visits. A signed-out visit must not disable it.
+        if (sub && options.sync !== false) {
+          const json = sub.toJSON();
+          try {
+            await apiPush('subscribe', {
+              endpoint: json.endpoint,
+              keys: json.keys || {},
+              user_agent: navigator.userAgent || '',
+              app_id: options.appId === 'admin_support' ? 'admin_support' : 'main'
+            });
+          } catch (e) {
+            syncError = e && e.message ? e.message : 'Could not sync push subscription';
+          }
         }
       }
-    } catch (_) {}
-    return { supported, permission, subscribed };
+    } catch (e) {
+      syncError = e && e.message ? e.message : 'Could not restore push registration';
+    }
+    return { supported, permission, subscribed, syncError };
   }
 
   global.MJHubPush = { enable, disable, status, isSupported, ensureServiceWorker };
