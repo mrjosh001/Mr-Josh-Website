@@ -3109,6 +3109,7 @@ async function pushSubscribe(req, body) {
   }
   const row = {
     user_id: userId,
+    app_id: ['main', 'admin_support'].includes(String(body.app_id || 'main')) ? String(body.app_id || 'main') : 'main',
     endpoint,
     p256dh,
     auth,

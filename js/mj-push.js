@@ -49,10 +49,38 @@
     return json;
   }
 
-  async function ensureServiceWorker() {
+  function registrationConfig(options) {
+    var appId = options && options.appId === 'admin_support' ? 'admin_support' : 'main';
+    return appId === 'admin_support'
+      ? { script: '/admin-support-sw.js', scope: '/admin-support.html' }
+      : { script: '/sw.js', scope: '/' };
+  }
+
+  async function getAppRegistration(options) {
+    if (!('serviceWorker' in navigator)) return null;
+    var config = registrationConfig(options);
+    var wantedScope = new URL(config.scope, location.origin).href;
+    var registrations = await navigator.serviceWorker.getRegistrations();
+    return registrations.find(function (registration) {
+      return registration.scope === wantedScope;
+    }) || null;
+  }
+
+  async function ensureServiceWorker(options) {
     if (!('serviceWorker' in navigator)) throw new Error('Service workers not supported on this device');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
+    var config = registrationConfig(options);
+    const reg = await navigator.serviceWorker.register(config.script, { scope: config.scope });
+    if (!reg.active) {
+      await new Promise(function (resolve, reject) {
+        var worker = reg.installing || reg.waiting;
+        if (!worker) return resolve();
+        worker.addEventListener('statechange', function () {
+          if (reg.active) resolve();
+          else if (worker.state === 'redundant') reject(new Error('Push service worker installation failed'));
+        });
+      });
+    }
+    if (!reg.active) throw new Error('Push service worker is not active yet. Please try again.');
     return reg;
   }
 
@@ -70,9 +98,11 @@
     return Notification.permission;
   }
 
-  async function enable() {
+  async function enable(options) {
+    options = options || {};
+    var appId = options.appId === 'admin_support' ? 'admin_support' : 'main';
     if (!(await isSupported())) throw new Error('Push not supported. On iPhone: Add to Home Screen first, then open the app.');
-    const reg = await ensureServiceWorker();
+    const reg = await ensureServiceWorker({ appId: appId });
     let perm = Notification.permission;
     if (perm === 'default') perm = await Notification.requestPermission();
     if (perm !== 'granted') throw new Error('Notification permission blocked. Enable it in phone Settings.');
@@ -91,15 +121,16 @@
     await apiPush('subscribe', {
       endpoint: json.endpoint,
       keys: json.keys || {},
-      user_agent: navigator.userAgent || ''
+      user_agent: navigator.userAgent || '',
+      app_id: appId
     });
-    try { localStorage.setItem('mjhub_push_enabled', '1'); } catch (_) {}
+    try { localStorage.setItem(appId === 'admin_support' ? 'mjhub_push_enabled_admin_support' : 'mjhub_push_enabled', '1'); } catch (_) {}
     return { ok: true, endpoint: json.endpoint };
   }
 
-  async function disable() {
+  async function disable(options) {
     if (!('serviceWorker' in navigator)) return { ok: true };
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await getAppRegistration(options);
     if (reg) {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
@@ -109,17 +140,17 @@
         try { await sub.unsubscribe(); } catch (_) {}
       }
     }
-    try { localStorage.removeItem('mjhub_push_enabled'); } catch (_) {}
+    try { localStorage.removeItem(options && options.appId === 'admin_support' ? 'mjhub_push_enabled_admin_support' : 'mjhub_push_enabled'); } catch (_) {}
     return { ok: true };
   }
 
-  async function status() {
+  async function status(options) {
     const supported = await isSupported();
     const permission = await getPermission();
     let subscribed = false;
     try {
       if (supported) {
-        const reg = await navigator.serviceWorker.getRegistration();
+        const reg = await getAppRegistration(options);
         if (reg) {
           const sub = await reg.pushManager.getSubscription();
           subscribed = !!sub;

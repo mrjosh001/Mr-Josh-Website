@@ -15,7 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
-import { sendPushToUser, sendPushToAdmins} from '../lib/push.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.js';
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
@@ -146,6 +146,20 @@ async function handleSupportTicket(req, res, user) {
     if (msgErr) {
       console.error('[order support_ticket message]', msgErr.message);
       return res.status(500).json({ success: false, message: 'Ticket opened but the message did not save. Try again.' });
+    }
+
+    // Deliver support alerts only to subscriptions registered by the admin support app.
+    // Push failure must not undo a message already saved for the customer.
+    try {
+      const preview = bodyText.replace(/\s+/g, ' ').trim().slice(0, 110);
+      await sendPushToAdmins(supabase, {
+        appId: 'admin_support', skipInApp: true,
+        title: 'New customer support message',
+        body: (customerId ? customerId + ': ' : '') + (preview || 'A customer opened a support ticket.'),
+        url: '/admin-support.html', type: 'admin_support_message', tag: 'support-' + created.id
+      });
+    } catch (pushError) {
+      console.warn('[order support_ticket push] delivery failed', pushError?.message || pushError);
     }
 
     return res.status(200).json({
