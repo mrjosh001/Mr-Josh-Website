@@ -3489,10 +3489,10 @@ async function supportMessagePush(req, body) {
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
-    const delivery = await sendPushToAdmins(supabase, { title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin-support.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    const delivery = await sendPushToAdmins(supabase, { excludeUserIds: [user.id], title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin-support.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }
-  if (senderType === 'admin') {
+  if (['admin','agent','staff','support'].includes(senderType)) {
     // An admin replying inside their own customer account must not notify that same account.
     if (String(ticket.user_id) === String(user.id)) {
       return { status: 200, body: { success: true, audience: 'customer', skipped: true, reason: 'sender_is_ticket_owner' } };
