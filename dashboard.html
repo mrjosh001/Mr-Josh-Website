@@ -6284,13 +6284,15 @@ window.mjSupportAppend = function(role, text, message) {
   }
   if (!hasImg) flushText(raw);
   else if (last < raw.length) flushText(raw.slice(last));
-  if (role === 'user' && message && message.id) {
+  if (message && message.id) {
     d.setAttribute('data-mj-message-id', String(message.id));
-    var receipt = document.createElement('span');
-    receipt.className = 'mj-support-receipt sent';
-    receipt.textContent = message.read_at ? '✓✓ Read' : (message.delivered_at ? '✓ Delivered' : 'Sent');
-    if (message.read_at) receipt.className = 'mj-support-receipt read';
-    d.appendChild(receipt);
+    d.setAttribute('data-mj-sender-type', String(message.sender_type || ''));
+    if (role === 'user') {
+      var receipt = document.createElement('span');
+      receipt.className = 'mj-support-receipt' + (message.read_at ? ' read' : (message.delivered_at ? '' : ' sent'));
+      receipt.textContent = message.read_at ? '✓✓ Read' : (message.delivered_at ? '✓ Delivered' : 'Sent');
+      d.appendChild(receipt);
+    }
   }
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
@@ -6310,14 +6312,33 @@ window.mjSupportUpdateReceipt = function(message) {
   });
 };
 
+window.mjSupportNotifyMessage = async function(messageId) {
+  if (!supabaseClient || !messageId) return;
+  var sess = await supabaseClient.auth.getSession();
+  var user = sess && sess.data && sess.data.session && sess.data.session.user;
+  var token = sess && sess.data && sess.data.session && sess.data.session.access_token;
+  if (!user || !token) return;
+  var response = await fetch('/api/admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ resource: 'support_push', action: 'message', message_id: messageId })
+  });
+  var result = await response.json().catch(function(){ return {}; });
+  if (!response.ok || !result.success) throw new Error(result.message || 'Support notification failed');
+};
+
 window.mjSupportMarkIncomingRead = async function(ticketId) {
   if (!supabaseClient || !ticketId || String(window._mjSup.ticketId || '') !== String(ticketId)) return;
   var panel = document.getElementById('mjSupportPanel');
   var chat = document.getElementById('mjSupportChat');
   if (document.visibilityState !== 'visible' || !panel || !panel.classList.contains('open') || !chat || !chat.classList.contains('active')) return;
+  var incoming = Array.prototype.slice.call(document.querySelectorAll('#mjSupportMessages [data-mj-message-id]')).filter(function(node) {
+    return /^(admin|agent|staff|support)$/i.test(node.getAttribute('data-mj-sender-type') || '');
+  }).map(function(node) { return node.getAttribute('data-mj-message-id'); }).filter(Boolean);
+  if (!incoming.length) return;
   try {
     await supabaseClient.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
-    await supabaseClient.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: null });
+    await supabaseClient.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: incoming });
   } catch (e) { console.warn('Support read receipt update failed', e); }
 };
 
@@ -6440,13 +6461,13 @@ window.mjSupportOpenTicket = async function(id) {
   if (!supabaseClient) return;
   var { data, error } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
   if (error) { mjSupportAppend('bot', 'Could not load this conversation. Please try again.'); return; }
-  await window.mjSupportMarkIncomingRead(id);
   var { data: fresh } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
   (fresh || data || []).forEach(function(m) {
     if (m.sender_type === 'user') mjSupportAppend('user', m.body, m);
     else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body, m);
     else mjSupportAppend('sys', m.body, m);
   });
+  await window.mjSupportMarkIncomingRead(id);
   try {
     var lastAdmin = (data || []).filter(function(m){
       return m && (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support');
@@ -6676,7 +6697,9 @@ window.mjSupportSend = async function(e) {
       var sentBubble = document.querySelector('#mjSupportMessages .mj-support-msg.user:last-child');
       if (sentBubble && sentMessage) {
         sentBubble.setAttribute('data-mj-message-id', String(sentMessage.id));
+        sentBubble.setAttribute('data-mj-sender-type', 'user');
         var sentReceipt = document.createElement('span'); sentReceipt.className = 'mj-support-receipt sent'; sentReceipt.textContent = 'Sent'; sentBubble.appendChild(sentReceipt);
+        window.mjSupportNotifyMessage(sentMessage.id).catch(function(e){ console.warn('Support push notification failed', e); });
       }
     }
     return false;
