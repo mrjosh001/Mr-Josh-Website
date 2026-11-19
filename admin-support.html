@@ -654,8 +654,8 @@
       }
       const incomingIds = (data || []).filter(m => m.sender_type === 'user' || m.sender_type === 'customer').map(m => m.id).filter(Boolean);
       if (isAdminThreadVisible(ticketId) && incomingIds.length) {
-        await sb.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
-        await sb.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: incomingIds });
+        await sb.rpc('mj_support_mark_delivered_for', { p_ticket_id: ticketId, p_reader_role: 'admin' });
+        await sb.rpc('mj_support_mark_read_for', { p_ticket_id: ticketId, p_message_ids: incomingIds, p_reader_role: 'admin' });
       }
       const { data: fresh } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
       const rows = fresh || data || [];
@@ -734,7 +734,7 @@
         body: String(body || '').slice(0, 4000)
       }).select('id').single();
       if (error) { alert(error.message || 'Failed to send'); return false; }
-      if (sentMessage && sentMessage.id) notifySupportMessage(sentMessage.id).catch(function(err){ console.warn('customer support push failed', err); });
+      if (sentMessage && sentMessage.id) { try { await notifySupportMessage(sentMessage.id); } catch (pushError) { console.warn('customer support push failed', pushError); } }
       input.value = '';
       if (fileEl) fileEl.value = '';
       await loadMessages(activeTicketId);
@@ -773,7 +773,7 @@
         messagesChannel = sb.channel('admin-support-messages')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, (payload) => {
             if (payload.eventType === 'INSERT' && payload.new && (payload.new.sender_type === 'user' || payload.new.sender_type === 'customer')) {
-              sb.rpc('mj_support_mark_delivered', { p_ticket_id: payload.new.ticket_id }).catch(function (e) { console.warn('support delivered receipt', e); });
+              sb.rpc('mj_support_mark_delivered_for', { p_ticket_id: payload.new.ticket_id, p_reader_role: 'admin' }).catch(function (e) { console.warn('support delivered receipt', e); });
             }
             if (payload.eventType === 'UPDATE' && payload.new && payload.new.ticket_id === activeTicketId) {
               const bubble = document.querySelector('#threadMessages [data-mj-message-id="' + payload.new.id + '"]');
