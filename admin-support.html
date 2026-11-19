@@ -128,6 +128,8 @@
     .bubble.admin { align-self: flex-end; background: linear-gradient(135deg, #3b82f6, #3b82f6); color: #fff; border-bottom-right-radius: 4px; }
     .bubble.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; max-width: 90%; text-align: center; box-shadow: none; }
     .bubble .who { font-size: 10px; opacity: .75; margin-bottom: 5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .mj-message-status { margin-top: 7px; text-align: right; font-size: 10px; opacity: .8; }
+    .mj-receipt.read { color: #93c5fd; font-weight: 800; }
     .bubble img.mj-shot {
       display: block; max-width: 100%; margin-top: 8px; border-radius: 12px;
       border: 1px solid var(--border); cursor: zoom-in;
@@ -640,10 +642,17 @@
         box.innerHTML = '<div style="color:var(--danger);">' + escapeHtml(error.message) + '</div>';
         return;
       }
-      box.innerHTML = (data || []).map(m => {
+      if (document.visibilityState === 'visible' && activeTicketId === ticketId) {
+        await sb.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
+        await sb.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: null });
+      }
+      const { data: fresh } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+      const rows = fresh || data || [];
+      box.innerHTML = rows.map(m => {
         const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
         const who = m.sender_type === 'admin' ? 'You' : (m.sender_type === 'system' ? 'System' : 'Customer');
-        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}</div>`;
+        const receipt = m.sender_type === 'admin' ? (m.read_at ? '<span class="mj-receipt read">✓✓ Read</span>' : (m.delivered_at ? '<span class="mj-receipt">✓ Delivered</span>' : '<span class="mj-receipt">Sent</span>')) : '';
+        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}${receipt ? '<div class="mj-message-status">'+receipt+'</div>' : ''}</div>`;
       }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
       box.scrollTop = box.scrollHeight;
       hydrateAdminShots();
@@ -710,7 +719,7 @@
           .subscribe();
         if (messagesChannel) sb.removeChannel(messagesChannel);
         messagesChannel = sb.channel('admin-support-messages')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, (payload) => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, (payload) => {
             if (payload.new && payload.new.ticket_id === activeTicketId) loadMessages(activeTicketId);
             loadTickets();
             if (payload.new && payload.new.sender_type === 'user') {
@@ -725,6 +734,9 @@
           .subscribe();
       } catch (e) { console.warn('realtime', e); }
     }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && activeTicketId) loadMessages(activeTicketId);
+    });
     document.addEventListener('click', function (e) {
       const img = e.target && e.target.closest && e.target.closest('img.mj-shot');
       if (img && img.src) {
