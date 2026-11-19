@@ -151,7 +151,7 @@ async function handleSupportTicket(req, res, user) {
     // Deliver support alerts only to subscriptions registered by the admin support app.
     // Push failure must not undo a message already saved for the customer.
     try {
-      const preview = bodyText.replace(/\\s+/g, ' ').trim().slice(0, 110);
+      const preview = bodyText.replace(/\s+/g, ' ').trim().slice(0, 110);
       await sendPushToAdmins(supabase, {
         appId: 'admin_support', skipInApp: true,
         title: 'New customer support message',
