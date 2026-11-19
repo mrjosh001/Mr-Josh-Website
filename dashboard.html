@@ -6337,8 +6337,10 @@ window.mjSupportMarkIncomingRead = async function(ticketId) {
   }).map(function(node) { return node.getAttribute('data-mj-message-id'); }).filter(Boolean);
   if (!incoming.length) return;
   try {
-    await supabaseClient.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
-    await supabaseClient.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: incoming });
+    var deliveredResult = await supabaseClient.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
+    if (deliveredResult && deliveredResult.error) throw deliveredResult.error;
+    var readResult = await supabaseClient.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: incoming });
+    if (readResult && readResult.error) throw readResult.error;
   } catch (e) { console.warn('Support read receipt update failed', e); }
 };
 
