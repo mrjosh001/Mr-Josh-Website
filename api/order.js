@@ -21,7 +21,7 @@ import { formatCredentials, joinRawLogDetails } from '../lib/formatCredentials.j
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { readSupplierStock } from '../lib/supplierStock.js';
 import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
-import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore, requireAdminOrCron } from '../lib/secure.js';
+import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore, requireAdminOrCron, requireCron } from '../lib/secure.js';
 import { parsePositiveInt, assertSameUser } from '../lib/validate.js';
 import { sendError } from '../lib/errors.js';
 
@@ -177,7 +177,7 @@ async function handleSupportTicket(req, res, user) {
 async function handleSupportUpload(req, res, user) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const raw = String(body.data || body.base64 || '').replace(/\s/g, '');
+    const raw = String(body.data || body.base64 || '').replace(/\\s/g, '');
     if (!raw || raw.length < 32 || raw.length > 500000) {
       return res.status(400).json({ success: false, message: 'Photo is missing or too large' });
     }
@@ -188,8 +188,31 @@ async function handleSupportUpload(req, res, user) {
     if (!buf || buf.length < 32) {
       return res.status(400).json({ success: false, message: 'Invalid photo' });
     }
-    const ticketPart = String(body.ticket_id || user.id || 'misc').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
-    const path = 'tickets/' + ticketPart + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+
+    const ticketId = String(body.ticket_id || '').trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ticketId)) {
+      return res.status(400).json({ success: false, message: 'A valid support ticket is required for attachments' });
+    }
+    const { data: ticket, error: ticketError } = await supabase
+      .from('support_tickets')
+      .select('id,user_id')
+      .eq('id', ticketId)
+      .maybeSingle();
+    if (ticketError || !ticket) {
+      return res.status(404).json({ success: false, message: 'Support ticket not found' });
+    }
+    if (String(ticket.user_id) !== String(user.id)) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!profile || profile.is_admin !== true) {
+        return res.status(403).json({ success: false, message: 'You cannot attach files to this support ticket' });
+      }
+    }
+
+    const path = 'tickets/' + ticketId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
     const buckets = ['support-attachments', 'support', 'attachments'];
     try {
       await supabase.storage.createBucket('support-attachments', { public: true, fileSizeLimit: 2 * 1024 * 1024 });
@@ -198,7 +221,7 @@ async function handleSupportUpload(req, res, user) {
     for (const bucket of buckets) {
       const up = await supabase.storage.from(bucket).upload(path, buf, {
         contentType: 'image/jpeg',
-        upsert: true
+        upsert: false
       });
       if (up.error) continue;
       const pub = supabase.storage.from(bucket).getPublicUrl(path);
@@ -1282,6 +1305,144 @@ async function findExistingLogOrder(userId, orderRef) {
   return null;
 }
 
+
+const SUPPORT_RETENTION_DAY_MS = 24 * 60 * 60 * 1000;
+
+function supportRetentionStorageObject(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || '').trim());
+    const configuredUrl = process.env.SUPABASE_URL;
+    if (!configuredUrl || url.origin !== new URL(configuredUrl).origin) return null;
+    const match = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/i);
+    if (!match) return null;
+    const bucket = decodeURIComponent(match[1]);
+    const objectPath = match[2].split('/').map(part => decodeURIComponent(part)).join('/');
+    if (!['support-attachments', 'support', 'attachments'].includes(bucket) || !objectPath || objectPath.includes('..')) return null;
+    return { bucket, path: objectPath };
+  } catch (_) {
+    return null;
+  }
+}
+
+function supportAttachmentUrls(body) {
+  const matches = [];
+  const re = /\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/gi;
+  let match;
+  while ((match = re.exec(String(body || '')))) {
+    const url = String(match[1] || '').trim();
+    if (/^https?:\/\//i.test(url)) matches.push(url);
+  }
+  return matches;
+}
+
+async function cleanSupportTicketAttachments(ticketId, counters) {
+  const { data: messages, error } = await supabase
+    .from('support_messages')
+    .select('id,body')
+    .eq('ticket_id', ticketId)
+    .limit(1000);
+  if (error) throw error;
+
+  for (const message of messages || []) {
+    const urls = supportAttachmentUrls(message.body);
+    if (!urls.length) continue;
+    let safeToMarkExpired = true;
+    for (const url of urls) {
+      const object = supportRetentionStorageObject(url);
+      if (!object) {
+        safeToMarkExpired = false;
+        counters.unparsedAttachments++;
+        console.warn('[support-retention] could not parse attachment URL', { ticketId, messageId: message.id });
+        continue;
+      }
+      const { error: removeError } = await supabase.storage.from(object.bucket).remove([object.path]);
+      if (removeError) {
+        safeToMarkExpired = false;
+        counters.storageDeleteFailures++;
+        console.error('[support-retention] storage deletion failed', { ticketId, messageId: message.id, bucket: object.bucket, error: removeError.message });
+      } else {
+        counters.attachmentsDeleted++;
+      }
+    }
+    if (safeToMarkExpired) {
+      const expired = String(message.body || '').replace(/\[\[MJURL\]\][\s\S]*?\[\[\/MJURL\]\]/gi, '[Attachment expired]');
+      const { error: updateError } = await supabase
+        .from('support_messages')
+        .update({ body: expired })
+        .eq('id', message.id)
+        .eq('ticket_id', ticketId);
+      if (updateError) {
+        counters.messageUpdateFailures++;
+        console.error('[support-retention] could not mark expired attachment', { ticketId, messageId: message.id, error: updateError.message });
+      }
+    }
+  }
+}
+
+async function handleSupportRetention(req, res) {
+  const auth = requireCron(req);
+  if (auth.error) return res.status(auth.error.status).json({ success: false, message: auth.error.message });
+
+  try {
+    const now = Date.now();
+    const attachmentCutoff = new Date(now - 60 * SUPPORT_RETENTION_DAY_MS).toISOString();
+    const messageCutoff = new Date(now - 90 * SUPPORT_RETENTION_DAY_MS).toISOString();
+    const counters = {
+      ticketsScanned: 0, attachmentTicketsProcessed: 0, attachmentsDeleted: 0,
+      messagesDeleted: 0, storageDeleteFailures: 0, messageUpdateFailures: 0,
+      unparsedAttachments: 0
+    };
+
+    // Existing closed tickets received a migration-time closed_at anchor;
+    // reopened tickets have closed_at cleared by the database trigger.
+    const { data: attachmentTickets, error: attachmentError } = await supabase
+      .from('support_tickets')
+      .select('id,closed_at')
+      .eq('status', 'closed')
+      .not('closed_at', 'is', null)
+      .lte('closed_at', attachmentCutoff)
+      .order('closed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(0, 999);
+    if (attachmentError) throw attachmentError;
+
+    for (const ticket of attachmentTickets || []) {
+      counters.ticketsScanned++;
+      await cleanSupportTicketAttachments(ticket.id, counters);
+      counters.attachmentTicketsProcessed++;
+    }
+
+    const { data: messageTickets, error: messageTicketError } = await supabase
+      .from('support_tickets')
+      .select('id')
+      .eq('status', 'closed')
+      .not('closed_at', 'is', null)
+      .lte('closed_at', messageCutoff)
+      .order('closed_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(0, 999);
+    if (messageTicketError) throw messageTicketError;
+
+    for (const ticket of messageTickets || []) {
+      const { error: deleteError, count } = await supabase
+        .from('support_messages')
+        .delete({ count: 'exact' })
+        .eq('ticket_id', ticket.id);
+      if (deleteError) {
+        console.error('[support-retention] message deletion failed', { ticketId: ticket.id, error: deleteError.message });
+        continue;
+      }
+      counters.messagesDeleted += Number(count || 0);
+    }
+
+    console.info('[support-retention] completed', counters);
+    return res.status(200).json({ success: true, counters });
+  } catch (error) {
+    console.error('[support-retention] failed', error);
+    return res.status(500).json({ success: false, message: 'Support retention cleanup failed' });
+  }
+}
+
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'GET, POST, OPTIONS' });
   setNoStore(res);
@@ -1307,6 +1468,10 @@ export default async function handler(req, res) {
   } catch (_) {}
   const action = String(q.action || bodyPeek.action || '').toLowerCase();
   const nudgeOnly = String(q.nudge_only || bodyPeek.nudge_only || '') === '1';
+  if (action === 'support_retention') {
+    return handleSupportRetention(req, res);
+  }
+
   if (action === 'sync' || action === 'nudge_only' || nudgeOnly) {
     // Slightly higher limit for cron/admin sync
     const rlSync = rateLimit(req, { limit: 10, windowMs: 60_000, suffix: 'fadded-sync' });
