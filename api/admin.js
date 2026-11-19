@@ -3488,7 +3488,7 @@ async function supportMessagePush(req, body) {
   if (String(message.sender_id || '') !== String(user.id)) return { status: 403, body: { success: false, message: 'Message sender does not match the signed-in account' } };
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
-  if ((senderType === 'user' || senderType === 'customer') && String(ticket.user_id) === String(user.id)) {
+  if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
     const delivery = await sendPushToAdmins(supabase, { appId: 'main', title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }
