@@ -49,9 +49,23 @@
     return json;
   }
 
-  async function ensureServiceWorker() {
+  function registrationConfig(options) {
+    var appId = options && options.appId === 'admin_support' ? 'admin_support' : 'main';
+    return appId === 'admin_support'
+      ? { script: '/admin-support-sw.js', scope: '/admin-support.html' }
+      : { script: '/sw.js', scope: '/' };
+  }
+
+  async function getAppRegistration(options) {
+    if (!('serviceWorker' in navigator)) return null;
+    var config = registrationConfig(options);
+    return navigator.serviceWorker.getRegistration(new URL(config.scope, location.origin).href);
+  }
+
+  async function ensureServiceWorker(options) {
     if (!('serviceWorker' in navigator)) throw new Error('Service workers not supported on this device');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    var config = registrationConfig(options);
+    const reg = await navigator.serviceWorker.register(config.script, { scope: config.scope });
     await navigator.serviceWorker.ready;
     return reg;
   }
@@ -74,7 +88,7 @@
     options = options || {};
     var appId = options.appId === 'admin_support' ? 'admin_support' : 'main';
     if (!(await isSupported())) throw new Error('Push not supported. On iPhone: Add to Home Screen first, then open the app.');
-    const reg = await ensureServiceWorker();
+    const reg = await ensureServiceWorker({ appId: appId });
     let perm = Notification.permission;
     if (perm === 'default') perm = await Notification.requestPermission();
     if (perm !== 'granted') throw new Error('Notification permission blocked. Enable it in phone Settings.');
@@ -100,9 +114,9 @@
     return { ok: true, endpoint: json.endpoint };
   }
 
-  async function disable() {
+  async function disable(options) {
     if (!('serviceWorker' in navigator)) return { ok: true };
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await getAppRegistration(options);
     if (reg) {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
@@ -116,13 +130,13 @@
     return { ok: true };
   }
 
-  async function status() {
+  async function status(options) {
     const supported = await isSupported();
     const permission = await getPermission();
     let subscribed = false;
     try {
       if (supported) {
-        const reg = await navigator.serviceWorker.getRegistration();
+        const reg = await getAppRegistration(options);
         if (reg) {
           const sub = await reg.pushManager.getSubscription();
           subscribed = !!sub;
