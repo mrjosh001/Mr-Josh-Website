@@ -6168,6 +6168,10 @@ window._mjSup = {
 };
 
 window.openMjSupportPanel = function(opts) {
+  opts = opts || {};
+  if (!opts.ticketId) {
+    try { opts.ticketId = new URLSearchParams(window.location.search).get('supportTicket'); } catch (e) {}
+  }
   var p = document.getElementById('mjSupportPanel');
   if (!p) return;
   p.classList.add('open');
@@ -6474,6 +6478,19 @@ window.mjSupportOpenTicket = async function(id) {
     else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body, m);
     else mjSupportAppend('sys', m.body, m);
   });
+  try {
+    var targetMessageId = new URLSearchParams(window.location.search).get('supportMessage');
+    if (targetMessageId) {
+      var targetNode = Array.prototype.find.call(document.querySelectorAll('#mjSupportMessages [data-mj-message-id]'), function(node) {
+        return node.getAttribute('data-mj-message-id') === targetMessageId;
+      });
+      if (targetNode) {
+        targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetNode.style.outline = '2px solid #3b82f6';
+        targetNode.style.outlineOffset = '3px';
+      }
+    }
+  } catch (e) {}
   await window.mjSupportMarkIncomingRead(id);
   try {
     var lastAdmin = (data || []).filter(function(m){
