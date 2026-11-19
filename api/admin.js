@@ -3490,6 +3490,7 @@ async function supportMessagePush(req, body) {
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
     const delivery = await sendPushToAdmins(supabase, { excludeUserIds: [user.id], title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin-support.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    console.info('[support-push] customer-to-admins', { messageId, senderType, delivery });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }
   if (['admin','agent','staff','support'].includes(senderType)) {
@@ -3501,6 +3502,7 @@ async function supportMessagePush(req, body) {
     const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
     if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required' } };
     const delivery = await sendPushToUser(supabase, ticket.user_id, { appId: 'main', title: 'MJ HUB Customer Support', body: preview || 'Customer support has replied to your conversation.', url: '/dashboard.html', type: 'support_reply', tag: 'support-' + ticket.id });
+    console.info('[support-push] admin-to-customer', { messageId, delivery });
     return { status: 200, body: { success: true, audience: 'customer', delivery } };
   }
   return { status: 403, body: { success: false, message: 'Unsupported support message sender' } };
