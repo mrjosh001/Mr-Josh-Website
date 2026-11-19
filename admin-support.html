@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+<script src="/js/mj-push.js" defer></script>
 <script>
 (function(){
   function apply(){
@@ -224,6 +225,7 @@
         <span class="stat-pill danger" id="statOpen">0 open</span>
         <span class="stat-pill warn" id="statPending">0 pending</span>
         <a href="admin.html">Main Admin</a>
+        <button class="btn btn-ghost btn-sm" id="supportPushEnable" type="button" onclick="enableSupportPush()">Enable Support Alerts</button>
         <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
       </div>
     </div>
@@ -477,7 +479,7 @@
       shell.classList.add('open');
       loadTickets().catch(function(e){ console.error('tickets', e); });
       subscribeRealtime();
-      try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+      updateSupportPushButton();
       if (window.matchMedia('(max-width: 860px)').matches) {
         document.getElementById('backToList').style.display = 'inline-flex';
       }
@@ -488,6 +490,28 @@
         evaluateSession(session);
       }
     });
+
+    async function updateSupportPushButton() {
+      var btn = document.getElementById('supportPushEnable');
+      if (!btn || !window.MJHubPush) return;
+      try {
+        var state = await window.MJHubPush.status();
+        btn.textContent = state.subscribed && state.permission === 'granted' ? 'Support Alerts Enabled' : 'Enable Support Alerts';
+        btn.disabled = !!(state.subscribed && state.permission === 'granted');
+      } catch (_) {}
+    }
+    async function enableSupportPush() {
+      var btn = document.getElementById('supportPushEnable');
+      if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
+      try {
+        await window.MJHubPush.enable({ appId: 'admin_support' });
+        if (btn) btn.textContent = 'Support Alerts Enabled';
+        alert('Support push notifications are enabled for this admin app.');
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Enable Support Alerts'; }
+        alert(e.message || 'Could not enable support notifications.');
+      }
+    }
 
     async function doLogin() {
       const email = document.getElementById('email').value.trim();
