@@ -6186,6 +6186,7 @@ window.closeMjSupportPanel = function() {
   if (!p) return;
   p.classList.remove('open');
   p.setAttribute('aria-hidden', 'true');
+  if (window.mjSupportStopPoll) window.mjSupportStopPoll();
 };
 
 window.mjSupportShowTab = function(which) {
@@ -6502,8 +6503,47 @@ window.mjSupportEnsureTicket = async function() {
   return data.id;
 };
 
+window.mjSupportStopPoll = function() {
+  if (window._mjSup && window._mjSup.pollTimer) {
+    clearInterval(window._mjSup.pollTimer);
+    window._mjSup.pollTimer = null;
+  }
+};
+window.mjSupportStartPoll = function(ticketId) {
+  window.mjSupportStopPoll();
+  if (!ticketId) return;
+  window._mjSup.pollTimer = setInterval(async function() {
+    var panel = document.getElementById('mjSupportPanel');
+    var chat = document.getElementById('mjSupportChat');
+    if (document.visibilityState !== 'visible' || !panel || !panel.classList.contains('open') || !chat || !chat.classList.contains('active') || String(window._mjSup.ticketId || '') !== String(ticketId)) return;
+    try {
+      var result = await supabaseClient.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
+      if (result.error) throw result.error;
+      var box = document.getElementById('mjSupportMessages');
+      var known = new Set(Array.prototype.map.call(box.querySelectorAll('[data-mj-message-id]'), function(n){ return n.getAttribute('data-mj-message-id'); }));
+      (result.data || []).forEach(function(m) {
+        if (!m || !m.id || known.has(String(m.id))) {
+          if (m && m.id) window.mjSupportUpdateReceipt(m);
+          return;
+        }
+        if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') {
+          mjSupportAppend('bot', m.body, m);
+        } else if (m.sender_type === 'user' || m.sender_type === 'customer') {
+          mjSupportAppend('user', m.body, m);
+        } else {
+          mjSupportAppend('sys', m.body, m);
+        }
+      });
+      await window.mjSupportMarkIncomingRead(ticketId);
+    } catch (pollError) {
+      console.warn('[support] customer fallback refresh failed', pollError);
+    }
+  }, 2500);
+};
+
 window.mjSupportSubscribe = function(ticketId) {
   if (!supabaseClient || !ticketId) return;
+  window.mjSupportStartPoll(ticketId);
   try {
     if (window._mjSup.channel) supabaseClient.removeChannel(window._mjSup.channel);
     window._mjSup.channel = supabaseClient.channel('mj-sup-' + ticketId)
@@ -6518,7 +6558,7 @@ window.mjSupportSubscribe = function(ticketId) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_messages', filter: 'ticket_id=eq.' + ticketId }, function(payload) {
         if (payload.new) window.mjSupportUpdateReceipt(payload.new);
       })
-      .subscribe();
+      .subscribe(function(status, err) { console.log('[support] customer message realtime:', status, err || ''); });
   } catch (e) { console.warn('Support realtime subscription failed', e); }
 };
 
