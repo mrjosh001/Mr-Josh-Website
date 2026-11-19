@@ -720,7 +720,10 @@
         if (messagesChannel) sb.removeChannel(messagesChannel);
         messagesChannel = sb.channel('admin-support-messages')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, (payload) => {
-            if (payload.new && payload.new.ticket_id === activeTicketId) loadMessages(activeTicketId);
+            if (payload.eventType === 'INSERT' && payload.new && payload.new.sender_type === 'user') {
+              sb.rpc('mj_support_mark_delivered', { p_ticket_id: payload.new.ticket_id }).catch(function (e) { console.warn('support delivered receipt', e); });
+            }
+            if (payload.new && payload.new.ticket_id === activeTicketId && document.visibilityState === 'visible') loadMessages(activeTicketId);
             loadTickets();
             if (payload.new && payload.new.sender_type === 'user') {
               document.title = '● New message — Support Desk';
