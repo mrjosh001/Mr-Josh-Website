@@ -571,6 +571,24 @@
       document.getElementById('statPending').textContent = pendN + ' pending';
       document.title = openN > 0 ? '(' + openN + ') Support Desk' : 'MJ HUB — Support Desk';
       renderTicketList();
+      // A push notification can deep-link directly to its conversation.
+      if (!window.__mjSupportDeepLinkHandled) {
+        const params = new URLSearchParams(window.location.search);
+        const targetTicket = params.get('ticket');
+        if (targetTicket && tickets.some(function (ticket) { return String(ticket.id) === String(targetTicket); })) {
+          window.__mjSupportDeepLinkHandled = true;
+          await openTicket(targetTicket);
+          const targetMessage = params.get('message');
+          if (targetMessage) {
+            const target = document.querySelector('#threadMessages [data-mj-message-id="' + CSS.escape(targetMessage) + '"]');
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              target.style.outline = '2px solid #3b82f6';
+              target.style.outlineOffset = '4px';
+            }
+          }
+        }
+      }
     }
 
     function renderTicketList() {
