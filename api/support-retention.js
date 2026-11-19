@@ -8,11 +8,13 @@ const BATCH_SIZE = 200;
 function extractStorageObject(rawUrl) {
   try {
     const url = new URL(String(rawUrl || '').trim());
+    const configuredUrl = process.env.SUPABASE_URL;
+    if (!configuredUrl || url.origin !== new URL(configuredUrl).origin) return null;
     const match = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/i);
     if (!match) return null;
     const bucket = decodeURIComponent(match[1]);
     const objectPath = match[2].split('/').map(part => decodeURIComponent(part)).join('/');
-    if (!bucket || !objectPath || objectPath.includes('..')) return null;
+    if (!['support-attachments', 'support', 'attachments'].includes(bucket) || !objectPath || objectPath.includes('..')) return null;
     return { bucket, path: objectPath };
   } catch (_) {
     return null;
