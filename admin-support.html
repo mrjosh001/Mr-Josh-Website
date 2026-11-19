@@ -669,6 +669,28 @@
       hydrateAdminShots();
     }
 
+    async function syncAdminMessageReceipts(ticketId) {
+      if (!isAdminThreadVisible(ticketId)) return;
+      const { data, error } = await sb.from('support_messages')
+        .select('id,sender_type,delivered_at,read_at')
+        .eq('ticket_id', ticketId)
+        .eq('sender_type', 'admin');
+      if (error || !data) return;
+      data.forEach(function (message) {
+        const bubble = document.querySelector('#threadMessages [data-mj-message-id="' + message.id + '"]');
+        if (!bubble) return;
+        let status = bubble.querySelector('.mj-message-status');
+        if (!status) {
+          status = document.createElement('div');
+          status.className = 'mj-message-status';
+          bubble.appendChild(status);
+        }
+        status.innerHTML = message.read_at
+          ? '<span class="mj-receipt read">✓✓ Read</span>'
+          : (message.delivered_at ? '<span class="mj-receipt">✓ Delivered</span>' : '<span class="mj-receipt">Sent</span>');
+      });
+    }
+
     function insertQuick(text) {
       const input = document.getElementById('replyInput');
       if (input) { input.value = text; input.focus(); }
@@ -736,6 +758,12 @@
     }
 
     function subscribeRealtime() {
+      // Realtime UPDATE events are primary; this lightweight receipt-only sync is a fallback
+      // for mobile browsers that occasionally suspend or miss a websocket event.
+      if (window.mjAdminReceiptSyncTimer) clearInterval(window.mjAdminReceiptSyncTimer);
+      window.mjAdminReceiptSyncTimer = setInterval(function () {
+        if (activeTicketId && isAdminThreadVisible(activeTicketId)) syncAdminMessageReceipts(activeTicketId);
+      }, 3000);
       try {
         if (ticketsChannel) sb.removeChannel(ticketsChannel);
         ticketsChannel = sb.channel('admin-support-tickets')
