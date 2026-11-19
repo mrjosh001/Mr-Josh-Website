@@ -1313,7 +1313,7 @@ function supportRetentionStorageObject(rawUrl) {
     const url = new URL(String(rawUrl || '').trim());
     const configuredUrl = process.env.SUPABASE_URL;
     if (!configuredUrl || url.origin !== new URL(configuredUrl).origin) return null;
-    const match = url.pathname.match(/\\/storage\\/v1\\/object\\/(?:public|sign|authenticated)\\/([^/]+)\\/(.+)$/i);
+    const match = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/i);
     if (!match) return null;
     const bucket = decodeURIComponent(match[1]);
     const objectPath = match[2].split('/').map(part => decodeURIComponent(part)).join('/');
@@ -1326,11 +1326,11 @@ function supportRetentionStorageObject(rawUrl) {
 
 function supportAttachmentUrls(body) {
   const matches = [];
-  const re = /\\[\\[MJURL\\]\\]([\\s\\S]*?)\\[\\[\\/MJURL\\]\\]/gi;
+  const re = /\[\[MJURL\]\]([\s\S]*?)\[\[\/MJURL\]\]/gi;
   let match;
   while ((match = re.exec(String(body || '')))) {
     const url = String(match[1] || '').trim();
-    if (/^https?:\\/\\//i.test(url)) matches.push(url);
+    if (/^https?:\/\//i.test(url)) matches.push(url);
   }
   return matches;
 }
@@ -1365,7 +1365,7 @@ async function cleanSupportTicketAttachments(ticketId, counters) {
       }
     }
     if (safeToMarkExpired) {
-      const expired = String(message.body || '').replace(/\\[\\[MJURL\\]\\][\\s\\S]*?\\[\\[\\/MJURL\\]\\]/gi, '[Attachment expired]');
+      const expired = String(message.body || '').replace(/\[\[MJURL\]\][\s\S]*?\[\[\/MJURL\]\]/gi, '[Attachment expired]');
       const { error: updateError } = await supabase
         .from('support_messages')
         .update({ body: expired })
