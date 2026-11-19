@@ -4,6 +4,7 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { sendError } from '../lib/errors.js';
 import { deleteUserStorageObjects } from '../lib/delete-user-storage.js';
+import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 
 /**
  * POST /api/admin
@@ -3471,6 +3472,35 @@ async function selfServiceAccountDelete(req, res, body) {
   }
 }
 
+async function supportMessagePush(req, body) {
+  const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return { status: 401, body: { success: false, message: 'Sign in required' } };
+  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  const user = authData && authData.user;
+  if (authError || !user) return { status: 401, body: { success: false, message: 'Invalid session' } };
+  const messageId = String(body.message_id || '').trim();
+  if (!messageId) return { status: 400, body: { success: false, message: 'message_id is required' } };
+  const { data: message, error: messageError } = await supabase.from('support_messages').select('id,ticket_id,sender_id,sender_type,body').eq('id', messageId).maybeSingle();
+  if (messageError || !message) return { status: 404, body: { success: false, message: 'Support message not found' } };
+  const { data: ticket, error: ticketError } = await supabase.from('support_tickets').select('id,user_id,customer_id').eq('id', message.ticket_id).maybeSingle();
+  if (ticketError || !ticket) return { status: 404, body: { success: false, message: 'Support conversation not found' } };
+  if (String(message.sender_id || '') !== String(user.id)) return { status: 403, body: { success: false, message: 'Message sender does not match the signed-in account' } };
+  const senderType = String(message.sender_type || '').toLowerCase();
+  const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
+  if ((senderType === 'user' || senderType === 'customer') && String(ticket.user_id) === String(user.id)) {
+    const delivery = await sendPushToAdmins(supabase, { appId: 'main', title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    return { status: 200, body: { success: true, audience: 'admins', delivery } };
+  }
+  if (senderType === 'admin') {
+    const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+    const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
+    if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required' } };
+    const delivery = await sendPushToUser(supabase, ticket.user_id, { appId: 'main', title: 'MJ HUB Customer Support', body: preview || 'Customer support has replied to your conversation.', url: '/dashboard.html', type: 'support_reply', tag: 'support-' + ticket.id });
+    return { status: 200, body: { success: true, audience: 'customer', delivery } };
+  }
+  return { status: 403, body: { success: false, message: 'Unsupported support message sender' } };
+}
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   setNoStore(res);
@@ -3510,6 +3540,11 @@ export default async function handler(req, res) {
       } else {
         result = { status: 400, body: { success: false, message: 'Unknown vendor action' } };
       }
+      return res.status(result.status).json(result.body);
+    }
+
+    if (resource === 'support_push' && action === 'message') {
+      const result = await supportMessagePush(req, body);
       return res.status(result.status).json(result.body);
     }
 
