@@ -654,8 +654,10 @@
       }
       const incomingIds = (data || []).filter(m => m.sender_type === 'user' || m.sender_type === 'customer').map(m => m.id).filter(Boolean);
       if (isAdminThreadVisible(ticketId) && incomingIds.length) {
-        await sb.rpc('mj_support_mark_delivered_for', { p_ticket_id: ticketId, p_reader_role: 'admin' });
-        await sb.rpc('mj_support_mark_read_for', { p_ticket_id: ticketId, p_message_ids: incomingIds, p_reader_role: 'admin' });
+        const delivered = await sb.rpc('mj_support_mark_delivered_for', { p_ticket_id: ticketId, p_reader_role: 'admin' });
+        if (delivered.error) console.warn('[support] admin delivered receipt failed', delivered.error);
+        const read = await sb.rpc('mj_support_mark_read_for', { p_ticket_id: ticketId, p_message_ids: incomingIds, p_reader_role: 'admin' });
+        if (read.error) console.warn('[support] admin read receipt failed', read.error);
       }
       const { data: fresh } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
       const rows = fresh || data || [];
@@ -757,6 +759,21 @@
       }
     }
 
+    // Realtime is the fast path; polling is the recovery path for suspended mobile
+    // WebSockets and missed INSERT events. It keeps the open thread and inbox current.
+    if (window.mjAdminSupportPoll) clearInterval(window.mjAdminSupportPoll);
+    window.mjAdminSupportPoll = setInterval(async function () {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        await loadTickets();
+        if (activeTicketId && isAdminThreadVisible(activeTicketId)) {
+          await loadMessages(activeTicketId);
+        }
+      } catch (pollError) {
+        console.warn('[support] admin fallback refresh failed', pollError);
+      }
+    }, 2500);
+
     function subscribeRealtime() {
       // Realtime UPDATE events are primary; this lightweight receipt-only sync is a fallback
       // for mobile browsers that occasionally suspend or miss a websocket event.
@@ -788,7 +805,7 @@
             }
             loadTickets();
           })
-          .subscribe();
+          .subscribe(function(status, err) { console.log('[support] admin message realtime:', status, err || ''); });
       } catch (e) { console.warn('realtime', e); }
     }
     document.addEventListener('visibilitychange', function () {
