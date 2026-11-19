@@ -3489,7 +3489,7 @@ async function supportMessagePush(req, body) {
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
-    const delivery = await sendPushToAdmins(supabase, { excludeUserIds: [user.id], title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin-support.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    const delivery = await sendPushToAdmins(supabase, { excludeUserIds: [user.id], title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
     console.info('[support-push] customer-to-admins', { messageId, senderType, delivery });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }

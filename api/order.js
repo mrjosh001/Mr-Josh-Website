@@ -148,12 +148,11 @@ async function handleSupportTicket(req, res, user) {
       return res.status(500).json({ success: false, message: 'Ticket opened but the message did not save. Try again.' });
     }
 
-    // Notify admins subscribed through the shared main app, even when logged out.
+    // Notify admins through the isolated admin_support subscription, never the customer app.
     // Push failure must not undo a message already saved for the customer.
     try {
       const preview = bodyText.replace(/\s+/g, ' ').trim().slice(0, 110);
       await sendPushToAdmins(supabase, {
-        appId: 'main',
         title: 'New customer support message',
         body: (customerId ? customerId + ': ' : '') + (preview || 'A customer opened a support ticket.'),
         url: '/admin.html', type: 'admin_support_message', tag: 'support-' + created.id

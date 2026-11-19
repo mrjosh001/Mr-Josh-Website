@@ -1043,7 +1043,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  <div class="tb-right">
  <span class="tb-status" id="onlineIndicator"><i></i> Online</span>
- <button type="button" class="btn btn-ghost btn-sm" id="adminSupportPushBtn" onclick="enableAdminSupportPush()">Enable Support Alerts</button>
+ <button type="button" class="btn btn-ghost btn-sm" id="adminSupportPushBtn" onclick="enableAdminSupportPush()">Enable Admin Alerts</button>
  <button type="button" class="tb-bell" id="supportTopBell" onclick="location.href='admin-support.html'" title="Support desk">
  <i class="fas fa-bell"></i>
  <span id="supportTopBellCount" class="tb-bell-count">0</span>
@@ -8177,10 +8177,10 @@ window.enableAdminSupportPush = async function() {
  try {
    if (!window.MJHubPush) throw new Error('Push module is not loaded. Reload the admin page and try again.');
    await window.MJHubPush.enable({ appId: 'admin_support' });
-   if (btn) btn.textContent = 'Support Alerts Enabled';
-   if (window.showToast) showToast('Admin support push notifications enabled', 'success');
+   if (btn) btn.textContent = 'Admin Alerts Enabled';
+   if (window.showToast) showToast('Admin push notifications enabled', 'success');
  } catch (e) {
-   if (btn) { btn.disabled = false; btn.textContent = 'Enable Support Alerts'; }
+   if (btn) { btn.disabled = false; btn.textContent = 'Enable Admin Alerts'; }
    alert(e.message || 'Could not enable support alerts');
  }
 };
