@@ -182,5 +182,22 @@
     return { supported, permission, subscribed, syncError };
   }
 
-  global.MJHubPush = { enable, disable, status, isSupported, ensureServiceWorker };
+
+  async function testAdminSupport() {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Sign in to the admin account before testing push notifications.');
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ resource: 'support_push', action: 'test' })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      const delivery = json.delivery || {};
+      throw new Error(json.message || ('Push test failed: sent ' + (delivery.sent || 0) + ', failed ' + (delivery.failed || 0)));
+    }
+    return json.delivery || { sent: 1 };
+  }
+
+  global.MJHubPush = { enable, disable, status, isSupported, ensureServiceWorker, testAdminSupport };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1044,6 +1044,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="tb-right">
  <span class="tb-status" id="onlineIndicator"><i></i> Online</span>
  <button type="button" class="btn btn-ghost btn-sm" id="adminSupportPushBtn" onclick="enableAdminSupportPush()">Enable Admin Alerts</button>
+ <button type="button" class="btn btn-ghost btn-sm" id="adminSupportPushTestBtn" onclick="testAdminSupportPush()" style="display:none">Test Alerts</button>
  <button type="button" class="tb-bell" id="supportTopBell" onclick="location.href='admin-support.html'" title="Support desk">
  <i class="fas fa-bell"></i>
  <span id="supportTopBellCount" class="tb-bell-count">0</span>
@@ -8186,17 +8187,20 @@ window.enableAdminSupportPush = async function() {
 };
 async function refreshAdminSupportPushButton() {
  const btn = document.getElementById('adminSupportPushBtn');
+ const testBtn = document.getElementById('adminSupportPushTestBtn');
  if (!btn || !window.MJHubPush) return;
  btn.disabled = false;
  btn.textContent = 'Checking Admin Alerts…';
+ if (testBtn) testBtn.style.display = 'none';
  try {
    const state = await window.MJHubPush.status({ appId: 'admin_support' });
    if (state.subscribed && state.permission === 'granted') {
-     btn.textContent = 'Admin Alerts Enabled';
+     btn.textContent = state.syncError ? 'Admin Alerts Sync Issue' : 'Admin Alerts Enabled';
      btn.disabled = true;
      btn.title = state.syncError
-       ? 'Notifications are enabled on this device. Server sync will retry when you sign in.'
-       : 'Admin alerts remain enabled on this device, including after logout.';
+       ? 'The browser subscription exists, but server sync failed: ' + state.syncError
+       : 'Browser subscription detected. Use Test Alerts to verify actual delivery.';
+     if (testBtn) testBtn.style.display = 'inline-flex';
    } else if (state.permission === 'denied') {
      btn.textContent = 'Notifications Blocked';
      btn.title = 'Allow notifications for MJ HUB in your browser or device settings.';
@@ -8208,6 +8212,19 @@ async function refreshAdminSupportPushButton() {
    btn.disabled = false;
    btn.textContent = 'Enable Admin Alerts';
    btn.title = e && e.message ? e.message : 'Could not check notification status.';
+ }
+}
+window.testAdminSupportPush = async function() {
+ const btn = document.getElementById('adminSupportPushTestBtn');
+ if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+ try {
+   await window.MJHubPush.testAdminSupport();
+   if (window.showToast) showToast('Test push sent. Check your device notifications.', 'success');
+   else alert('Test push sent. Check your device notifications.');
+ } catch (e) {
+   alert(e.message || 'Test push failed.');
+ } finally {
+   if (btn) { btn.disabled = false; btn.textContent = 'Test Alerts'; }
  }
 }
 refreshAdminSupportPushButton();

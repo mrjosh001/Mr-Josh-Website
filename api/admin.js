@@ -3491,6 +3491,38 @@ async function selfServiceAccountDelete(req, res, body) {
   }
 }
 
+
+async function supportPushTest(req) {
+  const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
+  const token = authHeader.replace(/^Bearer\\s+/i, '').trim();
+  if (!token) return { status: 401, body: { success: false, message: 'Admin sign-in required' } };
+  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  const user = authData && authData.user;
+  if (authError || !user) return { status: 401, body: { success: false, message: 'Invalid admin session' } };
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+  const isAdmin = !profileError && profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
+  if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required' } };
+  const delivery = await sendPushToUser(supabase, user.id, {
+    appId: 'admin_support',
+    title: 'MJ HUB admin push test',
+    body: 'Admin support notifications are reaching this device.',
+    url: '/admin-support.html',
+    type: 'admin_support_test',
+    tag: 'mjhub-admin-push-test-' + Date.now(),
+    skipInApp: true
+  });
+  const sent = Number(delivery && delivery.sent || 0);
+  console.info('[support-push] admin-self-test', { sent, failed: delivery && delivery.failed || 0, skipped: delivery && delivery.skipped || 0, reason: delivery && delivery.reason || null });
+  return {
+    status: sent > 0 ? 200 : 503,
+    body: {
+      success: sent > 0,
+      message: sent > 0 ? 'Test notification sent to this admin device.' : 'The browser subscription exists, but the push provider did not accept the test notification.',
+      delivery
+    }
+  };
+}
+
 async function supportMessagePush(req, body) {
   const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
@@ -3510,8 +3542,17 @@ async function supportMessagePush(req, body) {
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
     const deepLink = '/admin-support.html?ticket=' + encodeURIComponent(ticket.id) + '&message=' + encodeURIComponent(messageId);
     const delivery = await sendPushToAdmins(supabase, { title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: deepLink, type: 'admin_support_message', tag: 'support-' + ticket.id });
+    const pushSent = Number(delivery && delivery.sent || 0);
     console.info('[support-push] customer-to-admins', { messageId, senderType, delivery });
-    return { status: 200, body: { success: true, audience: 'admins', delivery } };
+    return {
+      status: pushSent > 0 ? 200 : 503,
+      body: {
+        success: pushSent > 0,
+        message: pushSent > 0 ? 'Admin push accepted by the push provider' : 'Support message was saved, but admin push delivery failed',
+        audience: 'admins',
+        delivery
+      }
+    };
   }
   if (['admin','agent','staff','support'].includes(senderType)) {
     const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
@@ -3563,6 +3604,11 @@ export default async function handler(req, res) {
       } else {
         result = { status: 400, body: { success: false, message: 'Unknown vendor action' } };
       }
+      return res.status(result.status).json(result.body);
+    }
+
+    if (resource === 'support_push' && action === 'test') {
+      const result = await supportPushTest(req);
       return res.status(result.status).json(result.body);
     }
 

@@ -228,6 +228,7 @@
         <span class="stat-pill warn" id="statPending">0 pending</span>
         <a href="admin.html">Main Admin</a>
         <button class="btn btn-ghost btn-sm" id="supportPushEnable" type="button" onclick="enableSupportPush()">Enable Support Alerts</button>
+        <button class="btn btn-ghost btn-sm" id="supportPushTest" type="button" onclick="testSupportPush()" style="display:none">Test Alerts</button>
         <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
       </div>
     </div>
@@ -496,12 +497,31 @@
 
     async function updateSupportPushButton() {
       var btn = document.getElementById('supportPushEnable');
+      var testBtn = document.getElementById('supportPushTest');
       if (!btn || !window.MJHubPush) return;
       try {
         var state = await window.MJHubPush.status({ appId: 'admin_support' });
-        btn.textContent = state.subscribed && state.permission === 'granted' ? 'Support Alerts Enabled' : 'Enable Support Alerts';
-        btn.disabled = !!(state.subscribed && state.permission === 'granted');
-      } catch (_) {}
+        var ready = !!(state.subscribed && state.permission === 'granted');
+        btn.textContent = ready ? (state.syncError ? 'Support Alerts Sync Issue' : 'Support Alerts Enabled') : 'Enable Support Alerts';
+        btn.disabled = ready;
+        btn.title = state.syncError || (ready ? 'Browser subscription detected. Use Test Alerts to verify delivery.' : '');
+        if (testBtn) testBtn.style.display = ready ? 'inline-flex' : 'none';
+      } catch (e) {
+        if (testBtn) testBtn.style.display = 'none';
+        btn.title = e && e.message ? e.message : 'Could not check notification status.';
+      }
+    }
+    async function testSupportPush() {
+      var btn = document.getElementById('supportPushTest');
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        await window.MJHubPush.testAdminSupport();
+        alert('Test push sent. Check your device notifications.');
+      } catch (e) {
+        alert(e.message || 'Test push failed.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Test Alerts'; }
+      }
     }
     async function enableSupportPush() {
       var btn = document.getElementById('supportPushEnable');

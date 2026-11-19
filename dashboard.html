@@ -6347,7 +6347,8 @@ window.mjSupportUpdateReceipt = function(message) {
 };
 
 window.mjSupportNotifyMessage = async function(messageId) {
-  if (!supabaseClient || !messageId) return;
+  if (!messageId) throw new Error('Support message ID is missing');
+  if (!supabaseClient) throw new Error('Support notification client is not available');
   var sess = await supabaseClient.auth.getSession();
   var user = sess && sess.data && sess.data.session && sess.data.session.user;
   var token = sess && sess.data && sess.data.session && sess.data.session.access_token;
@@ -6358,7 +6359,11 @@ window.mjSupportNotifyMessage = async function(messageId) {
     body: JSON.stringify({ resource: 'support_push', action: 'message', message_id: messageId })
   });
   var result = await response.json().catch(function(){ return {}; });
-  if (!response.ok || !result.success) throw new Error(result.message || 'Support notification failed');
+  if (!response.ok || !result.success) {
+    var delivery = result.delivery || {};
+    throw new Error(result.message || ('Support notification failed. Sent: ' + (delivery.sent || 0) + ', failed: ' + (delivery.failed || 0)));
+  }
+  return result.delivery || null;
 };
 
 window.mjSupportMarkIncomingRead = async function(ticketId) {
