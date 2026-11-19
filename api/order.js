@@ -137,12 +137,12 @@ async function handleSupportTicket(req, res, user) {
 
     const bodyText = String(message || '').trim().slice(0, 8000);
 
-    const { error: msgErr } = await supabase.from('support_messages').insert({
+    const { data: savedMessage, error: msgErr } = await supabase.from('support_messages').insert({
       ticket_id: created.id,
       sender_type: 'user',
       sender_id: user.id,
       body: bodyText
-    });
+    }).select('id').single();
     if (msgErr) {
       console.error('[order support_ticket message]', msgErr.message);
       return res.status(500).json({ success: false, message: 'Ticket opened but the message did not save. Try again.' });
@@ -152,11 +152,13 @@ async function handleSupportTicket(req, res, user) {
     // Push failure must not undo a message already saved for the customer.
     try {
       const preview = bodyText.replace(/\s+/g, ' ').trim().slice(0, 110);
-      await sendPushToAdmins(supabase, {
+      const delivery = await sendPushToAdmins(supabase, {
         title: 'New customer support message',
         body: (customerId ? customerId + ': ' : '') + (preview || 'A customer opened a support ticket.'),
-        url: '/admin.html', type: 'admin_support_message', tag: 'support-' + created.id
+        url: '/admin-support.html?ticket=' + encodeURIComponent(created.id) + '&message=' + encodeURIComponent(savedMessage && savedMessage.id || ''),
+        type: 'admin_support_message', tag: 'support-' + created.id
       });
+      console.info('[support-push] order-complaint-to-admins', { ticketId: created.id, messageId: savedMessage && savedMessage.id, delivery });
     } catch (pushError) {
       console.warn('[order support_ticket push] delivery failed', pushError?.message || pushError);
     }
