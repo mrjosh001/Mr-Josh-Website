@@ -177,7 +177,7 @@ async function handleSupportTicket(req, res, user) {
 async function handleSupportUpload(req, res, user) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const raw = String(body.data || body.base64 || '').replace(/\s/g, '');
+    const raw = String(body.data || body.base64 || '').replace(/\\s/g, '');
     if (!raw || raw.length < 32 || raw.length > 500000) {
       return res.status(400).json({ success: false, message: 'Photo is missing or too large' });
     }
@@ -188,8 +188,31 @@ async function handleSupportUpload(req, res, user) {
     if (!buf || buf.length < 32) {
       return res.status(400).json({ success: false, message: 'Invalid photo' });
     }
-    const ticketPart = String(body.ticket_id || user.id || 'misc').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
-    const path = 'tickets/' + ticketPart + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
+
+    const ticketId = String(body.ticket_id || '').trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ticketId)) {
+      return res.status(400).json({ success: false, message: 'A valid support ticket is required for attachments' });
+    }
+    const { data: ticket, error: ticketError } = await supabase
+      .from('support_tickets')
+      .select('id,user_id')
+      .eq('id', ticketId)
+      .maybeSingle();
+    if (ticketError || !ticket) {
+      return res.status(404).json({ success: false, message: 'Support ticket not found' });
+    }
+    if (String(ticket.user_id) !== String(user.id)) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (!profile || profile.is_admin !== true) {
+        return res.status(403).json({ success: false, message: 'You cannot attach files to this support ticket' });
+      }
+    }
+
+    const path = 'tickets/' + ticketId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.jpg';
     const buckets = ['support-attachments', 'support', 'attachments'];
     try {
       await supabase.storage.createBucket('support-attachments', { public: true, fileSizeLimit: 2 * 1024 * 1024 });
@@ -198,7 +221,7 @@ async function handleSupportUpload(req, res, user) {
     for (const bucket of buckets) {
       const up = await supabase.storage.from(bucket).upload(path, buf, {
         contentType: 'image/jpeg',
-        upsert: true
+        upsert: false
       });
       if (up.error) continue;
       const pub = supabase.storage.from(bucket).getPublicUrl(path);
