@@ -3532,11 +3532,21 @@ async function supportMessagePush(req, body) {
   if (authError || !user) return { status: 401, body: { success: false, message: 'Invalid session' } };
   const messageId = String(body.message_id || '').trim();
   if (!messageId) return { status: 400, body: { success: false, message: 'message_id is required' } };
+  console.info('[support-push] request received', { messageId, callerId: user.id });
   const { data: message, error: messageError } = await supabase.from('support_messages').select('id,ticket_id,sender_id,sender_type,body').eq('id', messageId).maybeSingle();
-  if (messageError || !message) return { status: 404, body: { success: false, message: 'Support message not found' } };
+  if (messageError || !message) {
+    console.warn('[support-push] message lookup failed', { messageId, error: messageError && messageError.message });
+    return { status: 404, body: { success: false, message: 'Support message not found' } };
+  }
   const { data: ticket, error: ticketError } = await supabase.from('support_tickets').select('id,user_id,customer_id').eq('id', message.ticket_id).maybeSingle();
-  if (ticketError || !ticket) return { status: 404, body: { success: false, message: 'Support conversation not found' } };
-  if (String(message.sender_id || '') !== String(user.id)) return { status: 403, body: { success: false, message: 'Message sender does not match the signed-in account' } };
+  if (ticketError || !ticket) {
+    console.warn('[support-push] ticket lookup failed', { messageId, ticketId: message.ticket_id, error: ticketError && ticketError.message });
+    return { status: 404, body: { success: false, message: 'Support conversation not found' } };
+  }
+  if (String(message.sender_id || '') !== String(user.id)) {
+    console.warn('[support-push] sender mismatch', { messageId, callerId: user.id, senderId: message.sender_id });
+    return { status: 403, body: { success: false, message: 'Message sender does not match the signed-in account' } };
+  }
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
@@ -3563,7 +3573,13 @@ async function supportMessagePush(req, body) {
     console.info('[support-push] admin-to-customer', { messageId, delivery });
     return { status: 200, body: { success: true, audience: 'customer', delivery } };
   }
-  return { status: 403, body: { success: false, message: 'Unsupported support message sender' } };
+  console.warn('[support-push] unsupported message or ticket owner mismatch', {
+    messageId,
+    senderType,
+    callerId: user.id,
+    ticketOwnerId: ticket.user_id
+  });
+  return { status: 403, body: { success: false, message: 'Unsupported support message sender or ticket owner mismatch' } };
 }
 export default async function handler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
