@@ -6303,9 +6303,13 @@ window.mjSupportAppend = function(role, text, message) {
 
 window.mjSupportUpdateReceipt = function(message) {
   if (!message || !message.id) return;
+  // Customer receipts belong only to messages authored by the customer.
+  // Support-team replies must never display Sent / Delivered / Read to the customer.
+  if (!/^(user|customer)$/i.test(String(message.sender_type || ''))) return;
   var nodes = document.querySelectorAll('#mjSupportMessages [data-mj-message-id]');
   nodes.forEach(function(node) {
     if (node.getAttribute('data-mj-message-id') !== String(message.id)) return;
+    if (!/^(user|customer)$/i.test(node.getAttribute('data-mj-sender-type') || '')) return;
     var receipt = node.querySelector('.mj-support-receipt');
     if (!receipt) { receipt = document.createElement('span'); node.appendChild(receipt); }
     receipt.className = 'mj-support-receipt' + (message.read_at ? ' read' : (message.delivered_at ? '' : ' sent'));

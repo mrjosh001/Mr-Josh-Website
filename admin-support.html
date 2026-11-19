@@ -759,6 +759,41 @@
       }
     }
 
+    let mjAdminRefreshInFlight = false;
+    async function refreshMessagesWithoutSpinner(ticketId) {
+      if (mjAdminRefreshInFlight || !isAdminThreadVisible(ticketId)) return;
+      mjAdminRefreshInFlight = true;
+      try {
+        const { data, error } = await sb.from('support_messages').select('*')
+          .eq('ticket_id', ticketId).order('created_at', { ascending: true });
+        if (error) throw error;
+        if (!isAdminThreadVisible(ticketId)) return;
+        const box = document.getElementById('threadMessages');
+        const existing = new Map(Array.from(box.querySelectorAll('[data-mj-message-id]')).map(node => [node.getAttribute('data-mj-message-id'), node]));
+        const rows = data || [];
+        const currentIds = new Set(rows.map(m => String(m.id)));
+        // Only redraw when the message set changes. Receipt changes update in place.
+        const renderedIds = Array.from(existing.keys());
+        const changed = renderedIds.length !== rows.length || rows.some(m => !existing.has(String(m.id)));
+        if (changed) {
+          await loadMessages(ticketId);
+        } else {
+          rows.forEach(function(m) {
+            if (m.sender_type !== 'admin') return;
+            const bubble = existing.get(String(m.id));
+            if (!bubble) return;
+            let status = bubble.querySelector('.mj-message-status');
+            if (!status) { status = document.createElement('div'); status.className = 'mj-message-status'; bubble.appendChild(status); }
+            status.innerHTML = m.read_at ? '<span class="mj-receipt read">✓✓ Read</span>' : (m.delivered_at ? '<span class="mj-receipt">✓ Delivered</span>' : '<span class="mj-receipt">Sent</span>');
+          });
+        }
+      } catch (err) {
+        console.warn('[support] quiet thread refresh failed', err);
+      } finally {
+        mjAdminRefreshInFlight = false;
+      }
+    }
+
     // Realtime is the fast path; polling is the recovery path for suspended mobile
     // WebSockets and missed INSERT events. It keeps the open thread and inbox current.
     if (window.mjAdminSupportPoll) clearInterval(window.mjAdminSupportPoll);
@@ -767,7 +802,7 @@
       try {
         await loadTickets();
         if (activeTicketId && isAdminThreadVisible(activeTicketId)) {
-          await loadMessages(activeTicketId);
+          await refreshMessagesWithoutSpinner(activeTicketId);
         }
       } catch (pollError) {
         console.warn('[support] admin fallback refresh failed', pollError);
