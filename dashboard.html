@@ -6185,6 +6185,31 @@ window.openMjSupportPanel = function(opts) {
   } catch (e) {}
 };
 
+// Reopen the exact support conversation after a notification click, including
+// after the customer signs back in from a lock-screen notification.
+(function () {
+  function openPushConversation() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var ticketId = params.get('supportTicket');
+      if (!ticketId || !supabaseClient) return;
+      supabaseClient.auth.getSession().then(function (result) {
+        if (result && result.data && result.data.session) {
+          window.openMjSupportPanel({ ticketId: ticketId });
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
+    supabaseClient.auth.onAuthStateChange(function (event, session) {
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+        openPushConversation();
+      }
+    });
+    openPushConversation();
+  }
+})();
+
 window.closeMjSupportPanel = function() {
   var p = document.getElementById('mjSupportPanel');
   if (!p) return;
