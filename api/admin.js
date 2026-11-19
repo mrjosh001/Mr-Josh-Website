@@ -3108,9 +3108,16 @@ async function pushSubscribe(req, body) {
   if (!endpoint || !p256dh || !auth) {
     return { status: 400, body: { success: false, message: 'endpoint and keys.p256dh / keys.auth required' } };
   }
+  const requestedAppId = ['main', 'admin_support'].includes(String(body.app_id || 'main')) ? String(body.app_id || 'main') : 'main';
+  if (requestedAppId === 'admin_support') {
+    if (!userId) return { status: 401, body: { success: false, message: 'Admin sign-in required for admin alerts' } };
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+    const isAdmin = !profileError && profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
+    if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required for admin alerts' } };
+  }
   const row = {
     user_id: userId,
-    app_id: ['main', 'admin_support'].includes(String(body.app_id || 'main')) ? String(body.app_id || 'main') : 'main',
+    app_id: requestedAppId,
     endpoint,
     p256dh,
     auth,
@@ -3489,15 +3496,11 @@ async function supportMessagePush(req, body) {
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
-    const delivery = await sendPushToAdmins(supabase, { excludeUserIds: [user.id], title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    const delivery = await sendPushToAdmins(supabase, { title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
     console.info('[support-push] customer-to-admins', { messageId, senderType, delivery });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }
   if (['admin','agent','staff','support'].includes(senderType)) {
-    // An admin replying inside their own customer account must not notify that same account.
-    if (String(ticket.user_id) === String(user.id)) {
-      return { status: 200, body: { success: true, audience: 'customer', skipped: true, reason: 'sender_is_ticket_owner' } };
-    }
     const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
     const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
     if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required' } };
