@@ -6534,12 +6534,15 @@ window.mjSupportConnectHuman = async function() {
   try {
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
-    await supabaseClient.from('support_messages').insert({
+    var { data: requestMessage } = await supabaseClient.from('support_messages').insert({
       ticket_id: tid,
       sender_type: 'system',
       sender_id: user && user.id,
       body: 'Customer requested a human agent.'
-    });
+    }).select('id').single();
+    if (requestMessage && requestMessage.id) {
+      window.mjSupportNotifyMessage(requestMessage.id).catch(function(e){ console.warn('Support request push failed', e); });
+    }
   } catch (e) {}
   mjSupportAppend('bot', 'You are connected to live support. A team member will reply here. Please share your Customer ID and any order or payment reference.');
 };
