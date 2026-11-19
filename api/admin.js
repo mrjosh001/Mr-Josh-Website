@@ -3172,7 +3172,8 @@ async function pushSend(body) {
   const url = String(body.url || '/dashboard.html').slice(0, 300);
   const payload = JSON.stringify({ title, body: msgBody, url, icon: '/img/IMG_3027.png' });
 
-  let q = supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth, user_id');
+  let q = supabase.from('push_subscriptions').select('id, endpoint, p256dh, auth, user_id')
+    .or('app_id.eq.main,app_id.is.null');
   if (body.user_id) q = q.eq('user_id', body.user_id);
   const { data: subs, error } = await q.limit(2000);
   if (error) return { status: 500, body: { success: false, message: error.message } };
@@ -3493,8 +3494,8 @@ async function selfServiceAccountDelete(req, res, body) {
 
 
 async function supportPushTest(req) {
-  const authHeader = String(req.headers.authorization || req.headers.Authorization || '');
-  const token = authHeader.replace(/^Bearer\\s+/i, '').trim();
+  const authHeader = String(req.headers.authorization || req.headers.Authorization || '').trim();
+  const token = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
   if (!token) return { status: 401, body: { success: false, message: 'Admin sign-in required' } };
   const { data: authData, error: authError } = await supabase.auth.getUser(token);
   const user = authData && authData.user;
