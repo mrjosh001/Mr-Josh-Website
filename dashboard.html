@@ -6321,6 +6321,12 @@ window.mjSupportMarkIncomingRead = async function(ticketId) {
   } catch (e) { console.warn('Support read receipt update failed', e); }
 };
 
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && window._mjSup && window._mjSup.ticketId) {
+    window.mjSupportMarkIncomingRead(window._mjSup.ticketId);
+  }
+});
+
 window.mjSupportSetActions = function(buttons) {
   var row = document.getElementById('mjSupportQuickActions');
   if (!row) return;
