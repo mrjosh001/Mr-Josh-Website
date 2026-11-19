@@ -6702,6 +6702,8 @@ window.mjSupportSend = async function(e) {
         sentBubble.setAttribute('data-mj-message-id', String(sentMessage.id));
         sentBubble.setAttribute('data-mj-sender-type', 'user');
         var sentReceipt = document.createElement('span'); sentReceipt.className = 'mj-support-receipt sent'; sentReceipt.textContent = 'Sent'; sentBubble.appendChild(sentReceipt);
+      }
+      if (sentMessage && sentMessage.id) {
         window.mjSupportNotifyMessage(sentMessage.id).catch(function(e){ console.warn('Support push notification failed', e); });
       }
     }
