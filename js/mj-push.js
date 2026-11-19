@@ -59,14 +59,28 @@
   async function getAppRegistration(options) {
     if (!('serviceWorker' in navigator)) return null;
     var config = registrationConfig(options);
-    return navigator.serviceWorker.getRegistration(new URL(config.scope, location.origin).href);
+    var wantedScope = new URL(config.scope, location.origin).href;
+    var registrations = await navigator.serviceWorker.getRegistrations();
+    return registrations.find(function (registration) {
+      return registration.scope === wantedScope;
+    }) || null;
   }
 
   async function ensureServiceWorker(options) {
     if (!('serviceWorker' in navigator)) throw new Error('Service workers not supported on this device');
     var config = registrationConfig(options);
     const reg = await navigator.serviceWorker.register(config.script, { scope: config.scope });
-    await navigator.serviceWorker.ready;
+    if (!reg.active) {
+      await new Promise(function (resolve, reject) {
+        var worker = reg.installing || reg.waiting;
+        if (!worker) return resolve();
+        worker.addEventListener('statechange', function () {
+          if (reg.active) resolve();
+          else if (worker.state === 'redundant') reject(new Error('Push service worker installation failed'));
+        });
+      });
+    }
+    if (!reg.active) throw new Error('Push service worker is not active yet. Please try again.');
     return reg;
   }
 
@@ -110,7 +124,7 @@
       user_agent: navigator.userAgent || '',
       app_id: appId
     });
-    try { localStorage.setItem('mjhub_push_enabled', '1'); } catch (_) {}
+    try { localStorage.setItem(appId === 'admin_support' ? 'mjhub_push_enabled_admin_support' : 'mjhub_push_enabled', '1'); } catch (_) {}
     return { ok: true, endpoint: json.endpoint };
   }
 
@@ -126,7 +140,7 @@
         try { await sub.unsubscribe(); } catch (_) {}
       }
     }
-    try { localStorage.removeItem('mjhub_push_enabled'); } catch (_) {}
+    try { localStorage.removeItem(options && options.appId === 'admin_support' ? 'mjhub_push_enabled_admin_support' : 'mjhub_push_enabled'); } catch (_) {}
     return { ok: true };
   }
 
