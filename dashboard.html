@@ -6168,6 +6168,10 @@ window._mjSup = {
 };
 
 window.openMjSupportPanel = function(opts) {
+  opts = opts || {};
+  if (!opts.ticketId) {
+    try { opts.ticketId = new URLSearchParams(window.location.search).get('supportTicket'); } catch (e) {}
+  }
   var p = document.getElementById('mjSupportPanel');
   if (!p) return;
   p.classList.add('open');
@@ -6180,6 +6184,31 @@ window.openMjSupportPanel = function(opts) {
     }
   } catch (e) {}
 };
+
+// Reopen the exact support conversation after a notification click, including
+// after the customer signs back in from a lock-screen notification.
+(function () {
+  function openPushConversation() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var ticketId = params.get('supportTicket');
+      if (!ticketId || !supabaseClient) return;
+      supabaseClient.auth.getSession().then(function (result) {
+        if (result && result.data && result.data.session) {
+          window.openMjSupportPanel({ ticketId: ticketId });
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
+    supabaseClient.auth.onAuthStateChange(function (event, session) {
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+        openPushConversation();
+      }
+    });
+    openPushConversation();
+  }
+})();
 
 window.closeMjSupportPanel = function() {
   var p = document.getElementById('mjSupportPanel');
@@ -6474,6 +6503,19 @@ window.mjSupportOpenTicket = async function(id) {
     else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body, m);
     else mjSupportAppend('sys', m.body, m);
   });
+  try {
+    var targetMessageId = new URLSearchParams(window.location.search).get('supportMessage');
+    if (targetMessageId) {
+      var targetNode = Array.prototype.find.call(document.querySelectorAll('#mjSupportMessages [data-mj-message-id]'), function(node) {
+        return node.getAttribute('data-mj-message-id') === targetMessageId;
+      });
+      if (targetNode) {
+        targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetNode.style.outline = '2px solid #3b82f6';
+        targetNode.style.outlineOffset = '3px';
+      }
+    }
+  } catch (e) {}
   await window.mjSupportMarkIncomingRead(id);
   try {
     var lastAdmin = (data || []).filter(function(m){
@@ -6934,12 +6976,15 @@ window.sendLiveChatMessage = async function(e) {
         if (window._liveChatTicketId && supabaseClient) {
           var sess0 = await supabaseClient.auth.getSession();
           var u0 = sess0 && sess0.data && sess0.data.session && sess0.data.session.user;
-          await supabaseClient.from('support_messages').insert({
+          var { data: faqSaved, error: faqSaveError } = await supabaseClient.from('support_messages').insert({
             ticket_id: window._liveChatTicketId,
             sender_type: 'user',
             sender_id: u0 && u0.id,
             body: text
-          });
+          }).select('id').single();
+          if (!faqSaveError && faqSaved && faqSaved.id && window.mjSupportNotifyMessage) {
+            window.mjSupportNotifyMessage(faqSaved.id).catch(function(e){ console.warn('Support FAQ push failed', e); });
+          }
         }
       } catch (err0) {}
       return false;
@@ -6962,15 +7007,18 @@ window.sendLiveChatMessage = async function(e) {
 
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
-    var { error } = await supabaseClient.from('support_messages').insert({
+    var { data: liveSentMessage, error } = await supabaseClient.from('support_messages').insert({
       ticket_id: window._liveChatTicketId,
       sender_type: 'user',
       sender_id: user && user.id,
       body: text
-    });
+    }).select('id').single();
     if (error) {
       window.appendLiveChatBubble('bot', 'Message could not be sent. Please try again in a moment.', false);
       return false;
+    }
+    if (liveSentMessage && liveSentMessage.id && window.mjSupportNotifyMessage) {
+      window.mjSupportNotifyMessage(liveSentMessage.id).catch(function(e){ console.warn('Live support push failed', e); });
     }
 
     if (!window._liveChatTransferred) {

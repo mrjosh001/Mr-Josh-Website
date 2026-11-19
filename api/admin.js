@@ -3115,8 +3115,20 @@ async function pushSubscribe(req, body) {
     const isAdmin = !profileError && profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
     if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required for admin alerts' } };
   }
+
+  // A signed-out page refresh may re-check an existing main-app subscription.
+  // Preserve its account owner instead of overwriting user_id with NULL.
+  let existingOwnerId = null;
+  if (!userId) {
+    const { data: existingSubscription, error: existingError } = await supabase
+      .from('push_subscriptions').select('user_id, app_id').eq('endpoint', endpoint).maybeSingle();
+    if (existingError) return { status: 500, body: { success: false, message: existingError.message } };
+    if (existingSubscription && existingSubscription.app_id === requestedAppId) {
+      existingOwnerId = existingSubscription.user_id || null;
+    }
+  }
   const row = {
-    user_id: userId,
+    user_id: userId || existingOwnerId,
     app_id: requestedAppId,
     endpoint,
     p256dh,
@@ -3496,7 +3508,8 @@ async function supportMessagePush(req, body) {
   const senderType = String(message.sender_type || '').toLowerCase();
   const preview = String(message.body || '').replace(/\s+/g, ' ').trim().slice(0, 110);
   if ((senderType === 'user' || senderType === 'customer' || senderType === 'system') && String(ticket.user_id) === String(user.id)) {
-    const delivery = await sendPushToAdmins(supabase, { title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: '/admin.html', type: 'admin_support_message', tag: 'support-' + ticket.id });
+    const deepLink = '/admin-support.html?ticket=' + encodeURIComponent(ticket.id) + '&message=' + encodeURIComponent(messageId);
+    const delivery = await sendPushToAdmins(supabase, { title: 'New customer support message', body: (ticket.customer_id ? ticket.customer_id + ': ' : '') + (preview || 'A customer needs support.'), url: deepLink, type: 'admin_support_message', tag: 'support-' + ticket.id });
     console.info('[support-push] customer-to-admins', { messageId, senderType, delivery });
     return { status: 200, body: { success: true, audience: 'admins', delivery } };
   }
@@ -3504,7 +3517,8 @@ async function supportMessagePush(req, body) {
     const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
     const isAdmin = profile && (profile.is_admin === true || profile.is_admin === 1 || profile.is_admin === '1' || String(profile.is_admin).toLowerCase() === 'true');
     if (!isAdmin) return { status: 403, body: { success: false, message: 'Admin access required' } };
-    const delivery = await sendPushToUser(supabase, ticket.user_id, { appId: 'main', title: 'MJ HUB Customer Support', body: preview || 'Customer support has replied to your conversation.', url: '/dashboard.html', type: 'support_reply', tag: 'support-' + ticket.id });
+    const deepLink = '/dashboard.html?supportTicket=' + encodeURIComponent(ticket.id) + '&supportMessage=' + encodeURIComponent(messageId);
+    const delivery = await sendPushToUser(supabase, ticket.user_id, { appId: 'main', title: 'MJ HUB Customer Support', body: preview || 'Customer support has replied to your conversation.', url: deepLink, type: 'support_reply', tag: 'support-' + ticket.id });
     console.info('[support-push] admin-to-customer', { messageId, delivery });
     return { status: 200, body: { success: true, audience: 'customer', delivery } };
   }

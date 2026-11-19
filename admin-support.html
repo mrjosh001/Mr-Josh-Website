@@ -498,7 +498,7 @@
       var btn = document.getElementById('supportPushEnable');
       if (!btn || !window.MJHubPush) return;
       try {
-        var state = await window.MJHubPush.status();
+        var state = await window.MJHubPush.status({ appId: 'admin_support' });
         btn.textContent = state.subscribed && state.permission === 'granted' ? 'Support Alerts Enabled' : 'Enable Support Alerts';
         btn.disabled = !!(state.subscribed && state.permission === 'granted');
       } catch (_) {}
@@ -507,7 +507,7 @@
       var btn = document.getElementById('supportPushEnable');
       if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
       try {
-        await window.MJHubPush.enable();
+        await window.MJHubPush.enable({ appId: 'admin_support' });
         if (btn) btn.textContent = 'Support Alerts Enabled';
         alert('Support push notifications are enabled for this admin app.');
       } catch (e) {
@@ -571,6 +571,26 @@
       document.getElementById('statPending').textContent = pendN + ' pending';
       document.title = openN > 0 ? '(' + openN + ') Support Desk' : 'MJ HUB — Support Desk';
       renderTicketList();
+      // A push notification can deep-link directly to its conversation.
+      if (!window.__mjSupportDeepLinkHandled) {
+        const params = new URLSearchParams(window.location.search);
+        const targetTicket = params.get('ticket');
+        if (targetTicket && tickets.some(function (ticket) { return String(ticket.id) === String(targetTicket); })) {
+          window.__mjSupportDeepLinkHandled = true;
+          await openTicket(targetTicket);
+          const targetMessage = params.get('message');
+          if (targetMessage) {
+            const target = Array.prototype.find.call(document.querySelectorAll('#threadMessages [data-mj-message-id]'), function (node) {
+              return node.getAttribute('data-mj-message-id') === targetMessage;
+            });
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              target.style.outline = '2px solid #3b82f6';
+              target.style.outlineOffset = '4px';
+            }
+          }
+        }
+      }
     }
 
     function renderTicketList() {
