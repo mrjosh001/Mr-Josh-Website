@@ -119,7 +119,7 @@ export default async function handler(req, res) {
       .not('closed_at', 'is', null)
       .lte('closed_at', attachmentCutoff)
       .order('closed_at', { ascending: true })
-      .limit(BATCH_SIZE);
+      .range(0, 999);
     if (attachmentTicketError) throw attachmentTicketError;
 
     for (const ticket of attachmentTickets || []) {
