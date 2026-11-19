@@ -1468,7 +1468,11 @@ export default async function handler(req, res) {
   } catch (_) {}
   const action = String(q.action || bodyPeek.action || '').toLowerCase();
   const nudgeOnly = String(q.nudge_only || bodyPeek.nudge_only || '') === '1';
-  if (action === 'support_retention') {\n    return handleSupportRetention(req, res);\n  }\n\n  if (action === 'sync' || action === 'nudge_only' || nudgeOnly) {
+  if (action === 'support_retention') {
+    return handleSupportRetention(req, res);
+  }
+
+  if (action === 'sync' || action === 'nudge_only' || nudgeOnly) {
     // Slightly higher limit for cron/admin sync
     const rlSync = rateLimit(req, { limit: 10, windowMs: 60_000, suffix: 'fadded-sync' });
     applyRateLimitHeaders(res, rlSync);
