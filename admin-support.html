@@ -315,6 +315,7 @@
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
     });
+    window.supabaseClient = sb;
 
     let currentFilter = 'open';
     let tickets = [];
