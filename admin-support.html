@@ -734,7 +734,7 @@
         body: String(body || '').slice(0, 4000)
       }).select('id').single();
       if (error) { alert(error.message || 'Failed to send'); return false; }
-      if (sentMessage && sentMessage.id) notifySupportMessage(sentMessage.id).catch(function(err){ console.warn('customer support push failed', err); });
+      if (sentMessage && sentMessage.id) { try { await notifySupportMessage(sentMessage.id); } catch (pushError) { console.warn('customer support push failed', pushError); } }
       input.value = '';
       if (fileEl) fileEl.value = '';
       await loadMessages(activeTicketId);
