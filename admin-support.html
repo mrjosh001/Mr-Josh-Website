@@ -497,7 +497,7 @@
       var btn = document.getElementById('supportPushEnable');
       if (!btn || !window.MJHubPush) return;
       try {
-        var state = await window.MJHubPush.status({ appId: 'admin_support' });
+        var state = await window.MJHubPush.status();
         btn.textContent = state.subscribed && state.permission === 'granted' ? 'Support Alerts Enabled' : 'Enable Support Alerts';
         btn.disabled = !!(state.subscribed && state.permission === 'granted');
       } catch (_) {}
@@ -506,7 +506,7 @@
       var btn = document.getElementById('supportPushEnable');
       if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
       try {
-        await window.MJHubPush.enable({ appId: 'admin_support' });
+        await window.MJHubPush.enable();
         if (btn) btn.textContent = 'Support Alerts Enabled';
         alert('Support push notifications are enabled for this admin app.');
       } catch (e) {
@@ -634,6 +634,15 @@
       document.getElementById('threadPane').classList.add('hide-mobile');
     }
 
+    function isAdminThreadVisible(ticketId) {
+      const active = document.getElementById('threadActive');
+      const pane = document.getElementById('threadPane');
+      return document.visibilityState === 'visible' &&
+        String(activeTicketId || '') === String(ticketId || '') &&
+        !!active && active.style.display !== 'none' &&
+        !!pane && !pane.classList.contains('hide-mobile');
+    }
+
     async function loadMessages(ticketId) {
       const box = document.getElementById('threadMessages');
       box.innerHTML = '<div style="color:var(--muted);font-size:13px;">Loading…</div>';
@@ -642,9 +651,10 @@
         box.innerHTML = '<div style="color:var(--danger);">' + escapeHtml(error.message) + '</div>';
         return;
       }
-      if (document.visibilityState === 'visible' && activeTicketId === ticketId) {
+      const incomingIds = (data || []).filter(m => m.sender_type === 'user' || m.sender_type === 'customer').map(m => m.id).filter(Boolean);
+      if (isAdminThreadVisible(ticketId) && incomingIds.length) {
         await sb.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
-        await sb.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: null });
+        await sb.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: incomingIds });
       }
       const { data: fresh } = await sb.from('support_messages').select('*').eq('ticket_id', ticketId).order('created_at', { ascending: true });
       const rows = fresh || data || [];
@@ -652,7 +662,7 @@
         const cls = m.sender_type === 'admin' ? 'admin' : (m.sender_type === 'system' ? 'system' : 'user');
         const who = m.sender_type === 'admin' ? 'You' : (m.sender_type === 'system' ? 'System' : 'Customer');
         const receipt = m.sender_type === 'admin' ? (m.read_at ? '<span class="mj-receipt read">✓✓ Read</span>' : (m.delivered_at ? '<span class="mj-receipt">✓ Delivered</span>' : '<span class="mj-receipt">Sent</span>')) : '';
-        return `<div class="bubble ${cls}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}${receipt ? '<div class="mj-message-status">'+receipt+'</div>' : ''}</div>`;
+        return `<div class="bubble ${cls}" data-mj-message-id="${escapeHtml(m.id)}"><div class="who">${who} · ${fmtTime(m.created_at)}</div>${formatSupportBody(m.body)}${receipt ? '<div class="mj-message-status">'+receipt+'</div>' : ''}</div>`;
       }).join('') || '<div style="color:var(--muted);">No messages yet.</div>';
       box.scrollTop = box.scrollHeight;
       hydrateAdminShots();
@@ -661,6 +671,18 @@
     function insertQuick(text) {
       const input = document.getElementById('replyInput');
       if (input) { input.value = text; input.focus(); }
+    }
+
+    async function notifySupportMessage(messageId) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !session.access_token) return;
+      const response = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ resource: 'support_push', action: 'message', message_id: messageId })
+      });
+      const result = await response.json().catch(function(){ return {}; });
+      if (!response.ok || !result.success) throw new Error(result.message || 'Push request failed');
     }
 
     async function sendAdminReply(e) {
@@ -682,13 +704,14 @@
         }
       }
       const { data: { user } } = await sb.auth.getUser();
-      const { error } = await sb.from('support_messages').insert({
+      const { data: sentMessage, error } = await sb.from('support_messages').insert({
         ticket_id: activeTicketId,
         sender_type: 'admin',
         sender_id: user && user.id,
         body: String(body || '').slice(0, 4000)
-      });
+      }).select('id').single();
       if (error) { alert(error.message || 'Failed to send'); return false; }
+      if (sentMessage && sentMessage.id) notifySupportMessage(sentMessage.id).catch(function(err){ console.warn('customer support push failed', err); });
       input.value = '';
       if (fileEl) fileEl.value = '';
       await loadMessages(activeTicketId);
@@ -720,25 +743,27 @@
         if (messagesChannel) sb.removeChannel(messagesChannel);
         messagesChannel = sb.channel('admin-support-messages')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, (payload) => {
-            if (payload.eventType === 'INSERT' && payload.new && payload.new.sender_type === 'user') {
+            if (payload.eventType === 'INSERT' && payload.new && (payload.new.sender_type === 'user' || payload.new.sender_type === 'customer')) {
               sb.rpc('mj_support_mark_delivered', { p_ticket_id: payload.new.ticket_id }).catch(function (e) { console.warn('support delivered receipt', e); });
             }
-            if (payload.new && payload.new.ticket_id === activeTicketId && document.visibilityState === 'visible') loadMessages(activeTicketId);
-            loadTickets();
-            if (payload.new && payload.new.sender_type === 'user') {
-              document.title = '● New message — Support Desk';
-              try {
-                if (window.Notification && Notification.permission === 'granted') {
-                  new Notification('MJ Hub Support', { body: 'New customer message', tag: 'mj-support' });
-                }
-              } catch (e) {}
+            if (payload.eventType === 'UPDATE' && payload.new && payload.new.ticket_id === activeTicketId) {
+              const bubble = document.querySelector('#threadMessages [data-mj-message-id="' + payload.new.id + '"]');
+              if (bubble && payload.new.sender_type === 'admin') {
+                let status = bubble.querySelector('.mj-message-status');
+                if (!status) { status = document.createElement('div'); status.className = 'mj-message-status'; bubble.appendChild(status); }
+                status.innerHTML = payload.new.read_at ? '<span class="mj-receipt read">✓✓ Read</span>' : (payload.new.delivered_at ? '<span class="mj-receipt">✓ Delivered</span>' : '<span class="mj-receipt">Sent</span>');
+              }
             }
+            if (payload.eventType === 'INSERT' && payload.new && payload.new.ticket_id === activeTicketId && isAdminThreadVisible(activeTicketId)) {
+              loadMessages(activeTicketId);
+            }
+            loadTickets();
           })
           .subscribe();
       } catch (e) { console.warn('realtime', e); }
     }
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible' && activeTicketId) loadMessages(activeTicketId);
+      if (activeTicketId && isAdminThreadVisible(activeTicketId)) loadMessages(activeTicketId);
     });
     document.addEventListener('click', function (e) {
       const img = e.target && e.target.closest && e.target.closest('img.mj-shot');
