@@ -8184,17 +8184,42 @@ window.enableAdminSupportPush = async function() {
    alert(e.message || 'Could not enable support alerts');
  }
 };
-(async function(){
+async function refreshAdminSupportPushButton() {
  const btn = document.getElementById('adminSupportPushBtn');
  if (!btn || !window.MJHubPush) return;
+ btn.disabled = false;
+ btn.textContent = 'Checking Admin Alerts…';
  try {
    const state = await window.MJHubPush.status({ appId: 'admin_support' });
    if (state.subscribed && state.permission === 'granted') {
      btn.textContent = 'Admin Alerts Enabled';
      btn.disabled = true;
+     btn.title = state.syncError
+       ? 'Notifications are enabled on this device. Server sync will retry when you sign in.'
+       : 'Admin alerts remain enabled on this device, including after logout.';
+   } else if (state.permission === 'denied') {
+     btn.textContent = 'Notifications Blocked';
+     btn.title = 'Allow notifications for MJ HUB in your browser or device settings.';
+   } else {
+     btn.textContent = 'Enable Admin Alerts';
+     btn.title = 'Enable once. Your browser will retain this setting across visits and logout.';
    }
- } catch (_) {}
-})();
+ } catch (e) {
+   btn.disabled = false;
+   btn.textContent = 'Enable Admin Alerts';
+   btn.title = e && e.message ? e.message : 'Could not check notification status.';
+ }
+}
+refreshAdminSupportPushButton();
+// Retry server-side subscription reconciliation after the saved admin session
+// has restored. This never requests notification permission again.
+if (typeof sb !== 'undefined' && sb.auth) {
+ sb.auth.onAuthStateChange(function(event) {
+   if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+     refreshAdminSupportPushButton();
+   }
+ });
+}
 
 /* Support desk unread indicator */
 (function() {
