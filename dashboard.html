@@ -2037,6 +2037,9 @@ body::after {
 .mj-support-msg.bot { align-self: flex-start; background: var(--card2, #151d30); }
 .mj-support-msg.user { align-self: flex-end; background: var(--primary); color: #fff; }
 .mj-support-msg.sys { align-self: center; background: transparent; color: var(--muted); font-size: 12px; text-align: center; max-width: 95%; }
+.mj-support-receipt { display:block; margin-top:4px; text-align:right; font-size:10px; line-height:1.2; color:rgba(255,255,255,.78); }
+.mj-support-receipt.read { color:#bfdbfe; font-weight:800; }
+.mj-support-receipt.sent { color:rgba(255,255,255,.62); }
 .mj-support-actions { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--border); }
 .mj-support-actions button {
   padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border);
@@ -6223,7 +6226,7 @@ window.mjOpenShot = function(src) {
   box.style.display = 'flex';
 };
 
-window.mjSupportAppend = function(role, text) {
+window.mjSupportAppend = function(role, text, message) {
   var box = document.getElementById('mjSupportMessages');
   if (!box) return;
   var d = document.createElement('div');
@@ -6281,9 +6284,41 @@ window.mjSupportAppend = function(role, text) {
   }
   if (!hasImg) flushText(raw);
   else if (last < raw.length) flushText(raw.slice(last));
+  if (role === 'user' && message && message.id) {
+    d.setAttribute('data-mj-message-id', String(message.id));
+    var receipt = document.createElement('span');
+    receipt.className = 'mj-support-receipt sent';
+    receipt.textContent = message.read_at ? '✓✓ Read' : (message.delivered_at ? '✓ Delivered' : 'Sent');
+    if (message.read_at) receipt.className = 'mj-support-receipt read';
+    d.appendChild(receipt);
+  }
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
   if (window.mjHydrateShots) window.mjHydrateShots(box);
+  return d;
+};
+
+window.mjSupportUpdateReceipt = function(message) {
+  if (!message || !message.id) return;
+  var nodes = document.querySelectorAll('#mjSupportMessages [data-mj-message-id]');
+  nodes.forEach(function(node) {
+    if (node.getAttribute('data-mj-message-id') !== String(message.id)) return;
+    var receipt = node.querySelector('.mj-support-receipt');
+    if (!receipt) { receipt = document.createElement('span'); node.appendChild(receipt); }
+    receipt.className = 'mj-support-receipt' + (message.read_at ? ' read' : (message.delivered_at ? '' : ' sent'));
+    receipt.textContent = message.read_at ? '✓✓ Read' : (message.delivered_at ? '✓ Delivered' : 'Sent');
+  });
+};
+
+window.mjSupportMarkIncomingRead = async function(ticketId) {
+  if (!supabaseClient || !ticketId || String(window._mjSup.ticketId || '') !== String(ticketId)) return;
+  var panel = document.getElementById('mjSupportPanel');
+  var chat = document.getElementById('mjSupportChat');
+  if (document.visibilityState !== 'visible' || !panel || !panel.classList.contains('open') || !chat || !chat.classList.contains('active')) return;
+  try {
+    await supabaseClient.rpc('mj_support_mark_delivered', { p_ticket_id: ticketId });
+    await supabaseClient.rpc('mj_support_mark_read', { p_ticket_id: ticketId, p_message_ids: null });
+  } catch (e) { console.warn('Support read receipt update failed', e); }
 };
 
 window.mjSupportSetActions = function(buttons) {
@@ -6397,11 +6432,14 @@ window.mjSupportOpenTicket = async function(id) {
   document.getElementById('mjSupportStatus').textContent = 'Connected';
   mjSupportSetActions([]);
   if (!supabaseClient) return;
-  var { data } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
-  (data || []).forEach(function(m) {
-    if (m.sender_type === 'user') mjSupportAppend('user', m.body);
-    else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body);
-    else mjSupportAppend('sys', m.body);
+  var { data, error } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
+  if (error) { mjSupportAppend('bot', 'Could not load this conversation. Please try again.'); return; }
+  await window.mjSupportMarkIncomingRead(id);
+  var { data: fresh } = await supabaseClient.from('support_messages').select('*').eq('ticket_id', id).order('created_at', { ascending: true });
+  (fresh || data || []).forEach(function(m) {
+    if (m.sender_type === 'user') mjSupportAppend('user', m.body, m);
+    else if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') mjSupportAppend('bot', m.body, m);
+    else mjSupportAppend('sys', m.body, m);
   });
   try {
     var lastAdmin = (data || []).filter(function(m){
@@ -6440,12 +6478,19 @@ window.mjSupportSubscribe = function(ticketId) {
   try {
     if (window._mjSup.channel) supabaseClient.removeChannel(window._mjSup.channel);
     window._mjSup.channel = supabaseClient.channel('mj-sup-' + ticketId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages', filter: 'ticket_id=eq.' + ticketId }, function(payload) {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages', filter: 'ticket_id=eq.' + ticketId }, async function(payload) {
         var m = payload.new;
-        if (m && m.sender_type === 'admin') mjSupportAppend('bot', m.body);
+        if (!m) return;
+        if (m.sender_type === 'admin' || m.sender_type === 'agent' || m.sender_type === 'staff' || m.sender_type === 'support') {
+          mjSupportAppend('bot', m.body, m);
+          await window.mjSupportMarkIncomingRead(ticketId);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_messages', filter: 'ticket_id=eq.' + ticketId }, function(payload) {
+        if (payload.new) window.mjSupportUpdateReceipt(payload.new);
       })
       .subscribe();
-  } catch (e) {}
+  } catch (e) { console.warn('Support realtime subscription failed', e); }
 };
 
 window.mjSupportConnectHuman = async function() {
@@ -6617,10 +6662,17 @@ window.mjSupportSend = async function(e) {
     }
     var sess = await supabaseClient.auth.getSession();
     var user = sess && sess.data && sess.data.session && sess.data.session.user;
-    var { error } = await supabaseClient.from('support_messages').insert({
+    var { data: sentMessage, error } = await supabaseClient.from('support_messages').insert({
       ticket_id: tid, sender_type: 'user', sender_id: user && user.id, body: String(text || '').slice(0, 4000)
-    });
+    }).select('id,ticket_id,sender_type,created_at,delivered_at,read_at').single();
     if (error) mjSupportAppend('bot', 'Message failed. Please try again.');
+    else {
+      var sentBubble = document.querySelector('#mjSupportMessages .mj-support-msg.user:last-child');
+      if (sentBubble && sentMessage) {
+        sentBubble.setAttribute('data-mj-message-id', String(sentMessage.id));
+        var sentReceipt = document.createElement('span'); sentReceipt.className = 'mj-support-receipt sent'; sentReceipt.textContent = 'Sent'; sentBubble.appendChild(sentReceipt);
+      }
+    }
     return false;
   }
 
