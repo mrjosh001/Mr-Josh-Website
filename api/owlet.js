@@ -6,9 +6,9 @@ import { sendPushToUser, sendPushToAdmins } from '../lib/push.js';
 import { applyApiCors, handleOptions } from '../lib/secure.js';
 
 /**
- * /api/owlet — MJ Boosters (JAP + CasperSMM Perfect Panel v2). Customer catalog shows both.
- * Also serves Telegram Premium & Stars via SMMKings (source 'smmkings'), limited to the two
- * supplier categories "Buy Telegram Premium to any @user" and "Buy Telegram Stars to any @user".
+ * /api/owlet — MJ Boosters (JAP + CasperSMM + non-Telegram SMMKings).
+ * Also serves Telegram Premium & Stars via SMMKings (source 'smmkings') through a separate Telegram catalog.
+ * The two Telegram categories are excluded from the MJ Boosters storefront and its KING sync scope.
  * Docs: https://theowlet.com/api
  * Base: POST https://theowlet.com/api/v2
  *
