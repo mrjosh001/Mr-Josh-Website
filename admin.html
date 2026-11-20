@@ -7786,7 +7786,7 @@ function paintBoosterCatalog(rows, tbody, cards, provider) {
   };
   if (tbody) {
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No services on this page.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No services on this page.</td></tr>';
     } else {
       tbody.innerHTML = rows.map(function(s) {
         const st = s.is_available === false ? 'Hidden' : 'Active';
@@ -7894,7 +7894,7 @@ async function loadBoosterSourceFromDb(provider) {
         + '<button class="btn btn-ghost btn-sm" style="width:auto" ' + (page >= totalPages ? 'disabled' : '') + ' onclick="smmkingsBoostersPage=smmkingsBoostersPage+1;loadBoosterSourceFromDb(\'smmkings_boosters\')">Next</button>';
     }
   } catch (e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="empty-state">' + (e.message||e) + '</td></tr>';
   }
 }
 
