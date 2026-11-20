@@ -92,10 +92,10 @@ const BOOSTER_PLATFORM_KEYS = {
   likee: ['likee'], tumblr: ['tumblr'], quora: ['quora'], onlyfans: ['onlyfans', 'only fans']
 };
 function detectedBoosterPlatforms(value) {
-  const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
   return Object.keys(BOOSTER_PLATFORM_KEYS).filter(id => (BOOSTER_PLATFORM_KEYS[id] || []).some(key => {
-    const token = String(key).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+    const token = String(key).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
     return token && (' ' + normalized + ' ').includes(' ' + token + ' ');
   }));
 }
