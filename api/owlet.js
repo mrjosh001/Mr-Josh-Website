@@ -74,6 +74,39 @@ function normalizeTelegramLink(raw) {
 /** Default source when unspecified (legacy). Customer catalog includes JAP, Casper, and KING. */
 const STORE_SOURCE = 'jap';
 const CUSTOMER_SOURCES = ['jap', 'casper', 'smmkings'];
+const BOOSTER_PLATFORM_KEYS = {
+  instagram: ['instagram', 'insta'],
+  tiktok: ['tiktok', 'tik tok', 'tik-tok'],
+  x: ['twitter', '(x)', 'tweet views', 'tweet likes', 'x followers', 'x views', 'x (twitter)', 'twitter (x)'],
+  youtube: ['youtube', 'youtuber'],
+  facebook: ['facebook'],
+  telegram: ['telegram'],
+  website: ['website', 'web traffic', 'website traffic', 'traffic from', 'seo traffic', 'hit traffic', 'referrer'],
+  spotify: ['spotify'],
+  whatsapp: ['whatsapp', 'whats app'],
+  snapchat: ['snapchat', 'snap chat', 'spotlight'],
+  google: ['google maps', 'google reviews', 'google my business', 'gmb', 'google'],
+  twitch: ['twitch'], discord: ['discord'], linkedin: ['linkedin'], threads: ['threads'],
+  reddit: ['reddit'], pinterest: ['pinterest'], soundcloud: ['soundcloud'], rumble: ['rumble'],
+  kick: ['kick.com', 'kick live', 'kick followers', 'kick views'], vk: ['vkontakte', 'vk.com', 'vk likes', 'vk followers', 'vk groups'],
+  likee: ['likee'], tumblr: ['tumblr'], quora: ['quora'], onlyfans: ['onlyfans', 'only fans']
+};
+function detectedBoosterPlatforms(value) {
+  const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+  if (!normalized) return [];
+  return Object.keys(BOOSTER_PLATFORM_KEYS).filter(id => (BOOSTER_PLATFORM_KEYS[id] || []).some(key => {
+    const token = String(key).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();
+    return token && (' ' + normalized + ' ').includes(' ' + token + ' ');
+  }));
+}
+function boosterServicePlatform(service) {
+  const byName = detectedBoosterPlatforms(service && service.name);
+  const byCategory = detectedBoosterPlatforms(service && service.category);
+  if (byName.length === 1) return byName[0];
+  if (byCategory.length === 1) return byCategory[0];
+  const shared = byName.filter(id => byCategory.includes(id));
+  return shared.length === 1 ? shared[0] : null;
+}
 function normalizePanelSource(src) {
   const s = String(src || '').toLowerCase().trim();
   if (s === 'owlet') return 'owlet';
@@ -759,6 +792,7 @@ async function handleCatalog(req, res) {
   // Public to signed-in users — categories + optional services
   const category = (req.query?.category || '').toString().trim();
   const q = (req.query?.q || '').toString().trim().toLowerCase();
+  const platform = (req.query?.platform || '').toString().trim().toLowerCase();
   const page = Math.max(1, parseInt(req.query?.page || '1', 10) || 1);
   const pageSize = Math.min(100, Math.max(12, parseInt(req.query?.page_size || '48', 10) || 48));
   const from = (page - 1) * pageSize;
@@ -829,6 +863,10 @@ async function handleCatalog(req, res) {
     }
     if (orParts.length) query = query.or(orParts.join(','));
     query = query.limit(5000);
+  } else if (platform) {
+    // Filter by service identity before pagination so platform pages do not
+    // lose matching rows behind unrelated services in the same category.
+    query = query.limit(5000);
   } else {
     query = query.range(from, to);
   }
@@ -844,6 +882,14 @@ async function handleCatalog(req, res) {
       const hay = `${s.name || ''} ${s.category || ''} ${s.service_id || ''}`.toLowerCase();
       return tokens.every(t => hay.includes(t));
     });
+  }
+  if (platform) {
+    rows = rows.filter(s => platform === 'other'
+      ? !boosterServicePlatform(s)
+      : boosterServicePlatform(s) === platform);
+  }
+
+  if (tokens.length || platform) {
     const totalMatched = rows.length;
     rows = rows.slice(from, from + pageSize);
     rows = rows.map(s => ({
