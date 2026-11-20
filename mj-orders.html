@@ -7,13 +7,147 @@
   <meta name="theme-color" content="#0b1220" />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="/css/graceful.css" />
-  <link rel="stylesheet" href="/css/mj-orders-page.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/js/graceful.js" defer></script>
+  <style>
+    :root{--bg:#060a12;--bg2:#0b1220;--card:rgba(15,23,42,.72);--text:#f1f5f9;--muted:#94a3b8;--border:rgba(148,163,184,.14);--blue:#3b82f6;--success:#34d399;--danger:#f87171;--radius:20px;--safe-b:env(safe-area-inset-bottom,0px)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--text);min-height:100vh;background:radial-gradient(900px 400px at 10% -10%,rgba(59,130,246,.22),transparent 55%),var(--bg);padding-bottom:calc(88px + var(--safe-b))}
+    .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+    .back{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--card);border:1px solid var(--border);color:var(--text);text-decoration:none}
+    .topbar h1{font-size:18px;font-weight:800;background:linear-gradient(135deg,#93c5fd,#3b82f6 55%,#1d4ed8);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .wrap{max-width:560px;margin:0 auto;padding:16px}
+    .list{display:flex;flex-direction:column;gap:12px}
+    .card{background:linear-gradient(145deg,rgba(59,130,246,.1),rgba(15,23,42,.45));border:1px solid rgba(96,165,250,.22);border-radius:var(--radius);padding:16px}
+    .title{font-size:14px;font-weight:800;line-height:1.35}
+    .meta{margin-top:8px;font-size:12px;font-weight:700;color:#93c5fd;display:flex;flex-wrap:wrap;gap:8px}
+    .btn-view{border:none;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-weight:700;font-size:12px;padding:10px 14px;border-radius:12px;margin-top:12px}
+    .empty{text-align:center;padding:44px 18px;border-radius:var(--radius);border:1px dashed var(--border);background:var(--card)}
+    .modal{display:none;position:fixed;inset:0;z-index:1000;align-items:flex-end;justify-content:center;background:rgba(2,6,23,.55);backdrop-filter:blur(8px);padding:12px}
+    .modal.open{display:flex}
+    .sheet{width:100%;max-width:420px;max-height:90vh;overflow:auto;background:#fff;color:#0f172a;border-radius:24px 24px 0 0;box-shadow:0 -12px 40px rgba(15,23,42,.18)}
+    .sheet-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px;border-bottom:1px solid #eef2f7;position:sticky;top:0;background:#fff;z-index:2}
+    .sheet-h strong{font-size:16px;font-weight:800;display:block}
+    .sheet-h span{font-size:12px;color:#64748b;font-weight:600}
+    .sheet-h button{border:none;background:#f1f5f9;width:36px;height:36px;border-radius:12px;cursor:pointer;font-size:16px}
+    .sheet-b{padding:16px 18px 28px}
+    .la-btn{flex:1;min-width:96px;border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:12px;border-radius:14px}
+    .la-btn.copy{background:#eef2ff;color:#4338ca}
+    .log-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .vpn-banner{padding:13px 14px;border-radius:14px;margin-bottom:14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:13px;font-weight:600;line-height:1.5}
+    .cred-card{border-radius:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0}
+    .cred-line{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
+    .cred-k{min-width:88px;font-weight:800;font-size:12px;color:#64748b}
+    .cred-k.pass{color:#dc2626}
+    .cred-v{flex:1;font-weight:700;word-break:break-all;color:#0f172a;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+    .cred-v button{margin-left:8px;border:none;background:#e0e7ff;color:#3730a3;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit}
+    .toast{position:fixed;left:50%;bottom:calc(90px + var(--safe-b));transform:translateX(-50%);z-index:1100;background:#0f172a;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:700;display:none}
+    .toast.show{display:block}
+    .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;justify-content:space-around;padding:10px 8px calc(10px + var(--safe-b));background:color-mix(in srgb,var(--bg2) 88%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--border)}
+    .bottom-nav a{text-decoration:none;color:var(--muted);font-size:10px;font-weight:700;text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center}
+    .bottom-nav a.active{color:#60a5fa}
+    .bottom-nav a i{font-size:16px}
+  </style>
 </head>
 <body>
-  <div id="root-fallback" style="padding:24px;font-family:system-ui;color:#94a3b8">Loading orders…</div>
-  <script src="/js/mj-orders-page.js"></script>
+  <div class="topbar">
+    <a class="back" href="dashboard.html"><i class="fa-solid fa-arrow-left"></i></a>
+    <div><h1>My Orders</h1></div>
+  </div>
+  <div class="wrap"><div class="list" id="list"><div class="empty">Loading…</div></div></div>
+
+  <div class="modal" id="modal">
+    <div class="sheet">
+      <div class="sheet-h">
+        <div><strong id="mTitle">Order</strong><span id="mSub"></span></div>
+        <button type="button" id="mClose">✕</button>
+      </div>
+      <div class="sheet-b" id="mBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <nav class="bottom-nav">
+    <a href="dashboard.html"><i class="fa-solid fa-house"></i>Home</a>
+    <a href="mj-orders.html" class="active"><i class="fa-solid fa-receipt"></i>Orders</a>
+    <a href="dashboard.html#cart"><i class="fa-solid fa-cart-shopping"></i>Cart</a>
+    <a href="dashboard.html#profile"><i class="fa-solid fa-user"></i>Profile</a>
+  </nav>
+
+<script>
+const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxxam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NDY0MzMsImV4cCI6MjA2OTUyMjQzM30.0vQ8yH6nK5xJ3mL9pR2sT4uV6wX8yZ0aB1cD3eF5gH7';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function copyText(s){ try{ await navigator.clipboard.writeText(s); toast('Copied'); }catch(e){ toast('Copy failed'); } }
+
+/** Show EXACT login_credentials from admin customer view — no second format. */
+function renderCredentials(text){
+  const lines = String(text||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return '<div class="cred-card">No credentials yet.</div>';
+  const rows = lines.map(line=>{
+    const m = line.match(/^([^:]{1,40}):\s*(.+)$/);
+    if(m){
+      const k=m[1].trim(), v=m[2].trim();
+      const pass = /pass/i.test(k) ? ' pass' : '';
+      return '<div class="cred-line"><span class="cred-k'+pass+'">'+esc(k)+'</span><span class="cred-v">'+esc(v)+' <button type="button" data-copy="'+esc(v).replace(/"/g,'&quot;')+'">Copy</button></span></div>';
+    }
+    return '<div class="cred-line"><span class="cred-v">'+esc(line)+' <button type="button" data-copy="'+esc(line).replace(/"/g,'&quot;')+'">Copy</button></span></div>';
+  }).join('');
+  return '<div class="cred-card">'+rows+'</div>';
+}
+
+function openOrder(o){
+  document.getElementById('mTitle').textContent = o.product_name || o.product || 'Order';
+  document.getElementById('mSub').textContent = (o.quantity||1)+' log · '+(o.order_id||'');
+  const creds = String(o.login_credentials||'').trim();
+  const body = document.getElementById('mBody');
+  body.innerHTML =
+    '<div class="log-actions"><button type="button" class="la-btn copy" id="copyAll">Copy All</button></div>'+
+    '<div class="vpn-banner">Please use a <strong>GOOD VPN</strong> to login and add 2-step verification after purchase.</div>'+
+    renderCredentials(creds);
+  body.querySelector('#copyAll').onclick = ()=>copyText(creds);
+  body.querySelectorAll('[data-copy]').forEach(btn=>{
+    btn.onclick = ()=>copyText(btn.getAttribute('data-copy'));
+  });
+  document.getElementById('modal').classList.add('open');
+}
+
+document.getElementById('mClose').onclick = ()=>document.getElementById('modal').classList.remove('open');
+document.getElementById('modal').onclick = (e)=>{ if(e.target.id==='modal') e.currentTarget.classList.remove('open'); };
+
+async function boot(){
+  const list = document.getElementById('list');
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){ list.innerHTML = '<div class="empty"><h3>Sign in required</h3><p>Open the app and log in first.</p><a href="dashboard.html" style="color:#60a5fa">Go to dashboard</a></div>'; return; }
+  const uid = session.user.id;
+  let { data, error } = await sb.from('orders').select('*').eq('user_id', uid).order('created_at',{ascending:false}).limit(100);
+  if(error || !data || !data.length){
+    const r2 = await sb.from('orders').select('*').eq('customer_user_id', uid).order('created_at',{ascending:false}).limit(100);
+    if(!r2.error && r2.data) data = r2.data;
+  }
+  if(error && (!data || !data.length)){
+    const email = session.user.email;
+    if(email){
+      const r3 = await sb.from('orders').select('*').eq('customer_email', email).order('created_at',{ascending:false}).limit(100);
+      if(!r3.error) data = r3.data;
+    }
+  }
+  if(!data || !data.length){
+    list.innerHTML = '<div class="empty"><h3>No orders yet</h3><p>Completed log orders will show here.</p></div>';
+    return;
+  }
+  list.innerHTML = data.map((o,i)=>{
+    const name = o.product_name || o.product || o.service_name || 'Order';
+    const oid = o.order_id || o.id || '';
+    const st = o.status || 'completed';
+    return '<div class="card"><div class="title">'+esc(name)+'</div><div class="meta"><span>'+esc(st)+'</span><span>'+esc(oid)+'</span></div><button type="button" class="btn-view" data-idx="'+i+'">View credentials</button></div>';
+  }).join('');
+  list.querySelectorAll('.btn-view').forEach(btn=>{
+    btn.onclick = ()=>openOrder(data[Number(btn.getAttribute('data-idx'))]);
+  });
+}
+boot();
+</script>
 </body>
 </html>
