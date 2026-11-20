@@ -134,8 +134,7 @@ async function boot(){
     return;
   }
   let session = null;
-  // The main dashboard stores Supabase auth in sessionStorage. Use the same
-  // storage here and allow a brief restore window after page navigation.
+  // Restore the shared MJ HUB session, then verify the user with Supabase Auth.
   for (let attempt = 0; attempt < 6; attempt++) {
     const result = await sb.auth.getSession();
     session = result?.data?.session || null;
@@ -146,22 +145,36 @@ async function boot(){
     const refreshed = await sb.auth.refreshSession().catch(() => null);
     session = refreshed?.data?.session || null;
   }
-  if(!session?.user?.id){ list.innerHTML = '<div class="empty"><h3>Session expired</h3><p>Your login could not be restored. Please sign in again to view your orders.</p><a href="auth.html" style="color:#60a5fa">Sign in to MJ HUB</a></div>'; return; }
-  const uid = session.user.id;
-  let { data, error } = await sb.from('orders').select('*').eq('user_id', uid).order('created_at',{ascending:false}).limit(100);
-  if(error || !data || !data.length){
-    const r2 = await sb.from('orders').select('*').eq('customer_user_id', uid).order('created_at',{ascending:false}).limit(100);
-    if(!r2.error && r2.data) data = r2.data;
+  if (!session?.access_token) {
+    list.innerHTML = '<div class="empty"><h3>Session expired</h3><p>Your login could not be restored. Please sign in again to view your orders.</p><a href="auth.html" style="color:#60a5fa">Sign in to MJ HUB</a></div>';
+    return;
   }
-  if((!data || !data.length)){
-    const email = session.user.email;
-    if(email){
-      const r3 = await sb.from('orders').select('*').eq('customer_email', email).order('created_at',{ascending:false}).limit(100);
-      if(!r3.error) data = r3.data;
-    }
+
+  const verified = await sb.auth.getUser(session.access_token);
+  const uid = verified?.data?.user?.id;
+  if (verified?.error || !uid) {
+    console.error('[MJ Orders] Auth user verification failed:', verified?.error);
+    list.innerHTML = '<div class="empty"><h3>Could not verify your account</h3><p>Please refresh the page or sign in again.</p><button type="button" class="btn-view" onclick="location.reload()">Retry</button></div>';
+    return;
   }
-  if(!data || !data.length){
-    list.innerHTML = '<div class="empty"><h3>No orders yet</h3><p>Completed log orders will show here.</p></div>';
+
+  // The live public.orders schema is keyed by user_id. Do not fall back to
+  // customer_user_id/customer_email: neither column exists in this table.
+  const result = await sb.from('orders')
+    .select('id, order_id, product_name, product_type, quantity, amount, status, login_credentials, credentials_id, credentials_pass, description, guide_url, created_at')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (result.error) {
+    console.error('[MJ Orders] Database query failed:', result.error);
+    list.innerHTML = '<div class="empty"><h3>Orders could not be loaded</h3><p>We could not retrieve your order history right now. Your orders have not been deleted. Please retry.</p><button type="button" class="btn-view" onclick="location.reload()">Retry</button></div>';
+    return;
+  }
+
+  const data = result.data || [];
+  if (!data.length) {
+    list.innerHTML = '<div class="empty"><h3>We could not find orders for this account</h3><p>If you have purchased logs before, contact MJ HUB support so we can reconcile your account with your existing orders.</p><a href="dashboard.html#support" style="color:#60a5fa">Contact support</a></div>';
     return;
   }
   list.innerHTML = data.map((o,i)=>{
