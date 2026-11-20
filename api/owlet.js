@@ -615,7 +615,7 @@ async function handleList(req, res) {
       query = query.not('category', 'ilike', '%telegram premium to any%')
         .not('category', 'ilike', '%telegram stars to any%');
     } else {
-      query = query.or('category.ilike.%telegram premium to any%,category.ilike.%telegram stars to any%');
+      query = query.in('category', ['Buy Telegram Premium to any @user', 'Buy Telegram Stars to any @user']);
     }
   }
 
@@ -1544,7 +1544,7 @@ async function handleMyOrders(req, res) {
         const now = String(o.status || '').toLowerCase();
         const wasDone = /completed|partial|canceled|cancelled|refunded/.test(prev);
         if (!wasDone && /completed/i.test(now)) {
-          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
+          const isTgOrder = !!telegramKind({ category: o.category }) || /telegram\s+(premium|stars)/i.test(String(o.service_name || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order completed' : 'Boost order completed',
@@ -1553,7 +1553,7 @@ async function handleMyOrders(req, res) {
             isTgOrder ? 'telegram' : 'booster'
           );
         } else if (!wasDone && /partial/i.test(now)) {
-          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
+          const isTgOrder = !!telegramKind({ category: o.category }) || /telegram\s+(premium|stars)/i.test(String(o.service_name || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order partial' : 'Boost order partial',
@@ -1562,7 +1562,7 @@ async function handleMyOrders(req, res) {
             isTgOrder ? 'telegram' : 'booster'
           );
         } else if (!wasDone && /cancel/i.test(now) && refunded > 0) {
-          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
+          const isTgOrder = !!telegramKind({ category: o.category }) || /telegram\s+(premium|stars)/i.test(String(o.service_name || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order refunded' : 'Boost order refunded',
