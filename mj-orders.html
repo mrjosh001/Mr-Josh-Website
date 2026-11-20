@@ -75,18 +75,7 @@
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-// Match auth.html and dashboard.html. sessionStorage is tab-scoped, so a
-// separate tab/PWA window otherwise appears signed out despite a valid login.
-// Migrate an existing tab-scoped Supabase session before switching to shared storage.
-try {
-    const authStorageKey = 'sb-atczodlljmlayvldxfmv-auth-token';
-    if (!window.localStorage.getItem(authStorageKey)) {
-        const legacySession = window.sessionStorage.getItem(authStorageKey);
-        if (legacySession) window.localStorage.setItem(authStorageKey, legacySession);
-    }
-} catch (storageMigrationError) { console.warn('MJ auth storage migration unavailable', storageMigrationError); }
-
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage } });
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage } });
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
 function esc(s){ return String(s||'').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
