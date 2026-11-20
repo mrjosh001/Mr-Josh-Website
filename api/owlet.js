@@ -32,15 +32,15 @@ const JAP_KEY = String(process.env.JAP_API_KEY || '').trim().replace(/^["']+|["'
 // CasperSMM — same Perfect Panel v2 shape (https://caspersmm.com/api/v2)
 const CASPER_URL = (process.env.CASPER_API_URL || 'https://caspersmm.com/api/v2').replace(/\/$/, '');
 const CASPER_KEY = String(process.env.CASPER_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
-// SMMKings — Telegram Premium & Stars only (same Perfect Panel v2 shape)
+// SMMKings — Telegram and general booster services (same Perfect Panel v2 shape)
 const SMMKINGS_URL = (process.env.SMMKINGS_API_URL || 'https://smmkings.com/api/v2').replace(/\/$/, '');
 const SMMKINGS_KEY = String(process.env.SMMKINGS_API_KEY || '').trim().replace(/^["']+|["']+$/g, '');
 const TELEGRAM_SOURCE = 'smmkings';
 /**
- * Only these two SMMKings categories are sold:
+ * The dedicated Telegram shop supports these two SMMKings categories:
  *   "Buy Telegram Premium to any @user"  -> premium (fixed price, quantity 1)
  *   "Buy Telegram Stars to any @user"    -> stars   (price per 1k, quantity = stars)
- * Anything else from SMMKings is ignored on sync, hidden, and rejected on order.
+ * All other SMMKings categories are routed to the regular MJ Boosters catalog.
  */
 function telegramKind(s) {
   const cat = String((s && s.category) || '');
@@ -71,7 +71,7 @@ function normalizeTelegramLink(raw) {
   if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(u)) return '';      // valid Telegram username
   return 'https://t.me/' + u;
 }
-/** Default source when unspecified (legacy). Customer catalog shows BOTH jap + casper. */
+/** Default source when unspecified (legacy). Customer catalog includes JAP, Casper, and KING. */
 const STORE_SOURCE = 'jap';
 const CUSTOMER_SOURCES = ['jap', 'casper', 'smmkings'];
 function normalizePanelSource(src) {
@@ -710,7 +710,7 @@ async function handleStatus(req, res) {
 
 
 async function handleEnableAllJap(req, res) {
-  // Admin: unhide every JAP service so customer store is not empty after first sync
+  // Admin: unhide all non-Telegram booster services from JAP, Casper, and KING.
   const { data, error, count } = await supabase
     .from('booster_services')
     .update({ is_available: true, updated_at: new Date().toISOString() })
@@ -726,8 +726,8 @@ async function handleEnableAllJap(req, res) {
   return res.status(200).json({
     success: true,
     message: n
-      ? ('Turned on ' + n + ' JAP services for customers')
-      : 'No JAP services in DB yet — run Sync JAP first',
+      ? ('Turned on ' + n + ' booster services for customers')
+      : 'No booster services in DB yet — run a supplier sync first',
     enabled: n
   });
 }
