@@ -74,11 +74,11 @@
 
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Y3pvZGxxam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NDY0MzMsImV4cCI6MjA2OTUyMjQzM30.0vQ8yH6nK5xJ3mL9pR2sT4uV6wX8yZ0aB1cD3eF5gH7';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s){ return String(s||'').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
 async function copyText(s){ try{ await navigator.clipboard.writeText(s); toast('Copied'); }catch(e){ toast('Copy failed'); } }
 
 /** Show EXACT login_credentials from admin customer view — no second format. */
@@ -90,9 +90,9 @@ function renderCredentials(text){
     if(m){
       const k=m[1].trim(), v=m[2].trim();
       const pass = /pass/i.test(k) ? ' pass' : '';
-      return '<div class="cred-line"><span class="cred-k'+pass+'">'+esc(k)+'</span><span class="cred-v">'+esc(v)+' <button type="button" data-copy="'+esc(v).replace(/"/g,'&quot;')+'">Copy</button></span></div>';
+      return '<div class="cred-line"><span class="cred-k'+pass+'">'+esc(k)+'</span><span class="cred-v">'+esc(v)+' <button type="button" data-copy="'+esc(v).replace(/"/g,'"')+'">Copy</button></span></div>';
     }
-    return '<div class="cred-line"><span class="cred-v">'+esc(line)+' <button type="button" data-copy="'+esc(line).replace(/"/g,'&quot;')+'">Copy</button></span></div>';
+    return '<div class="cred-line"><span class="cred-v">'+esc(line)+' <button type="button" data-copy="'+esc(line).replace(/"/g,'"')+'">Copy</button></span></div>';
   }).join('');
   return '<div class="cred-card">'+rows+'</div>';
 }
@@ -126,7 +126,7 @@ async function boot(){
     const r2 = await sb.from('orders').select('*').eq('customer_user_id', uid).order('created_at',{ascending:false}).limit(100);
     if(!r2.error && r2.data) data = r2.data;
   }
-  if(error && (!data || !data.length)){
+  if((!data || !data.length)){
     const email = session.user.email;
     if(email){
       const r3 = await sb.from('orders').select('*').eq('customer_email', email).order('created_at',{ascending:false}).limit(100);
