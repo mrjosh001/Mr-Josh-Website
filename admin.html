@@ -1589,11 +1589,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
  </tr>
  </thead>
  <tbody id="japTableBody">
- <tr><td colspan="9" class="empty-state">Click <strong>Sync JAP</strong> to pull catalog.</td></tr>
+ <tr><td colspan="11" class="empty-state">Click <strong>Sync JAP</strong> to pull catalog.</td></tr>
  </tbody>
  </table>
  </div>
@@ -1625,11 +1625,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
  </tr>
  </thead>
  <tbody id="casperTableBody">
- <tr><td colspan="9" class="empty-state">Click <strong>Sync Casper</strong> to pull catalog.</td></tr>
+ <tr><td colspan="11" class="empty-state">Click <strong>Sync Casper</strong> to pull catalog.</td></tr>
  </tbody>
  </table>
  </div>
@@ -1661,11 +1661,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
+ <th>ID</th><th>Name</th><th>Category</th><th>Supplier</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th>
  </tr>
  </thead>
  <tbody id="smmkingsTableBody">
- <tr><td colspan="9" class="empty-state">Click <strong>Sync SMMKings (TG)</strong> to pull Telegram services.</td></tr>
+ <tr><td colspan="11" class="empty-state">Click <strong>Sync SMMKings (TG)</strong> to pull Telegram services.</td></tr>
  </tbody>
  </table>
  </div>
@@ -1691,8 +1691,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </label>
  </div>
  <div class="desktop-only desktop-table table-wrap">
- <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th></tr></thead>
- <tbody id="smmkingsBoostersTableBody"><tr><td colspan="10" class="empty-state">Click Sync KING Boosters to load the non-Telegram SMMKings catalog.</td></tr></tbody></table>
+ <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Supplier</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th></tr></thead>
+ <tbody id="smmkingsBoostersTableBody"><tr><td colspan="11" class="empty-state">Click Sync KING Boosters to load the non-Telegram SMMKings catalog.</td></tr></tbody></table>
  </div>
  <div id="smmkingsBoostersMobileCards" class="mobile-only mobile-cards"></div>
  <div id="smmkingsBoostersPager" style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:14px;font-size:12px;color:var(--muted);"></div>
@@ -7761,7 +7761,21 @@ function boosterProfitHtml(s) {
   const color = p >= 0 ? '#34d399' : '#f87171';
   return '<span style="color:' + color + ';font-weight:700;">₦' + Math.round(p).toLocaleString() + '</span>';
 }
-window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], casper: [], smmkings: [] };
+window._boosterRowsByProvider = window._boosterRowsByProvider || { owlet: [], jap: [], casper: [], smmkings: [], smmkings_boosters: [] };
+
+function boosterSupplierLabel(provider) {
+  const key = String(provider || '').toLowerCase();
+  if (key === 'jap') return 'JAP';
+  if (key === 'casper') return 'CASP';
+  if (key === 'smmkings_boosters') return 'KING';
+  if (key === 'smmkings') return 'SMMKINGS';
+  return 'OWLET';
+}
+function boosterSupplierPill(provider) {
+  const label = boosterSupplierLabel(provider);
+  const colors = { JAP: 'background:rgba(59,130,246,.14);color:#60a5fa;border:1px solid rgba(59,130,246,.3)', CASP: 'background:rgba(168,85,247,.14);color:#c084fc;border:1px solid rgba(168,85,247,.3)', KING: 'background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.3)', SMMKINGS: 'background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.3)', OWLET: 'background:rgba(148,163,184,.14);color:#94a3b8;border:1px solid rgba(148,163,184,.3)' };
+  return '<span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.04em;' + colors[label] + '">' + label + '</span>';
+}
 
 function paintBoosterCatalog(rows, tbody, cards, provider) {
   provider = provider || 'owlet';
@@ -7772,7 +7786,7 @@ function paintBoosterCatalog(rows, tbody, cards, provider) {
   };
   if (tbody) {
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No services on this page.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No services on this page.</td></tr>';
     } else {
       tbody.innerHTML = rows.map(function(s) {
         const st = s.is_available === false ? 'Hidden' : 'Active';
@@ -7781,6 +7795,7 @@ function paintBoosterCatalog(rows, tbody, cards, provider) {
           + '<td>' + esc(String(s.service_id || '')) + '</td>'
           + '<td style="font-weight:600;">' + esc(s.name || '') + '</td>'
           + '<td>' + esc(s.category || '') + '</td>'
+          + '<td>' + boosterSupplierPill(provider) + '</td>'
           + '<td class="supplier-price">$' + Number(s.supplier_rate_usd || 0).toFixed(4) + '</td>'
           + '<td class="price">₦' + Number(s.price_ngn || 0).toLocaleString() + '</td>'
           + '<td>' + boosterProfitHtml(s) + '</td>'
@@ -7800,7 +7815,8 @@ function paintBoosterCatalog(rows, tbody, cards, provider) {
         return '<div class="mobile-card">'
           + '<div style="font-weight:700;margin-bottom:8px;">' + esc(s.name || '') + '</div>'
           + '<div class="row-line"><span>Category</span><span>' + esc(s.category || '') + '</span></div>'
-          + '<div class="row-line"><span>Supplier</span><span class="supplier-price">$' + Number(s.supplier_rate_usd || 0).toFixed(4) + '</span></div>'
+          + '<div class="row-line"><span>Supplier label</span>' + boosterSupplierPill(provider) + '</div>'
+          + '<div class="row-line"><span>Supplier cost</span><span class="supplier-price">$' + Number(s.supplier_rate_usd || 0).toFixed(4) + '</span></div>'
           + '<div class="row-line"><span>Sell</span><span class="price">₦' + Number(s.price_ngn || 0).toLocaleString() + '</span></div>'
           + '<div class="row-line"><span>Profit</span>' + boosterProfitHtml(s) + '</div>'
           + '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="editBoosterService(\'' + String(s.id).replace(/'/g, '') + '\',\'' + provider + '\')"><i class="fas fa-edit"></i> Edit Price</button>'
@@ -7862,14 +7878,14 @@ async function loadBoosterSourceFromDb(provider) {
       if (prev) catSel.value = prev;
     }
     if (!rows.length) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No services match this filter. Uncheck <strong>Hide unavailable</strong> to see synced (admin-hidden) services, or click Sync.</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="empty-state">No services match this filter. Uncheck <strong>Hide unavailable</strong> to see synced (admin-hidden) services, or click Sync.</td></tr>';
       if (cards) cards.innerHTML = '<div class="empty-state">No services match. Uncheck Hide unavailable to see synced services.</div>';
       const pager = cfg.pager && document.getElementById(cfg.pager);
       if (pager) pager.innerHTML = '';
       return;
     }
     // Always same layout as Owlet (Supplier / Sell / Profit / Edit)
-    paintBoosterCatalog(rows, tbody, cards, cfg.apiProvider || provider);
+    paintBoosterCatalog(rows, tbody, cards, provider);
     if (cfg.pager) {
       const pager = document.getElementById(cfg.pager);
       const totalPages = Math.max(1, Math.ceil(Number(data.total || 0) / 100));
@@ -7878,7 +7894,7 @@ async function loadBoosterSourceFromDb(provider) {
         + '<button class="btn btn-ghost btn-sm" style="width:auto" ' + (page >= totalPages ? 'disabled' : '') + ' onclick="smmkingsBoostersPage=smmkingsBoostersPage+1;loadBoosterSourceFromDb(\'smmkings_boosters\')">Next</button>';
     }
   } catch (e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="11" class="empty-state">' + (e.message||e) + '</td></tr>';
   }
 }
 
