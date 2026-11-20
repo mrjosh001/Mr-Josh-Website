@@ -75,7 +75,7 @@
 <script>
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmVzZSIsInJlZiI6ImF0Y3pvZGxsam1sYXl2bGR4Zm12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNzUyMzgsImV4cCI6MjEwMDY1MTIzOH0.ufthD-p7BmeD_B7xyuMM6PNPL8DmcL4AtRYgg-MuoLI';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage } });
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
 function esc(s){ return String(s||'').replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"'); }
@@ -118,8 +118,24 @@ document.getElementById('modal').onclick = (e)=>{ if(e.target.id==='modal') e.cu
 
 async function boot(){
   const list = document.getElementById('list');
-  const { data: { session } } = await sb.auth.getSession();
-  if(!session){ list.innerHTML = '<div class="empty"><h3>Sign in required</h3><p>Open the app and log in first.</p><a href="dashboard.html" style="color:#60a5fa">Go to dashboard</a></div>'; return; }
+  if (!window.supabase || !sb) {
+    list.innerHTML = '<div class="empty"><h3>Orders temporarily unavailable</h3><p>Could not load the secure account connection. Refresh this page to try again.</p></div>';
+    return;
+  }
+  let session = null;
+  // The main dashboard stores Supabase auth in sessionStorage. Use the same
+  // storage here and allow a brief restore window after page navigation.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const result = await sb.auth.getSession();
+    session = result?.data?.session || null;
+    if (session?.access_token) break;
+    await new Promise(resolve => setTimeout(resolve, 120));
+  }
+  if (!session?.access_token) {
+    const refreshed = await sb.auth.refreshSession().catch(() => null);
+    session = refreshed?.data?.session || null;
+  }
+  if(!session?.user?.id){ list.innerHTML = '<div class="empty"><h3>Sign in required</h3><p>Your MJ HUB login session could not be restored. Return to the dashboard and sign in again.</p><a href="dashboard.html" style="color:#60a5fa">Go to dashboard</a></div>'; return; }
   const uid = session.user.id;
   let { data, error } = await sb.from('orders').select('*').eq('user_id', uid).order('created_at',{ascending:false}).limit(100);
   if(error || !data || !data.length){
