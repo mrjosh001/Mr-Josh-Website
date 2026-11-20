@@ -743,8 +743,11 @@ async function loadServices(){
         <div class="card-top">
           <div class="icon">${iconFor(s.category,s.name)}</div>
           <div class="card-body">
-            <h3>${esc(s.name)}${s.refill ? '<span class="badge">Refill</span>' : ''}${sourcePillHtml(s.source)}</h3>
-            <div class="meta">Min ${min.toLocaleString()} · Instant start</div>
+            <h3>${esc(s.name)}${s.refill ? '<span class="badge">Refill</span>' : ''}</h3>
+            <div class="meta service-source-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px">
+              ${sourcePillHtml(s.source)}
+              <span>Min ${min.toLocaleString()} · Instant start</span>
+            </div>
           </div>
         </div>
         <div class="card-foot">
@@ -763,8 +766,8 @@ async function loadServices(){
 
 function sourceLabel(src){
   const s = String(src || 'jap').toLowerCase();
-  if (s === 'smmkings' || s === 'smmking') return { text: 'KING', cls: 'king' };
-  if (s === 'casper' || s === 'caspersmm') return { text: 'CASP', cls: 'casp' };
+  if (s === 'smmkings' || s === 'smmking' || s === 'smmkings_boosters' || s === 'smmkings-boosters') return { text: 'KING', cls: 'king' };
+  if (s === 'casper' || s === 'caspersmm' || s === 'casper_smm') return { text: 'CASP', cls: 'casp' };
   return { text: 'JAP', cls: 'jp' };
 }
 function sourcePillHtml(src){
