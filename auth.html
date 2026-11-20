@@ -1128,23 +1128,12 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
           } catch (e) {}
         })();
 
-// Migrate an existing tab-scoped Supabase session before switching to shared storage.
-try {
-    const authStorageKey = 'sb-atczodlljmlayvldxfmv-auth-token';
-    if (!window.localStorage.getItem(authStorageKey)) {
-        const legacySession = window.sessionStorage.getItem(authStorageKey);
-        if (legacySession) window.localStorage.setItem(authStorageKey, legacySession);
-    }
-} catch (storageMigrationError) { console.warn('MJ auth storage migration unavailable', storageMigrationError); }
-
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true,
-                // Use one origin-wide auth store so dashboard and order pages share the same
-                // authenticated session even when opened in a separate browser tab.
-                storage: window.localStorage
+                storage: window.sessionStorage
             }
         });
 

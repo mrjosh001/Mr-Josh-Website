@@ -4357,15 +4357,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 window.SUPABASE_URL = SUPABASE_URL;
 window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 
-// Migrate an existing tab-scoped Supabase session before switching to shared storage.
-try {
-    const authStorageKey = 'sb-atczodlljmlayvldxfmv-auth-token';
-    if (!window.localStorage.getItem(authStorageKey)) {
-        const legacySession = window.sessionStorage.getItem(authStorageKey);
-        if (legacySession) window.localStorage.setItem(authStorageKey, legacySession);
-    }
-} catch (storageMigrationError) { console.warn('MJ auth storage migration unavailable', storageMigrationError); }
-
 let supabaseClient = null;
 if (window.supabase) {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -4373,8 +4364,7 @@ if (window.supabase) {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            // Share the Supabase session with customer pages opened in another tab.
-            storage: window.localStorage
+            storage: window.sessionStorage
         }
     });
 }
