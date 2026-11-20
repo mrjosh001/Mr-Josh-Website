@@ -765,11 +765,11 @@ function sourceLabel(src){
   const s = String(src || 'jap').toLowerCase();
   if (s === 'smmkings' || s === 'smmking') return { text: 'KING', cls: 'king' };
   if (s === 'casper' || s === 'caspersmm') return { text: 'CASP', cls: 'casp' };
-  return { text: 'JP', cls: 'jp' };
+  return { text: 'JAP', cls: 'jp' };
 }
 function sourcePillHtml(src){
   const p = sourceLabel(src);
-  const title = p.cls === 'king' ? 'SMMKings' : (p.cls === 'casp' ? 'Server B' : 'Server A');
+  const title = p.cls === 'king' ? 'SMMKings · KING' : (p.cls === 'casp' ? 'CASP' : 'JAP');
   return '<span class="src-pill ' + p.cls + '" title="' + title + '">' + p.text + '</span>';
 }
 function openOrderFromEl(el){
