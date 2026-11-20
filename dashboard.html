@@ -4364,7 +4364,8 @@ if (window.supabase) {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            storage: window.sessionStorage
+            // Share the Supabase session with customer pages opened in another tab.
+            storage: window.localStorage
         }
     });
 }
