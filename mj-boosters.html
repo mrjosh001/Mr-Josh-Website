@@ -8,9 +8,7 @@
 <link rel="icon" href="https://atczodlljmlayvldxfmv.supabase.co/storage/v1/object/public/avatars/dark%20background%20log">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-(function(){try{var t=localStorage.getItem('mjhub-theme-pref')||localStorage.getItem('mjhub-theme')||'dark';if(t==='system'){try{t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}catch(e){t='dark';}}document.documentElement.setAttribute('data-theme',(t==='light')?'light':'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
-</script>
+<script src="/js/mj-theme.js"></script>
 <meta name="theme-color" content="#06080f">
 <style>
 :root[data-theme="dark"]{
@@ -279,7 +277,7 @@ button,input{font:inherit}
 <header class="header">
   <a class="back" href="dashboard.html#booster"><i class="fa-solid fa-arrow-left"></i></a>
   <h1>MJ Boosters</h1>
-  <button type="button" id="themeBtn" onclick="toggleTheme()" title="Theme" style="width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;margin-left:4px;">🌙</button>
+   
   <div class="bal" id="walletBal">₦—</div>
 </header>
 
@@ -484,8 +482,6 @@ const serviceMap = new Map();
 
 function syncThemeUi(){
   const dark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const btn = document.getElementById('themeBtn');
-  if (btn) btn.textContent = dark ? '🌙' : '☀️';
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#06080f' : '#f4f6fb');
   document.querySelectorAll('img.theme-mono-icon').forEach(img => {
@@ -504,13 +500,6 @@ function syncThemeUi(){
       img.src = dark ? 'https://cdn.simpleicons.org/x/ffffff' : 'https://cdn.simpleicons.org/x/000000';
     }
   });
-}
-function toggleTheme(){
-  const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  const next = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  try { localStorage.setItem('mjhub-theme', next); try{localStorage.setItem('mjhub-theme-pref', next);}catch(e){} } catch (e) {}
-  syncThemeUi();
 }
 
 async function authHeaders() {
@@ -1009,5 +998,6 @@ async function placeOrder(){
 
 </script>
   <script src="/js/haptic.js" defer></script>
+  <script src="/js/mj-pull-refresh.js" defer></script>
 </body>
 </html>
