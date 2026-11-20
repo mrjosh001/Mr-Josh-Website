@@ -721,6 +721,7 @@ async function loadServices(){
   const params=new URLSearchParams({action:'catalog', page:String(page), page_size:'48'});
   if(category) params.set('category', category);
   if(q) params.set('q', q);
+  if(activePlatform !== 'all') params.set('platform', activePlatform);
 
   document.getElementById('content').innerHTML='<div class="skel-card"></div><div class="skel-card"></div><div class="skel-card"></div><div class="skel-card"></div>';
   const res=await fetch('/api/owlet?'+params.toString(),{headers});
