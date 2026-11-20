@@ -470,7 +470,7 @@ let allRows = [];
         const source = String(o.source || o.provider || '').toLowerCase();
         const service = String(o.service_name || o.name || '').toLowerCase();
         const category = String(o.category || '').toLowerCase();
-        return source !== 'smmkings' && source !== 'telegram' &&
+        return source !== 'telegram' &&
           !/telegram/.test(service) && !/telegram/.test(category);
       });
       allRows = rows;
@@ -485,7 +485,8 @@ let allRows = [];
 
       const hasActive = rows.some(isActive);
       const hasCasper = rows.some(o => ['casper', 'caspersmm'].includes(String(o.source || o.provider || '').toLowerCase()));
-      const shouldPollLive = hasActive || hasCasper;
+      const hasKing = rows.some(o => ['smmkings', 'smmking'].includes(String(o.source || o.provider || '').toLowerCase()));
+      const shouldPollLive = hasActive || hasCasper || hasKing;
       if (shouldPollLive) {
         // Always reconcile Casper orders, including locally terminal orders, to refresh status/remains.
         fetch('/api/owlet?action=my_orders&page_size=50&live=1', { headers })
@@ -496,7 +497,7 @@ let allRows = [];
                 const source = String(o.source || o.provider || '').toLowerCase();
                 const service = String(o.service_name || o.name || '').toLowerCase();
                 const category = String(o.category || '').toLowerCase();
-                return source !== 'smmkings' && source !== 'telegram' &&
+                return source !== 'telegram' &&
                   !/telegram/.test(service) && !/telegram/.test(category);
               });
               renderFilters();
