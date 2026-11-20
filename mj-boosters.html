@@ -769,12 +769,14 @@ async function loadServices(){
 
 function sourceLabel(src){
   const s = String(src || 'jap').toLowerCase();
+  if (s === 'smmkings' || s === 'smmking') return { text: 'KING', cls: 'king' };
   if (s === 'casper' || s === 'caspersmm') return { text: 'CASP', cls: 'casp' };
   return { text: 'JP', cls: 'jp' };
 }
 function sourcePillHtml(src){
   const p = sourceLabel(src);
-  return '<span class="src-pill ' + p.cls + '" title="' + (p.cls === 'casp' ? 'Server B' : 'Server A') + '">' + p.text + '</span>';
+  const title = p.cls === 'king' ? 'SMMKings' : (p.cls === 'casp' ? 'Server B' : 'Server A');
+  return '<span class="src-pill ' + p.cls + '" title="' + title + '">' + p.text + '</span>';
 }
 function openOrderFromEl(el){
   const sid = el.getAttribute('data-sid');
