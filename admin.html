@@ -1019,6 +1019,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 <button class="nav-item" data-tab="boosters-jap" onclick="switchTab('boosters-jap')"><i class="fas fa-bolt"></i> JAP Boosters</button>
 <button class="nav-item" data-tab="boosters-casper" onclick="switchTab('boosters-casper')"><i class="fas fa-bolt"></i> Casper Boosters</button>
 <button class="nav-item" data-tab="boosters-smmkings" onclick="switchTab('boosters-smmkings')"><i class="fas fa-paper-plane"></i> SMMKings (Telegram)</button>
+<button class="nav-item" data-tab="boosters-smmkings-boosters" onclick="switchTab('boosters-smmkings-boosters')"><i class="fas fa-bolt"></i> KING Boosters</button>
 <button class="nav-item" data-tab="booster-orders" onclick="switchTab('booster-orders')"><i class="fas fa-receipt"></i> Booster Orders</button>
 <button class="nav-item" data-tab="telegram-orders" onclick="switchTab('telegram-orders')"><i class="fab fa-telegram"></i> Telegram Orders</button>
 </div>
@@ -1669,6 +1670,31 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </table>
  </div>
  <div id="smmkingsMobileCards" class="mobile-only mobile-cards"></div>
+ </div>
+ </div>
+
+ <div id="tab-boosters-smmkings-boosters" class="tab-content">
+ <div class="panel">
+ <div class="panel-header">
+ <div class="panel-title">KING Boosters Catalog · SMMKings</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;">
+ <button class="btn btn-primary btn-sm" id="btnSmmkingsBoostersSync" onclick="syncBoosterProvider('smmkings_boosters')"><i class="fas fa-sync"></i> Sync KING Boosters</button>
+ </div>
+ </div>
+ <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">Imports every SMMKings service except Telegram Premium and Telegram Stars. Telegram packages remain in the separate Telegram catalog. New services are added to MJ Boosters with the KING supplier label.</p>
+ <div id="smmkingsBoostersSyncProgress" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px;"></div>
+ <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+ <input type="search" id="smmkingsBoostersSearch" placeholder="Search KING service name or category…" style="flex:1;min-width:180px;" onkeydown="if(event.key==='Enter'){smmkingsBoostersPage=1;loadBoosterSourceFromDb('smmkings_boosters')}">
+ <select id="smmkingsBoostersCategoryFilter" onchange="smmkingsBoostersPage=1;loadBoosterSourceFromDb('smmkings_boosters')"><option value="">All categories</option></select>
+ <label style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap;">
+ <input type="checkbox" id="smmkingsBoostersHideUnavailable" checked onchange="smmkingsBoostersPage=1;loadBoosterSourceFromDb('smmkings_boosters')"> Hide unavailable
+ </label>
+ </div>
+ <div class="desktop-only desktop-table table-wrap">
+ <table><thead><tr><th>ID</th><th>Name</th><th>Category</th><th>Supplier USD</th><th>Sell ₦</th><th>Profit ₦</th><th>Min-Max</th><th>Refill</th><th>Status</th><th></th></tr></thead>
+ <tbody id="smmkingsBoostersTableBody"><tr><td colspan="10" class="empty-state">Click Sync KING Boosters to load the non-Telegram SMMKings catalog.</td></tr></tbody></table>
+ </div>
+ <div id="smmkingsBoostersMobileCards" class="mobile-only mobile-cards"></div>
  </div>
  </div>
 
@@ -7684,6 +7710,11 @@ window.addEventListener('DOMContentLoaded', async () => {
  if (t) t.textContent = 'SMMKings (Telegram)';
  try { loadBoosterSourceFromDb('smmkings'); } catch (e) {}
  }
+ if (tab === 'boosters-smmkings-boosters') {
+ const t = document.getElementById('pageTitle');
+ if (t) t.textContent = 'KING Boosters';
+ try { loadBoosterSourceFromDb('smmkings_boosters'); } catch (e) {}
+ }
  };
 })();
 
@@ -7711,7 +7742,7 @@ async function loadOwletBalance() {
 }
 
 
-let japPage = 1, casperPage = 1, smmkingsPage = 1;
+let japPage = 1, casperPage = 1, smmkingsPage = 1, smmkingsBoostersPage = 1;
 
 
 /** Shared booster catalog cards/table — same UX for Owlet, JAP, SMMKings */
@@ -7783,7 +7814,8 @@ async function loadBoosterSourceFromDb(provider) {
   const ids = {
     jap: { tbody: 'japTableBody', cards: 'japMobileCards', search: 'japSearch', cat: 'japCategoryFilter', hide: 'japHideUnavailable', page: () => japPage, setPage: (n) => { japPage = n; } },
     casper: { tbody: 'casperTableBody', cards: 'casperMobileCards', search: 'casperSearch', cat: 'casperCategoryFilter', hide: 'casperHideUnavailable', page: () => casperPage, setPage: (n) => { casperPage = n; } },
-    smmkings: { tbody: 'smmkingsTableBody', cards: 'smmkingsMobileCards', search: 'smmkingsSearch', cat: 'smmkingsCategoryFilter', hide: 'smmkingsHideUnavailable', page: () => smmkingsPage, setPage: (n) => { smmkingsPage = n; } }
+    smmkings: { tbody: 'smmkingsTableBody', cards: 'smmkingsMobileCards', search: 'smmkingsSearch', cat: 'smmkingsCategoryFilter', hide: 'smmkingsHideUnavailable', page: () => smmkingsPage, setPage: (n) => { smmkingsPage = n; }, apiProvider: 'smmkings', scope: 'telegram' },
+    smmkings_boosters: { tbody: 'smmkingsBoostersTableBody', cards: 'smmkingsBoostersMobileCards', search: 'smmkingsBoostersSearch', cat: 'smmkingsBoostersCategoryFilter', hide: 'smmkingsBoostersHideUnavailable', page: () => smmkingsBoostersPage, setPage: (n) => { smmkingsBoostersPage = n; }, apiProvider: 'smmkings', scope: 'boosters' }
   };
   const cfg = ids[provider];
   if (!cfg) return loadOwletServicesFromDb();
@@ -7800,7 +7832,9 @@ async function loadBoosterSourceFromDb(provider) {
     const hideEl = document.getElementById(cfg.hide);
     const hide = (hideEl && hideEl.checked) ? '1' : '0';
     const page = cfg.page() || 1;
-    const url = '/api/owlet?action=list&provider=' + encodeURIComponent(provider)
+    const apiProvider = cfg.apiProvider || provider;
+    const url = '/api/owlet?action=list&provider=' + encodeURIComponent(apiProvider)
+      + (cfg.scope ? '&scope=' + encodeURIComponent(cfg.scope) : '')
       + '&page=' + page + '&page_size=100&hide_unavailable=' + hide
       + (q ? '&q=' + encodeURIComponent(q) : '')
       + (cat ? '&category=' + encodeURIComponent(cat) : '');
@@ -7832,7 +7866,7 @@ async function loadBoosterSourceFromDb(provider) {
       return;
     }
     // Always same layout as Owlet (Supplier / Sell / Profit / Edit)
-    paintBoosterCatalog(rows, tbody, cards, provider);
+    paintBoosterCatalog(rows, tbody, cards, cfg.apiProvider || provider);
   } catch (e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
   }
@@ -7840,11 +7874,13 @@ async function loadBoosterSourceFromDb(provider) {
 
 async function syncBoosterProvider(provider) {
  provider = provider || 'owlet';
- const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', casper: 'CasperSMM', smmkings: 'SMMKings (Telegram only)' };
+ const labels = { owlet: 'Owlet', jap: 'JustAnotherPanel (JAP)', casper: 'CasperSMM', smmkings: 'SMMKings (Telegram)', smmkings_boosters: 'KING Boosters (SMMKings)' };
  const label = labels[provider] || provider;
- const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', casper: 'btnCasperSync', smmkings: 'btnSmmkingsSync' };
+ const syncProvider = provider === 'smmkings_boosters' ? 'smmkings' : provider;
+ const syncScope = provider === 'smmkings_boosters' ? 'boosters' : '';
+ const btnMap = { owlet: 'btnOwletSync', jap: 'btnJapSync', casper: 'btnCasperSync', smmkings: 'btnSmmkingsSync', smmkings_boosters: 'btnSmmkingsBoostersSync' };
  const btn = document.getElementById(btnMap[provider] || 'btnOwletSync');
- const progMap = { owlet: 'owletSyncProgress', jap: 'japSyncProgress', casper: 'casperSyncProgress', smmkings: 'smmkingsSyncProgress' };
+ const progMap = { owlet: 'owletSyncProgress', jap: 'japSyncProgress', casper: 'casperSyncProgress', smmkings: 'smmkingsSyncProgress', smmkings_boosters: 'smmkingsBoostersSyncProgress' };
  const prog = document.getElementById(progMap[provider] || 'owletSyncProgress');
  setBtnBusy(btn, true, 'Syncing…');
  if (prog) prog.textContent = 'Pulling services from ' + label + '…';
@@ -7866,7 +7902,7 @@ async function syncBoosterProvider(provider) {
  ? ('Syncing ' + label + '…')
  : ('Continuing ' + label + ' sync (round ' + rounds + ')…');
 
- const res = await fetch('/api/owlet?action=sync&provider=' + encodeURIComponent(provider), { method: 'GET', headers });
+ const res = await fetch('/api/owlet?action=sync&provider=' + encodeURIComponent(syncProvider) + (syncScope ? '&scope=' + encodeURIComponent(syncScope) : ''), { method: 'GET', headers });
  let data = null;
  try { data = await res.json(); } catch (_) { data = {}; }
  if (!res.ok || !data.success) {
@@ -7885,7 +7921,8 @@ async function syncBoosterProvider(provider) {
    owletPage = 1;
    await loadOwletServicesFromDb();
  } else {
-   window[provider + 'Page'] = 1;
+   if (provider === 'smmkings_boosters') smmkingsBoostersPage = 1;
+   else window[provider + 'Page'] = 1;
    await loadBoosterSourceFromDb(provider);
  }
  showAdminToast(label + ' sync finished', 'success');
