@@ -166,8 +166,10 @@ button,input{font:inherit}
 .src-pill{display:inline-flex;align-items:center;font-size:9px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle;text-transform:uppercase;border:1px solid transparent}
 .src-pill.jp{background:rgba(59,130,246,.14);color:#60a5fa;border-color:rgba(59,130,246,.28)}
 .src-pill.casp{background:rgba(168,85,247,.14);color:#c084fc;border-color:rgba(168,85,247,.28)}
+.src-pill.king{background:rgba(245,158,11,.14);color:#fbbf24;border-color:rgba(245,158,11,.3)}
 :root[data-theme="light"] .src-pill.jp{background:rgba(37,99,235,.1);color:#2563eb;border-color:rgba(37,99,235,.22)}
 :root[data-theme="light"] .src-pill.casp{background:rgba(126,34,206,.1);color:#7c3aed;border-color:rgba(126,34,206,.22)}
+:root[data-theme="light"] .src-pill.king{background:rgba(217,119,6,.1);color:#b45309;border-color:rgba(217,119,6,.24)}
 .empty{grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px;font-weight:600;line-height:1.5}
 .empty .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;margin:0 auto 12px;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -769,12 +771,14 @@ async function loadServices(){
 
 function sourceLabel(src){
   const s = String(src || 'jap').toLowerCase();
+  if (s === 'smmkings' || s === 'smmking') return { text: 'KING', cls: 'king' };
   if (s === 'casper' || s === 'caspersmm') return { text: 'CASP', cls: 'casp' };
   return { text: 'JP', cls: 'jp' };
 }
 function sourcePillHtml(src){
   const p = sourceLabel(src);
-  return '<span class="src-pill ' + p.cls + '" title="' + (p.cls === 'casp' ? 'Server B' : 'Server A') + '">' + p.text + '</span>';
+  const title = p.cls === 'king' ? 'SMMKings' : (p.cls === 'casp' ? 'Server B' : 'Server A');
+  return '<span class="src-pill ' + p.cls + '" title="' + title + '">' + p.text + '</span>';
 }
 function openOrderFromEl(el){
   const sid = el.getAttribute('data-sid');
