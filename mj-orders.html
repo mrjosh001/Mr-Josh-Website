@@ -137,7 +137,7 @@ async function boot(){
     const refreshed = await sb.auth.refreshSession().catch(() => null);
     session = refreshed?.data?.session || null;
   }
-  if(!session?.user?.id){ list.innerHTML = '<div class="empty"><h3>Session expired</h3><p>Your login could not be restored. Please sign in again to view your orders.</p><a href="auth.html?redirect=mj-orders.html" style="color:#60a5fa">Sign in to MJ HUB</a></div>'; return; }
+  if(!session?.user?.id){ list.innerHTML = '<div class="empty"><h3>Session expired</h3><p>Your login could not be restored. Please sign in again to view your orders.</p><a href="auth.html" style="color:#60a5fa">Sign in to MJ HUB</a></div>'; return; }
   const uid = session.user.id;
   let { data, error } = await sb.from('orders').select('*').eq('user_id', uid).order('created_at',{ascending:false}).limit(100);
   if(error || !data || !data.length){
