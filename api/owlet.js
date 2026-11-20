@@ -608,6 +608,17 @@ async function handleList(req, res) {
     query = query.range(from, to);
   }
 
+  const listSrc = normalizePanelSource(req.query?.provider || 'jap');
+  const listScope = String(req.query?.scope || '').toLowerCase();
+  if (listSrc === TELEGRAM_SOURCE) {
+    if (listScope === 'boosters') {
+      query = query.not('category', 'ilike', '%telegram premium to any%')
+        .not('category', 'ilike', '%telegram stars to any%');
+    } else {
+      query = query.or('category.ilike.%telegram premium to any%,category.ilike.%telegram stars to any%');
+    }
+  }
+
   const { data, error, count } = await query;
   if (error) {
     return res.status(500).json({
@@ -643,8 +654,6 @@ async function handleList(req, res) {
     rows = rows.slice(from, from + pageSize);
   }
 
-  const listSrc = normalizePanelSource(req.query?.provider || 'jap');
-  const listScope = String(req.query?.scope || '').toLowerCase();
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
@@ -706,6 +715,8 @@ async function handleEnableAllJap(req, res) {
     .from('booster_services')
     .update({ is_available: true, updated_at: new Date().toISOString() })
     .in('source', CUSTOMER_SOURCES)
+    .not('category', 'ilike', '%telegram premium to any%')
+    .not('category', 'ilike', '%telegram stars to any%')
     .select('id', { count: 'exact' });
 
   if (error) {
@@ -773,6 +784,7 @@ async function handleCatalog(req, res) {
       const src = String(c.source || '').toLowerCase();
       if (src === 'casper' || src === 'caspersmm') srcMap[k].add('casper');
       else if (src === 'jap') srcMap[k].add('jap');
+      else if (src === 'smmkings') srcMap[k].add('smmkings');
     }
     const cards = Object.entries(counts)
       .map(([name, count]) => ({
@@ -799,6 +811,8 @@ async function handleCatalog(req, res) {
       { count: 'exact' }
     )
     .in('source', CUSTOMER_SOURCES)
+    .not('category', 'ilike', '%telegram premium to any%')
+    .not('category', 'ilike', '%telegram stars to any%')
     .or('is_available.eq.true,is_available.is.null')
     .order('price_ngn', { ascending: true });
 
@@ -1530,7 +1544,7 @@ async function handleMyOrders(req, res) {
         const now = String(o.status || '').toLowerCase();
         const wasDone = /completed|partial|canceled|cancelled|refunded/.test(prev);
         if (!wasDone && /completed/i.test(now)) {
-          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order completed' : 'Boost order completed',
@@ -1539,7 +1553,7 @@ async function handleMyOrders(req, res) {
             isTgOrder ? 'telegram' : 'booster'
           );
         } else if (!wasDone && /partial/i.test(now)) {
-          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order partial' : 'Boost order partial',
@@ -1548,7 +1562,7 @@ async function handleMyOrders(req, res) {
             isTgOrder ? 'telegram' : 'booster'
           );
         } else if (!wasDone && /cancel/i.test(now) && refunded > 0) {
-          const isTgOrder = /telegram|smmkings/i.test(String(o.source || o.provider || o.service_name || ''));
+          const isTgOrder = /telegram/i.test(String(o.service_name || '') + ' ' + String(o.category || ''));
           await notifyUserPush(
             userGate.user.id,
             isTgOrder ? 'Telegram order refunded' : 'Boost order refunded',
