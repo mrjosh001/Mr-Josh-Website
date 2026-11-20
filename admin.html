@@ -2546,10 +2546,14 @@ async function loadAllData() {
  if (_adminDataLoading) return;
  _adminDataLoading = true;
  try {
- // Supplier balances on sign-in (Overview is the first screen)
- if (typeof loadSupplierBalances === 'function') {
+ // Supplier balances are secondary to the first dashboard paint.
+ // Start provider checks after the overview has rendered so external supplier
+ // latency does not compete with the initial dashboard data.
+ if (typeof loadSupplierBalances === 'function' && !_supplierBalancesLoaded) {
    _supplierBalancesLoaded = true;
-   loadSupplierBalances().catch(function(e){ _supplierBalancesLoaded = false; console.error('supplier balances', e); });
+   setTimeout(function(){
+     loadSupplierBalances().catch(function(e){ _supplierBalancesLoaded = false; console.error('supplier balances', e); });
+   }, 1800);
  }
  // Prioritize the visible overview. Defer large lists until their tab is
  // opened; this avoids fetching and rendering thousands of rows at sign-in.
@@ -8324,69 +8328,77 @@ if (typeof sb !== 'undefined' && sb.auth) {
 
 /* Support desk unread indicator */
 (function() {
+ let badgePollInFlight = false;
  async function pollSupportBadge() {
+   if (badgePollInFlight || document.visibilityState === 'hidden') return;
+   badgePollInFlight = true;
+   try {
+     if (typeof sb === 'undefined' || !sb) return;
+     const { data: { session } } = await sb.auth.getSession();
+     if (!session) return;
+
+     // Only active conversations can contribute to the admin unread badge.
+     // Closed tickets and browser-local seen timestamps must not create
+     // phantom unread counts after a device change or stale local storage.
+     const { data: tickets, error: ticketError } = await sb.from('support_tickets')
+       .select('id')
+       .in('status', ['open', 'pending'])
+       .limit(400);
+     if (ticketError) return;
+
+     let unreadCount = 0;
+     if (tickets && tickets.length) {
+       const ids = tickets.map(function(ticket){ return ticket.id; });
+       const { data: messages, error: messageError } = await sb.from('support_messages')
+         .select('ticket_id, sender_type, created_at, read_at')
+         .in('ticket_id', ids)
+         .order('created_at', { ascending: false })
+         .limit(800);
+       if (messageError) return;
+
+       const latestByTicket = {};
+       (messages || []).forEach(function(message) {
+         if (message && message.ticket_id && !latestByTicket[message.ticket_id]) {
+           latestByTicket[message.ticket_id] = message;
+         }
+       });
+       unreadCount = Object.keys(latestByTicket).filter(function(ticketId) {
+         const message = latestByTicket[ticketId];
+         const sender = String(message.sender_type || '').toLowerCase();
+         return (sender === 'user' || sender === 'customer') && !message.read_at;
+       }).length;
+     }
+
+     const badge = document.getElementById('supportNavBadge');
+     const bellCount = document.getElementById('supportTopBellCount');
+     const label = unreadCount > 99 ? '99+' : String(unreadCount);
+     if (badge) {
+       badge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+       badge.textContent = label;
+     }
+     if (bellCount) {
+       bellCount.textContent = label;
+       if (unreadCount > 0) bellCount.classList.add('show');
+       else bellCount.classList.remove('show');
+     }
+     document.title = unreadCount > 0
+       ? '(' + unreadCount + ') MJ HUB Admin'
+       : document.title.replace(/^\\(\\d+\\+?\\)\\s*/, '');
+   } catch (e) {
+     console.warn('[support badge] refresh failed', e);
+   } finally {
+     badgePollInFlight = false;
+   }
+ }
+ setInterval(pollSupportBadge, 30000);
+ setTimeout(pollSupportBadge, 1800);
  try {
- if (typeof sb === 'undefined' || !sb) return;
- const { data: { session } } = await sb.auth.getSession();
- if (!session) return;
- const { data: tickets, error } = await sb.from('support_tickets').select('id').limit(400);
- if (error) return;
- let n = 0;
- if (tickets && tickets.length) {
- const ids = tickets.map(function(x){ return x.id; });
- const { data: msgs } = await sb.from('support_messages')
- .select('ticket_id, sender_type, created_at')
- .in('ticket_id', ids)
- .order('created_at', { ascending: false })
- .limit(800);
- const latest = {};
- (msgs || []).forEach(function(m){
- if (m && m.ticket_id && !latest[m.ticket_id]) latest[m.ticket_id] = m;
- });
- let seen = {};
- try { seen = JSON.parse(localStorage.getItem('mjhub_admin_msg_seen') || '{}') || {}; } catch (e) { seen = {}; }
- if (!localStorage.getItem('mjhub_admin_support_seeded_v2')) {
- Object.keys(latest).forEach(function(id){ seen[id] = latest[id].created_at; });
- try {
- localStorage.setItem('mjhub_admin_msg_seen', JSON.stringify(seen));
- localStorage.setItem('mjhub_admin_support_seeded_v2', '1');
- } catch (e) {}
- n = 0;
- } else {
- Object.keys(latest).forEach(function(id){
- var m = latest[id];
- var st = String(m.sender_type || '').toLowerCase();
- if (st !== 'user' && st !== 'customer') return;
- var seenAt = seen[id] ? Date.parse(seen[id]) : 0;
- var at = Date.parse(m.created_at || '') || 0;
- if (at > seenAt) n += 1;
- });
- }
- }
- const badge = document.getElementById('supportNavBadge');
- const bell = document.getElementById('supportTopBell');
- const label = n > 99 ? '99+' : String(n);
- if (badge) {
- badge.style.display = n > 0 ? 'inline-block' : 'none';
- badge.textContent = label;
- }
- const bc = document.getElementById('supportTopBellCount');
- if (bc) {
- bc.textContent = label;
- if (n > 0) bc.classList.add('show'); else bc.classList.remove('show');
- }
- document.title = n > 0 ? '(' + n + ') MJ HUB Admin' : document.title.replace(/^\(\d+\+?\)\s*/, '');
- } catch (e) {}
- }
- setInterval(pollSupportBadge, 20000);
- setTimeout(pollSupportBadge, 2500);
- try {
- if (typeof sb !== 'undefined' && sb) {
- sb.channel('admin-support-badge')
- .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, pollSupportBadge)
- .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, pollSupportBadge)
- .subscribe();
- }
+   if (typeof sb !== 'undefined' && sb) {
+     sb.channel('admin-support-badge')
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, pollSupportBadge)
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, pollSupportBadge)
+       .subscribe();
+   }
  } catch (e) {}
 })();
 </script>
