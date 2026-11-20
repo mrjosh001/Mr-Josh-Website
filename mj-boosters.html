@@ -554,27 +554,34 @@ function effectiveMin(s){
   return minQ;
 }
 
+function detectedPlatforms(text){
+  const normalized = String(text || '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+  return Object.keys(PLATFORM_KEYS).filter(function(id){
+    if (id === 'other') return false;
+    return (PLATFORM_KEYS[id] || []).some(function(key){
+      const token = String(key || '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!token) return false;
+      return (' ' + normalized + ' ').includes(' ' + token + ' ');
+    });
+  });
+}
 function matchesPlatform(text, platform){
   if(!platform || platform==='all') return true;
-  const raw = String(text || '').toLowerCase();
-  const cleaned = raw.replace(/[^a-z0-9\s+.-]/g, ' ').replace(/\s+/g, ' ');
-  if (platform === 'other') {
-    const known = Object.keys(PLATFORM_KEYS).filter(function(id){ return id !== 'other'; });
-    return !known.some(function(id){
-      const keys = PLATFORM_KEYS[id] || [];
-      return keys.some(function(k){
-        const kk = String(k).toLowerCase().trim();
-        if (!kk) return false;
-        return cleaned.includes(kk) || raw.includes(kk);
-      });
-    });
-  }
-  const keys = PLATFORM_KEYS[platform] || [platform];
-  return keys.some(k => {
-    const kk = String(k).toLowerCase().trim();
-    if (!kk) return false;
-    return cleaned.includes(kk) || raw.includes(kk);
-  });
+  const detected = detectedPlatforms(text);
+  return platform === 'other' ? detected.length === 0 : detected.includes(platform);
+}
+// A service title is the strongest identifier. If it clearly names a platform,
+// it overrides a conflicting supplier category instead of leaking into that category.
+function platformForService(service){
+  const namePlatforms = detectedPlatforms(service && service.name);
+  const categoryPlatforms = detectedPlatforms(service && service.category);
+  if (namePlatforms.length === 1) return namePlatforms[0];
+  if (categoryPlatforms.length === 1) return categoryPlatforms[0];
+  const shared = namePlatforms.filter(function(id){ return categoryPlatforms.includes(id); });
+  return shared.length === 1 ? shared[0] : null;
 }
 
 function iconFor(cat,name){
@@ -706,10 +713,6 @@ async function loadServices(){
   const q=document.getElementById('search').value.trim();
   let category = activeCategory;
 
-  if(!category && activePlatform!=='all'){
-    const list=filteredCategories();
-    if(list[0]) category = list[0].name;
-  }
   if(!category && !q){
     showCategoryCards(filteredCategories());
     return;
@@ -718,7 +721,6 @@ async function loadServices(){
   const params=new URLSearchParams({action:'catalog', page:String(page), page_size:'48'});
   if(category) params.set('category', category);
   if(q) params.set('q', q);
-  if(!category && q && allCategories[0]) params.set('category', allCategories[0].name);
 
   document.getElementById('content').innerHTML='<div class="skel-card"></div><div class="skel-card"></div><div class="skel-card"></div><div class="skel-card"></div>';
   const res=await fetch('/api/owlet?'+params.toString(),{headers});
@@ -736,7 +738,7 @@ async function loadServices(){
 
   let rows=data.data||[];
   if(activePlatform!=='all'){
-    rows = rows.filter(s => matchesPlatform((s.category||'')+' '+(s.name||''), activePlatform));
+    rows = rows.filter(s => activePlatform === 'other' ? !platformForService(s) : platformForService(s) === activePlatform);
   }
 
   if(!rows.length){
@@ -840,7 +842,7 @@ function openOrder(s){
   const fullName = String(s.name || 'Service');
   const tags = parseServiceTags(fullName);
 
-  document.getElementById('mTitle').innerHTML = esc(shortServiceTitle(fullName)) + sourcePillHtml(s.source);
+  document.getElementById('mTitle').innerHTML = esc(fullName) + sourcePillHtml(s.source);
   document.getElementById('mSub').textContent = (s.category || '') + (s.service_type ? ' · ' + s.service_type : '');
   document.getElementById('mPrice').textContent = fmt(s.price_ngn) + ' / 1k';
   document.getElementById('mMinMax').textContent = 'Min ' + min.toLocaleString() + (max < 2000000000 ? ' · Max ' + max.toLocaleString() : '');
