@@ -701,11 +701,34 @@ async function fetchUserProfileAndBalance(userId) {
     try {
         const { data, error } = await supabaseClient
             .from('profiles')
-            .select('balance, balance_usd, customer_id')
+            .select('balance, balance_usd, customer_id, full_name, username, phone_number, bio, street_address, nin, bvn')
             .eq('id', userId)
             .single();
 
         if (data && !error) {
+            // Always prefer the canonical profile identity over potentially stale
+            // values embedded in a previously issued Supabase Auth session.
+            const canonicalName = String(data.full_name || data.username || '').trim();
+            if (canonicalName) {
+                userData.name = canonicalName;
+                const nameTargets = [
+                    'dropdownName', 'profileHeaderName', 'profileAvatarInitial',
+                    'headerAvatarText'
+                ];
+                nameTargets.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (id === 'profileAvatarInitial' || id === 'headerAvatarText') {
+                        if (!el.querySelector('img')) el.textContent = canonicalName.charAt(0).toUpperCase();
+                    } else {
+                        el.textContent = canonicalName;
+                    }
+                });
+                const welcome = document.getElementById('heroWelcomeTitle');
+                if (welcome) welcome.textContent = 'Welcome back, ' + canonicalName + '!';
+                const nameInput = document.getElementById('profileNameInput');
+                if (nameInput) nameInput.value = data.full_name || '';
+            }
             currentBalanceNgn = parseFloat(data.balance) || 0.00;
             currentBalanceUsd = Number(data.balance_usd) || 0;
             if (data.customer_id) {

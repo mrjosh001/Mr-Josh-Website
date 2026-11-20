@@ -251,7 +251,34 @@ async function updateProfile(req, res) {
             bvn 
         } = req.body;
 
-        // Save and update profile record securely using upsert to handle both updates and persistence across sessions
+        // Keep the profile table and Auth metadata synchronized. The profile table
+        // is the canonical source for customer-facing identity fields.
+        const { data: authUserResult, error: authFetchError } = await supabase.auth.admin.getUserById(userId);
+        if (authFetchError || !authUserResult?.user) {
+            return res.status(500).json({ error: 'Could not verify the account identity: ' + (authFetchError?.message || 'User not found') });
+        }
+
+        const previousMetadata = authUserResult.user.user_metadata || {};
+        const nextMetadata = {
+            ...previousMetadata,
+            full_name: fullName,
+            username: username,
+            phone_number: phoneNumber,
+            bio,
+            street_address: streetAddress,
+            city,
+            country,
+            postal_code: postalCode,
+            nin,
+            bvn
+        };
+        const { error: authUpdateError } = await supabase.auth.admin.updateUserById(userId, {
+            user_metadata: nextMetadata
+        });
+        if (authUpdateError) {
+            return res.status(409).json({ error: 'Could not synchronize account identity: ' + authUpdateError.message });
+        }
+
         const { data, error } = await supabase
             .from('profiles')
             .upsert({
@@ -271,24 +298,12 @@ async function updateProfile(req, res) {
             .single();
 
         if (error) {
+            const { error: rollbackError } = await supabase.auth.admin.updateUserById(userId, {
+                user_metadata: previousMetadata
+            });
+            if (rollbackError) console.error('[updateProfile] Auth metadata rollback failed:', rollbackError);
             return res.status(400).json({ error: error.message });
         }
-
-        // Also update auth user metadata for consistency across sessions
-        await supabase.auth.admin.updateUserById(userId, {
-            user_metadata: {
-                full_name: fullName,
-                username: username,
-                phone_number: phoneNumber,
-                bio,
-                street_address: streetAddress,
-                city,
-                country,
-                postal_code: postalCode,
-                nin,
-                bvn
-            }
-        });
 
         res.status(200).json({
             message: 'Profile updated successfully',
