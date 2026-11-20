@@ -1695,6 +1695,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <tbody id="smmkingsBoostersTableBody"><tr><td colspan="10" class="empty-state">Click Sync KING Boosters to load the non-Telegram SMMKings catalog.</td></tr></tbody></table>
  </div>
  <div id="smmkingsBoostersMobileCards" class="mobile-only mobile-cards"></div>
+ <div id="smmkingsBoostersPager" style="display:flex;justify-content:center;align-items:center;gap:10px;margin-top:14px;font-size:12px;color:var(--muted);"></div>
  </div>
  </div>
 
@@ -7815,7 +7816,7 @@ async function loadBoosterSourceFromDb(provider) {
     jap: { tbody: 'japTableBody', cards: 'japMobileCards', search: 'japSearch', cat: 'japCategoryFilter', hide: 'japHideUnavailable', page: () => japPage, setPage: (n) => { japPage = n; } },
     casper: { tbody: 'casperTableBody', cards: 'casperMobileCards', search: 'casperSearch', cat: 'casperCategoryFilter', hide: 'casperHideUnavailable', page: () => casperPage, setPage: (n) => { casperPage = n; } },
     smmkings: { tbody: 'smmkingsTableBody', cards: 'smmkingsMobileCards', search: 'smmkingsSearch', cat: 'smmkingsCategoryFilter', hide: 'smmkingsHideUnavailable', page: () => smmkingsPage, setPage: (n) => { smmkingsPage = n; }, apiProvider: 'smmkings', scope: 'telegram' },
-    smmkings_boosters: { tbody: 'smmkingsBoostersTableBody', cards: 'smmkingsBoostersMobileCards', search: 'smmkingsBoostersSearch', cat: 'smmkingsBoostersCategoryFilter', hide: 'smmkingsBoostersHideUnavailable', page: () => smmkingsBoostersPage, setPage: (n) => { smmkingsBoostersPage = n; }, apiProvider: 'smmkings', scope: 'boosters' }
+    smmkings_boosters: { tbody: 'smmkingsBoostersTableBody', cards: 'smmkingsBoostersMobileCards', search: 'smmkingsBoostersSearch', cat: 'smmkingsBoostersCategoryFilter', hide: 'smmkingsBoostersHideUnavailable', pager: 'smmkingsBoostersPager', page: () => smmkingsBoostersPage, setPage: (n) => { smmkingsBoostersPage = n; }, apiProvider: 'smmkings', scope: 'boosters' }
   };
   const cfg = ids[provider];
   if (!cfg) return loadOwletServicesFromDb();
@@ -7861,12 +7862,21 @@ async function loadBoosterSourceFromDb(provider) {
       if (prev) catSel.value = prev;
     }
     if (!rows.length) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No services match this filter. Uncheck <strong>Hide unavailable</strong> to see synced (admin-hidden) services, or click Sync.</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No services match this filter. Uncheck <strong>Hide unavailable</strong> to see synced (admin-hidden) services, or click Sync.</td></tr>';
       if (cards) cards.innerHTML = '<div class="empty-state">No services match. Uncheck Hide unavailable to see synced services.</div>';
+      const pager = cfg.pager && document.getElementById(cfg.pager);
+      if (pager) pager.innerHTML = '';
       return;
     }
     // Always same layout as Owlet (Supplier / Sell / Profit / Edit)
     paintBoosterCatalog(rows, tbody, cards, cfg.apiProvider || provider);
+    if (cfg.pager) {
+      const pager = document.getElementById(cfg.pager);
+      const totalPages = Math.max(1, Math.ceil(Number(data.total || 0) / 100));
+      if (pager) pager.innerHTML = '<button class="btn btn-ghost btn-sm" style="width:auto" ' + (page <= 1 ? 'disabled' : '') + ' onclick="smmkingsBoostersPage=Math.max(1,smmkingsBoostersPage-1);loadBoosterSourceFromDb(\'smmkings_boosters\')">Previous</button>'
+        + '<span>Page ' + page + ' of ' + totalPages + ' · ' + Number(data.total || 0).toLocaleString() + ' services</span>'
+        + '<button class="btn btn-ghost btn-sm" style="width:auto" ' + (page >= totalPages ? 'disabled' : '') + ' onclick="smmkingsBoostersPage=smmkingsBoostersPage+1;loadBoosterSourceFromDb(\'smmkings_boosters\')">Next</button>';
+    }
   } catch (e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">' + (e.message||e) + '</td></tr>';
   }
@@ -7894,7 +7904,7 @@ async function syncBoosterProvider(provider) {
 
  let done = false;
  let rounds = 0;
- const maxRounds = 40;
+ const maxRounds = 200;
 
  while (!done && rounds < maxRounds) {
  rounds += 1;
@@ -7915,6 +7925,8 @@ async function syncBoosterProvider(provider) {
  if (prog) prog.textContent = data.message || (done ? (label + ' sync complete') : 'In progress…');
  if (!done) await new Promise(r => setTimeout(r, 400));
  }
+
+ if (!done) throw new Error(label + ' sync is still in progress. Click Sync again to continue from the saved cursor.');
 
  // Reload the matching catalog tab
  if (provider === 'owlet') {
