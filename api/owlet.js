@@ -73,7 +73,7 @@ function normalizeTelegramLink(raw) {
 }
 /** Default source when unspecified (legacy). Customer catalog shows BOTH jap + casper. */
 const STORE_SOURCE = 'jap';
-const CUSTOMER_SOURCES = ['jap', 'casper'];
+const CUSTOMER_SOURCES = ['jap', 'casper', 'smmkings'];
 function normalizePanelSource(src) {
   const s = String(src || '').toLowerCase().trim();
   if (s === 'owlet') return 'owlet';
@@ -359,7 +359,11 @@ async function handleSync(req, res) {
   let provider = normalizePanelSource(req.query?.provider || body.provider || 'jap');
   if (provider === 'owlet') provider = 'jap'; // customer sync targets jap|casper|smmkings only
   const SYNC_SOURCE = provider;
-  const IS_TG_SYNC = SYNC_SOURCE === TELEGRAM_SOURCE;
+  const syncScope = String(req.query?.scope || body.scope || '').toLowerCase() === 'boosters' ? 'boosters' : 'telegram';
+  const IS_SMMKINGS_SYNC = SYNC_SOURCE === TELEGRAM_SOURCE;
+  const IS_TG_SYNC = IS_SMMKINGS_SYNC && syncScope !== 'boosters';
+  const IS_KING_BOOSTER_SYNC = IS_SMMKINGS_SYNC && syncScope === 'boosters';
+  const JOB_SOURCE = IS_KING_BOOSTER_SYNC ? 'smmkings_boosters' : SYNC_SOURCE;
   const TIME_BUDGET_MS = 250000;
   const BATCH = 80;
   const startedAt = Date.now();
@@ -368,7 +372,7 @@ async function handleSync(req, res) {
 
   let job = null;
   {
-    const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', SYNC_SOURCE).maybeSingle();
+    const { data, error } = await supabase.from('sync_jobs').select('*').eq('source', JOB_SOURCE).maybeSingle();
     if (error && !/does not exist|relation/i.test(error.message || '')) {
       console.warn('[owlet sync] sync_jobs read:', error.message);
     }
@@ -377,7 +381,7 @@ async function handleSync(req, res) {
 
   if (forceRestart || !job || job.status === 'completed') {
     job = {
-      source: SYNC_SOURCE,
+      source: JOB_SOURCE,
       status: 'running',
       cursor_index: 0,
       items_seen: 0,
@@ -396,12 +400,15 @@ async function handleSync(req, res) {
     });
   }
 
-  // SMMKings: keep ONLY the two Telegram categories (Premium / Stars to any @user)
-  const services = IS_TG_SYNC ? json.filter((s) => telegramKind(s)) : json;
-  if (IS_TG_SYNC && !services.length) {
+  // Keep the existing Telegram sync separate from the new non-Telegram KING Boosters sync.
+  const services = IS_TG_SYNC ? json.filter((s) => telegramKind(s))
+    : IS_KING_BOOSTER_SYNC ? json.filter((s) => !telegramKind(s)) : json;
+  if (IS_SMMKINGS_SYNC && !services.length) {
     return res.status(200).json({
       success: false,
-      message: 'No services found in the categories "Buy Telegram Premium to any @user" or "Buy Telegram Stars to any @user". Check the category names on SMMKings.'
+      message: IS_TG_SYNC
+        ? 'No Telegram Premium or Stars services were found in the SMMKings catalog.'
+        : 'No non-Telegram SMMKings services were found. No existing services were changed.'
     });
   }
   let cursor = Number(job.cursor_index) || 0;
@@ -409,7 +416,7 @@ async function handleSync(req, res) {
 
   const { data: existing, error: exErr } = await supabase
     .from('booster_services')
-    .select('service_id, price_ngn, price_source')
+    .select('service_id, category, price_ngn, price_source, is_available')
     .eq('source', SYNC_SOURCE);
 
   if (exErr) {
@@ -463,7 +470,7 @@ async function handleSync(req, res) {
         max_quantity: Number(s.max) || 0,
         refill: !!s.refill,
         cancel: !!s.cancel,
-        is_available: true,
+        is_available: IS_SMMKINGS_SYNC && prev ? prev.is_available !== false : true,
         updated_at: now
       };
     });
@@ -488,27 +495,33 @@ async function handleSync(req, res) {
 
   const done = cursor >= services.length && !ranOutOfTime;
 
-  // SMMKings: hide anything outside the two Telegram categories (old/stray rows)
+  // Retire stale rows only within the catalog scope being synced. The Telegram sync
+  // must never hide non-Telegram SMMKings services, and vice versa.
   let hiddenStray = 0;
-  if (IS_TG_SYNC && done) {
+  if (IS_SMMKINGS_SYNC && done) {
     try {
-      const keep = services.map((s) => String(s.service)).filter((id) => /^[A-Za-z0-9_-]+$/.test(id));
-      if (keep.length) {
-        const { data: hidden } = await supabase
+      const keep = new Set(services.map((s) => String(s.service)));
+      const staleIds = (existing || [])
+        .filter(row => (IS_TG_SYNC ? !!telegramKind(row) : !telegramKind(row)))
+        .map(row => String(row.service_id))
+        .filter(id => id && !keep.has(id) && /^[A-Za-z0-9_-]+$/.test(id));
+      for (let i = 0; i < staleIds.length; i += 200) {
+        const { data: hidden, error: hideError } = await supabase
           .from('booster_services')
           .update({ is_available: false, updated_at: new Date().toISOString() })
           .eq('source', TELEGRAM_SOURCE)
-          .not('service_id', 'in', '(' + keep.join(',') + ')')
+          .in('service_id', staleIds.slice(i, i + 200))
           .select('id');
-        hiddenStray = Array.isArray(hidden) ? hidden.length : 0;
+        if (hideError) throw hideError;
+        hiddenStray += Array.isArray(hidden) ? hidden.length : 0;
       }
     } catch (e) {
-      console.warn('[owlet sync] hide stray smmkings rows failed', e?.message || e);
+      console.warn('[owlet sync] hide stale smmkings rows failed', e?.message || e);
     }
   }
 
   const jobFields = {
-    source: SYNC_SOURCE,
+    source: JOB_SOURCE,
     status: done ? 'completed' : 'running',
     cursor_index: done ? 0 : cursor,
     items_seen: services.length,
@@ -529,10 +542,13 @@ async function handleSync(req, res) {
     done,
     message: done
       ? (IS_TG_SYNC
-          ? `smmkings sync complete — ${services.length} Telegram services (Premium + Stars only)`
-          : `${SYNC_SOURCE} sync complete — ${services.length} services`)
-      : `${SYNC_SOURCE} sync progress ${cursor}/${services.length} — run Sync again to continue`,
+          ? `smmkings Telegram sync complete — ${services.length} Premium + Stars services`
+          : IS_KING_BOOSTER_SYNC
+            ? `KING Boosters sync complete — ${services.length} non-Telegram services`
+            : `${SYNC_SOURCE} sync complete — ${services.length} services`)
+      : `${IS_KING_BOOSTER_SYNC ? 'KING Boosters' : SYNC_SOURCE} sync progress ${cursor}/${services.length} — run Sync again to continue`,
     provider: SYNC_SOURCE,
+    scope: IS_KING_BOOSTER_SYNC ? 'boosters' : (IS_TG_SYNC ? 'telegram' : 'all'),
     total: services.length,
     cursor,
     upserted_this_run: upserted,
@@ -628,12 +644,19 @@ async function handleList(req, res) {
   }
 
   const listSrc = normalizePanelSource(req.query?.provider || 'jap');
+  const listScope = String(req.query?.scope || '').toLowerCase();
   const { data: catRows } = await supabase
     .from('booster_services')
     .select('category')
     .eq('source', listSrc)
     .limit(5000);
-  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
+  const scopedCategories = listSrc === TELEGRAM_SOURCE
+    ? (catRows || []).filter(r => listScope === 'boosters' ? !telegramKind(r) : !!telegramKind(r))
+    : (catRows || []);
+  const categories = [...new Set(scopedCategories.map(r => r.category).filter(Boolean))].sort();
+  if (listSrc === TELEGRAM_SOURCE) {
+    rows = rows.filter(r => listScope === 'boosters' ? !telegramKind(r) : !!telegramKind(r));
+  }
 
   rows = rows.map(s => ({
     ...s,
@@ -737,7 +760,8 @@ async function handleCatalog(req, res) {
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message || 'Could not load categories' });
   }
-  const categories = [...new Set((catRows || []).map(r => r.category).filter(Boolean))].sort();
+  catRows = (catRows || []).filter(r => !telegramKind(r));
+  const categories = [...new Set(catRows.map(r => r.category).filter(Boolean))].sort();
 
   if (!category && !q) {
     const counts = {};
@@ -800,7 +824,7 @@ async function handleCatalog(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 
-  let rows = data || [];
+  let rows = (data || []).filter(s => !telegramKind(s));
   if (tokens.length) {
     rows = rows.filter(s => {
       const hay = `${s.name || ''} ${s.category || ''} ${s.service_id || ''}`.toLowerCase();
@@ -969,12 +993,12 @@ async function handleOrder(req, res) {
 
   // Prefer explicit source from client (avoids jap/casper service_id collisions)
   const requestedSource = body.source ? normalizePanelSource(body.source) : null;
-  const isTg = requestedSource === TELEGRAM_SOURCE;
+  const requestedSmmkings = requestedSource === TELEGRAM_SOURCE;
   let svcQuery = supabase
     .from('booster_services')
     .select('*')
     .eq('service_id', serviceId);
-  if (isTg) {
+  if (requestedSmmkings) {
     svcQuery = svcQuery.eq('source', TELEGRAM_SOURCE);
   } else if (requestedSource && isCustomerSource(requestedSource)) {
     svcQuery = svcQuery.eq('source', requestedSource);
@@ -986,9 +1010,10 @@ async function handleOrder(req, res) {
     ? (svcRows.find(r => r.is_available !== false) || svcRows[0])
     : null;
 
-  // Telegram orders are only allowed for the two supported SMMKings categories
-  const tgKind = isTg && service ? telegramKind(service) : null;
-  if (sErr || !service || (isTg && !tgKind)) {
+  // SMMKings serves both stores. Only the two dedicated categories use Telegram-specific handling.
+  const tgKind = requestedSmmkings && service ? telegramKind(service) : null;
+  const isTg = !!tgKind;
+  if (sErr || !service) {
     return res.status(404).json({ success: false, message: 'Service not found or unavailable' });
   }
 
@@ -1005,7 +1030,7 @@ async function handleOrder(req, res) {
   }
 
   const orderSource = normalizePanelSource(service.source || STORE_SOURCE);
-  if (!isCustomerSource(orderSource) && orderSource !== TELEGRAM_SOURCE) {
+  if (!isCustomerSource(orderSource)) {
     return res.status(400).json({ success: false, message: 'This package is unavailable.' });
   }
   // Telegram has no service-specific fields (the "subscription" regex must not trigger on Premium)
