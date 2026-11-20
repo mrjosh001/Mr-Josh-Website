@@ -470,8 +470,8 @@ let allRows = [];
         const source = String(o.source || o.provider || '').toLowerCase();
         const service = String(o.service_name || o.name || '').toLowerCase();
         const category = String(o.category || '').toLowerCase();
-        return source !== 'telegram' &&
-          !/telegram/.test(service) && !/telegram/.test(category);
+        const telegramShopOrder = /telegram\s+(premium|stars)/i.test(service) || /telegram\s+(premium|stars)\s+to\s+any/i.test(category);
+        return source !== 'telegram' && !telegramShopOrder;
       });
       allRows = rows;
       renderFilters();
@@ -497,8 +497,8 @@ let allRows = [];
                 const source = String(o.source || o.provider || '').toLowerCase();
                 const service = String(o.service_name || o.name || '').toLowerCase();
                 const category = String(o.category || '').toLowerCase();
-                return source !== 'telegram' &&
-                  !/telegram/.test(service) && !/telegram/.test(category);
+                const telegramShopOrder = /telegram\s+(premium|stars)/i.test(service) || /telegram\s+(premium|stars)\s+to\s+any/i.test(category);
+        return source !== 'telegram' && !telegramShopOrder;
               });
               renderFilters();
               renderRows(allRows);
