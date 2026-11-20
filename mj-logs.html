@@ -623,7 +623,8 @@ try{
 setStatus('Connecting to database...');
 if(!window.supabase){showError('Supabase library did not load.');return}
 if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  // Match auth.html/dashboard.html. The shared session is stored in localStorage.
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage }
 });
 const sb = sbClient;
 setStatus('Fetching products...');
@@ -681,7 +682,8 @@ async function initSession(){
 try{
 if(!window.supabase) return;
 if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
+  // Match auth.html/dashboard.html. The shared session is stored in localStorage.
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage }
 });
 const { data: { session } } = await sbClient.auth.getSession();
 if(session && session.user){
