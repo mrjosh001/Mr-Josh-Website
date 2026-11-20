@@ -1133,8 +1133,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true,
-                // sessionStorage: token clears when the browser tab/window closes (harder for XSS to keep long-lived access)
-                storage: window.sessionStorage
+                // Use one origin-wide auth store so dashboard and order pages share the same
+                // authenticated session even when opened in a separate browser tab.
+                storage: window.localStorage
             }
         });
 
