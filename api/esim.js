@@ -1,6 +1,7 @@
 import { WALLET_USD_RATE } from '../lib/wallet-rate.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser } from '../lib/push.js';
+import { sendEmailWithFallback } from '../lib/email-provider.js';
 
 const ESIM_URL = process.env.ESIM_SUPABASE_URL;
 const ESIM_SERVICE_KEY = process.env.ESIM_SUPABASE_SERVICE_ROLE_KEY;
@@ -137,30 +138,17 @@ function fromAddress(displayName) {
 }
 
 async function sendEmail({ to, subject, html, attachments, replyTo, fromName }) {
-  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
-    throw new Error('Resend is not configured for this deployment');
-  }
-  const payload = {
-    from: fromName ? fromAddress(fromName) : process.env.RESEND_FROM_EMAIL,
+  const from = fromName
+    ? fromAddress(fromName)
+    : (process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ HUB <noreply@mjhub.store>');
+  return sendEmailWithFallback({
+    from,
     to: [to],
     subject,
-    html
-  };
-  if (Array.isArray(attachments) && attachments.length) payload.attachments = attachments;
-  if (replyTo) payload.reply_to = replyTo;
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + process.env.RESEND_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(result.message || 'Resend rejected the email (' + response.status + ')');
-  }
-  return result;
+    html,
+    ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
+    ...(replyTo ? { reply_to: replyTo } : {})
+  }, { context: 'esim-email' });
 }
 
 async function sendOrderEmails(order) {
