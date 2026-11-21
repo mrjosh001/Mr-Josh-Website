@@ -2605,7 +2605,7 @@ async function sendOneEmail({ provider, to, name, subject, html, fromResend, fro
       });
       const json = await resp.json().catch(() => ({}));
       if (resp.ok) return { ok: true, provider: 'resend', quotaHit: false };
-      const quotaHit = isProviderQuotaError(resp.status, json);
+      const quotaHit = true; // Any definitive Resend rejection can use the configured backup.
       return { ok: false, provider: 'resend', quotaHit, error: json?.message || json?.error || String(resp.status) };
     } catch (e) {
       return { ok: false, provider: 'resend', quotaHit: false, error: e.message };
@@ -2680,7 +2680,7 @@ async function sendResendBatch({ chunk, subject, message, from, apiKey }) {
       ok: false,
       sent: 0,
       failed: chunk.length,
-      quotaHit: isProviderQuotaError(resp.status, json),
+      quotaHit: true, // Definitive batch rejection: caller may retry remaining recipients via Mailtrap.
       error: json?.message || json?.error || String(resp.status)
     };
   } catch (e) {

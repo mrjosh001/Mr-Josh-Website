@@ -660,11 +660,7 @@ async function sendCareEmail({ to, subject, html }) {
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok) return { ok: true, provider: 'resend', id: json.id };
-      if (!isProviderQuotaError(res.status, json)) {
-        console.error('[care-email] Resend error', res.status, json);
-        return { ok: false, provider: 'resend', error: json };
-      }
-      console.warn('[care-email] Resend quota, trying Mailtrap for', to);
+      console.warn('[care-email] Resend rejected the message; trying Mailtrap backup', res.status, to);
     } catch (e) {
       console.error('[care-email] Resend exception', e.message);
       if (!mailtrapKey) return { ok: false, provider: 'resend', error: e.message };
