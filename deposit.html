@@ -150,6 +150,14 @@ a{color:inherit;text-decoration:none}
 .meta-box .k{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .meta-box .v{font-size:14px;font-weight:800;color:var(--text);word-break:break-word}
 .instruct{padding:12px 14px;border-radius:12px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.22);font-size:13px;line-height:1.5;color:var(--text);margin-bottom:14px;font-weight:600}
+.registered-name-card{padding:14px 15px;border-radius:14px;background:var(--primary-soft);border:1px solid rgba(91,138,245,.28);margin:0 0 12px}
+.registered-name-head{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.045em;text-transform:uppercase;color:var(--primary);margin-bottom:7px}
+.registered-name-value{font-size:16px;font-weight:850;line-height:1.35;color:var(--text);overflow-wrap:anywhere}
+.registered-name-caption{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
+.name-match-notice{display:flex;gap:10px;align-items:flex-start;padding:12px 13px;border-radius:12px;background:var(--fee-notice-bg);border:1px solid var(--fee-notice-border);color:var(--fee-notice-text);font-size:12px;line-height:1.55;margin:0 0 10px}
+.name-match-notice i{margin-top:2px;flex:0 0 auto}
+.name-help-link{display:inline-flex;align-items:center;gap:5px;color:var(--primary);font-size:12px;font-weight:800;text-decoration:none}
+.name-help-link:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:4px}
 .waiting{text-align:center;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px}
 .waiting i{margin-right:6px}
 
@@ -395,6 +403,18 @@ document.addEventListener('click', function(e){
           <div class="meta-box"><div class="k">Account name</div><div class="v" id="vaAccountName">—</div></div>
           <div class="meta-box"><div class="k">Bank</div><div class="v" id="vaBankName">—</div></div>
         </div>
+        <section class="registered-name-card" aria-labelledby="registeredNameLabel">
+          <div class="registered-name-head" id="registeredNameLabel"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Your registered MJ HUB name</div>
+          <div class="registered-name-value" id="depositRegisteredFullName">Loading name…</div>
+          <p class="registered-name-caption">This is the full name saved on your MJ HUB account.</p>
+        </section>
+        <div class="name-match-notice" role="note">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>Please make sure the bank account you are sending from bears the same name as your registered MJ HUB account. Transfers from accounts with different names may experience verification delays or funds reconciliation issues.</span>
+        </div>
+        <div style="text-align:center;margin:0 0 14px;">
+          <a class="name-help-link" href="support.html"><i class="fa-solid fa-headset" aria-hidden="true"></i> Need help correcting your name? Contact Support</a>
+        </div>
         <div class="instruct" id="vaInstruct">Transfer the exact amount above. Your wallet credits automatically once the payment is confirmed.</div>
         <div class="waiting" id="vaWaiting"><i class="fa-solid fa-rotate fa-spin"></i> Waiting for confirmation…</div>
         <button type="button" class="btn btn-soft" id="vaCheckStatusBtn" onclick="checkVaPaymentNow()"><i class="fa-solid fa-rotate"></i> Check status</button>
@@ -447,6 +467,7 @@ const ADMIN_WA = '2347026502927';
 
 let depositWallet = 'ngn';
 let currentUserId = null;
+let currentUserFullName = '';
 let customerId = '';
 let generatingVa = false;
 let vaDetails = null;
@@ -1065,15 +1086,21 @@ async function ensureAuth() {
     return false;
   }
   currentUserId = data.session.user.id;
+  const authMeta = data.session.user.user_metadata || {};
+  currentUserFullName = String(authMeta.full_name || authMeta.name || [authMeta.first_name, authMeta.last_name].filter(Boolean).join(' ') || '').trim();
   await loadProfile();
   return true;
 }
 async function loadProfile() {
   if (!currentUserId) return;
   const { data: prof } = await sb.from('profiles')
-    .select('balance, balance_usd, customer_id')
+    .select('balance, balance_usd, customer_id, full_name')
     .eq('id', currentUserId)
     .maybeSingle();
+  const profileName = String(prof?.full_name || '').trim();
+  if (profileName) currentUserFullName = profileName;
+  const registeredNameEl = document.getElementById('depositRegisteredFullName');
+  if (registeredNameEl) registeredNameEl.textContent = currentUserFullName || 'Name not available';
   window.__balNgn = Number(prof?.balance) || 0;
   document.getElementById('balNgn').textContent = fmtNgn2(window.__balNgn);
   document.getElementById('balUsd').textContent = fmtUsd(Number(prof?.balance_usd) || 0);
