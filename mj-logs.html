@@ -375,9 +375,36 @@ let purchaseNonce = null;
 let searchQuery = '';
 
 function setStatus(m){const s=document.getElementById('statusText');if(s)s.textContent=m}
-function cleanText(str){if(!str)return'';const t=document.createElement('div');t.innerHTML=str;return(t.textContent||t.innerText||'').replace(/\s+/g,' ').trim()}
+function cleanText(str){
+  if(!str)return'';
+  let value=String(str);
+  for(let i=0;i<3;i++){
+    const t=document.createElement('div');
+    t.innerHTML=value;
+    const decoded=t.textContent||t.innerText||'';
+    if(decoded===value)break;
+    value=decoded;
+  }
+  return value.replace(/\s+/g,' ').trim();
+}
 function isSujanProduct(p){return !!p && (String(p.source||'').toLowerCase()==='sujandepartment' || /^sj_/i.test(String(p.product_key||'')))}
-function displayProductName(p){const raw=cleanText(p && p.name || 'Product');if(!isSujanProduct(p))return raw;return raw.replace(/\bCLONE\b/gi,' ').replace(/\s+/g,' ').replace(/\s+([,;:])/g,'$1').replace(/^[\s|–—-]+|[\s|–—-]+$/g,'').trim() || 'Product'}
+function isBulkmailTikTokProduct(p){
+  const name=String(p && p.name || '');
+  return String(p && p.source || '').toLowerCase()==='bulkmail' &&
+    /tiktok/i.test(name) && !/^(gmail|hotmail|outlook)\b/i.test(name);
+}
+function isBulkmailTikTokClone(p){
+  return isBulkmailTikTokProduct(p) && /\bclone\b/i.test(String(p && p.name || ''));
+}
+function hideCloneWord(value){
+  return String(value || '').replace(/\bclone\b/gi,' ').replace(/\s+/g,' ')
+    .replace(/\s+([,;:])/g,'$1').replace(/^[\s|–—-]+|[\s|–—-]+$/g,'').trim();
+}
+function displayProductName(p){
+  const raw=cleanText(p && p.name || 'Product');
+  if(isBulkmailTikTokProduct(p) || isSujanProduct(p)) return hideCloneWord(raw) || 'Product';
+  return raw;
+}
 function escapeHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function showToast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='error'?' error':'');t.innerHTML='<span>'+(type==='error'?'❌':'✅')+'</span><span>'+escapeHtml(msg)+'</span>';toastContainer.appendChild(t);setTimeout(()=>t.remove(),3000)}
 function showError(reason){productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">⚠️</div><h4>Failed to Load</h4><p>'+escapeHtml(reason)+'</p><button class="btn btn-primary" style="max-width:200px;margin:0 auto" onclick="location.reload()">Retry</button></div>'}
@@ -557,14 +584,17 @@ function renderLogIconHtml(category, name, sizeClass){
 function getDisplayDescription(p){
   const raw = (p && (p.display_description || p.description)) || '';
   if (!raw) return '';
-  const t = document.createElement('div');
-  t.innerHTML = String(raw);
-  return (t.textContent || t.innerText || '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  let value=String(raw);
+  for(let i=0;i<3;i++){
+    const t=document.createElement('div');
+    t.innerHTML=value;
+    const decoded=t.textContent||t.innerText||'';
+    if(decoded===value)break;
+    value=decoded;
+  }
+  value=value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return isBulkmailTikTokProduct(p) ? value.split('\n').map(hideCloneWord).join('\n') : value;
 }
 function formatDescriptionHtml(p){
   const text = getDisplayDescription(p);
@@ -575,6 +605,7 @@ function formatDescriptionHtml(p){
   }).join('');
 }
 function getAccountFormat(p){
+if(isBulkmailTikTokClone(p)) return '';
 return p.account_format || p.accountFormat || p.format || p.delivery_format || p.product_format || '';
 }
 function buildCartItem(p, qty){
