@@ -3476,8 +3476,8 @@ async function loadProducts() {
  // in stable, bounded pages so products after the first 1,000 are not lost.
  const pageSize = 500;
  const columns = [
-   'id, product_key, name, category, price, supplier_price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description, display_description, updated_at',
-   'id, product_key, name, category, price, stock_quantity, is_available, is_shared, shared_inventory_ids, source, description',
+   'id, product_key, name, category, price, supplier_price, stock_quantity, is_available, admin_hidden, is_shared, shared_inventory_ids, source, description, display_description, updated_at',
+   'id, product_key, name, category, price, stock_quantity, is_available, admin_hidden, is_shared, shared_inventory_ids, source, description',
    '*'
  ];
  let selectedColumns = columns[0];
@@ -5232,7 +5232,7 @@ function renderProducts(list) {
  const price = Number(p.price || 0);
  const profit = price - supplierCost;
  const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : ' ');
- const available = p.is_available !== false;
+ const available = p.is_available !== false && p.admin_hidden !== true;
  const category = p.category || 'OTHER';
  const rowId = p.id || p.product_key;
  return `
@@ -5269,7 +5269,7 @@ function renderProductCards(items) {
  const price = Number(p.price || 0);
  const profit = price - supplierCost;
  const stock = p.is_shared ? 'Shared ∞' : (p.stock_quantity != null ? p.stock_quantity : ' ');
- const available = p.is_available !== false;
+ const available = p.is_available !== false && p.admin_hidden !== true;
  const rowId = p.id || p.product_key;
  return `
  <div class="product-card">
@@ -5326,9 +5326,12 @@ function filterProducts() {
  (p.description || '').toLowerCase().includes(q)
  );
  }
- // Admin Logs product catalogue: lowest selling price first.
- // Numeric comparison avoids the incorrect lexicographic order (e.g. 1000 before 900).
+ // Keep customer-visible products at the top and hidden/disabled products below.
+ // Preserve the existing lowest-price-first ordering within each visibility group.
  filtered = [...filtered].sort((a, b) => {
+ const availableA = a.is_available !== false && a.admin_hidden !== true;
+ const availableB = b.is_available !== false && b.admin_hidden !== true;
+ if (availableA !== availableB) return availableA ? -1 : 1;
  const priceA = Number(a.price);
  const priceB = Number(b.price);
  const validA = Number.isFinite(priceA) ? priceA : Number.POSITIVE_INFINITY;
