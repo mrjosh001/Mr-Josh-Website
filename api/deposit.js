@@ -21,6 +21,7 @@ import { rateLimit, applyRateLimitHeaders } from '../lib/rateLimit.js';
 import { rejectClientSuppliedSecrets, applyApiCors, handleOptions, setNoStore } from '../lib/secure.js';
 import { parseAmountNgn } from '../lib/validate.js';
 import { sendError } from '../lib/errors.js';
+import { sendEmailWithFallback } from '../lib/email-provider.js';
 import { createClient } from '@supabase/supabase-js';
 import { sendPushToUser } from '../lib/push.js';
 
@@ -256,12 +257,7 @@ function isPaidStatus(data) {
  * Env: RESEND_API_KEY, RESEND_FROM_EMAIL, APP_URL, SUPPORT_EMAIL
  */
 async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference, tenderedLabel }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <onboarding@resend.dev>';
-  if (!apiKey || !to) {
-    console.warn('[deposit-email] skipped — missing RESEND_API_KEY or recipient');
-    return { ok: false, skipped: true };
-  }
+  if (!to) return { ok: false, skipped: true, error: 'Missing recipient' };
 
   const esc = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -401,21 +397,14 @@ async function sendDepositEmail({ to, name, amountLabel, walletLabel, reference,
 </html>`;
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ from, to: [to], subject, html })
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error('[deposit-email] Resend error', res.status, json);
-      return { ok: false, error: json };
-    }
-    console.log('[deposit-email] sent', json?.id || '');
-    return { ok: true, id: json?.id };
+    const result = await sendEmailWithFallback({
+      from: process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM || 'MJ Hub <noreply@mjhub.store>',
+      to: [to],
+      subject,
+      html
+    }, { context: 'deposit-email' });
+    console.log('[deposit-email] sent via', result.provider || 'email provider', result.id || '');
+    return { ok: true, id: result.id, provider: result.provider };
   } catch (e) {
     console.error('[deposit-email] failed', e?.message || e);
     return { ok: false, error: e?.message || String(e) };
