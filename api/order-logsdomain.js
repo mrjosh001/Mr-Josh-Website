@@ -160,6 +160,30 @@ function bmSellPriceNgn(usd) {
   return Math.ceil(Math.max(supplierNgn * 1.7, supplierNgn + 500, 1000) / 50) * 50;
 }
 
+const BM_TIKTOK_CATEGORY = 'ALL COUNTRIES TIKTOK';
+
+function isBulkmailTikTokProduct(name) {
+  const value = String(name || '').trim();
+  return /tiktok/i.test(value) && !/^(gmail|hotmail|outlook)\b/i.test(value);
+}
+
+function cleanBulkmailText(value) {
+  return String(value || '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&gt;/gi, '>')
+    .replace(/&lt;/gi, '<')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+function bulkmailTikTokPrice(usd) {
+  // Higher-cost supplier stock is the premium tier; the lower-cost tier is standard.
+  return Number(usd || 0) > 0.1 ? 2500 : 2000;
+}
+
 // These specific BulkMail products are approved for automatic stock-based visibility.
 // A positive supplier stock count makes them visible; zero stock hides them.
 // All other BulkMail products retain the existing admin-controlled visibility rules.
@@ -200,18 +224,30 @@ async function handleBulkmailSync(req, res) {
       if (p.id == null) continue;
       const productKey = 'bm_' + p.id;
       const usd = Number(p.price || 0) || 0;
-      const stockQty = Number(p.stock_quantity || p.stock || 0) || 0;
-      const sell = bmSellPriceNgn(usd);
+      const stockRaw = p.stock_quantity != null ? p.stock_quantity : (p.stock != null ? p.stock : 0);
+      const stockQty = Math.max(0, Number(stockRaw) || 0);
       const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
+      const isTikTok = isBulkmailTikTokProduct(name);
+      const sell = isTikTok ? bulkmailTikTokPrice(usd) : bmSellPriceNgn(usd);
+      const description = cleanBulkmailText(p.description || '') || null;
 
       const { data: existing } = await supabase.from('products').select('product_key, admin_hidden').eq('product_key', productKey).maybeSingle();
       if (existing) {
-        // Existing products keep their catalogue metadata. The approved subset follows live stock.
+        // TikTok listings follow the supplier's exact stock on every sync.
         const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', updated_at: now };
-        // An explicit admin hide always wins, including for normally auto-visible keys.
-        // Supplier sync may refresh stock/cost but must never clear admin_hidden.
-        if (existing.admin_hidden) { /* preserve admin visibility decision */ }
-        else if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
+        if (isTikTok) {
+          patch.category = BM_TIKTOK_CATEGORY;
+          patch.price = sell;
+          patch.description = description;
+          if (stockQty > 0) {
+            patch.is_available = true;
+            patch.admin_hidden = false;
+          } else {
+            patch.is_available = false;
+          }
+        } else if (existing.admin_hidden) {
+          // Preserve admin visibility decisions for every non-TikTok BulkMail product.
+        } else if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
           patch.is_available = stockQty > 0;
         } else if (stockQty <= 0) patch.is_available = false;
         else patch.is_available = true;
@@ -220,10 +256,10 @@ async function handleBulkmailSync(req, res) {
       } else {
         const { error } = await supabase.from('products').insert({
           product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
-          is_available: BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0,
-          admin_hidden: !BM_STOCK_VISIBILITY_KEYS.has(productKey),
-          category: 'BulkMail', source: 'bulkmail',
-          description: String(p.description || '').trim() || null, updated_at: now
+          is_available: isTikTok ? stockQty > 0 : (BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0),
+          admin_hidden: isTikTok ? stockQty <= 0 : !BM_STOCK_VISIBILITY_KEYS.has(productKey),
+          category: isTikTok ? BM_TIKTOK_CATEGORY : 'BulkMail', source: 'bulkmail',
+          description: description, updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalNew++;
       }
