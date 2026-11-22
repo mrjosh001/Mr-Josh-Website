@@ -2274,6 +2274,8 @@ function renderAdminLoginCaptcha(attempt = 0) {
     adminLoginCaptchaRetryTimer = null;
     renderAdminLoginCaptcha(attempt + 1);
    }, 250);
+  } else if (attempt >= 24) {
+   mount.textContent = 'Security check could not load. Check your connection and refresh the page.';
   }
   return;
  }
