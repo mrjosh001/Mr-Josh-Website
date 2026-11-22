@@ -13,7 +13,7 @@
 <style>
 :root{color-scheme:dark;--bg:#09090b;--card:#121216;--text:#fafafa;--muted:#a1a1aa;--border:#27272a;--primary:#3b82f6;--danger:#f87171}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse 80% 50% at 20% -10%,rgba(59,130,246,.1),transparent),var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
-.card{width:min(100%,400px);padding:32px 26px;background:var(--card);border:1px solid var(--border);border-radius:20px;box-shadow:0 18px 55px #0008}
+.card{width:min(100%,400px);padding:32px 26px;background:#15151c;border:1px solid #3f3f46;border-radius:20px;box-shadow:0 18px 55px #000a;position:relative;z-index:1}
 .logo{display:block;width:auto;height:42px;max-width:190px;object-fit:contain;margin:0 auto 20px}
 h1{font-size:22px;margin:0 0 6px;text-align:center}p{font-size:13px;color:var(--muted);text-align:center;margin:0 0 25px}
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 7px}
@@ -24,6 +24,7 @@ button:disabled{opacity:.65;cursor:wait}.error{min-height:20px;margin-top:12px;c
 </style>
 </head>
 <body>
+<noscript><div style="max-width:400px;margin:40px auto;padding:20px;background:#121216;border:1px solid #27272a;border-radius:16px;color:#fafafa;font-family:system-ui;text-align:center">Enable JavaScript to sign in to MJ HUB Admin.</div></noscript>
 <main class="card">
 <img class="logo" src="/img/IMG_3027.png" alt="MJ HUB">
 <h1>Admin sign in</h1><p>Sign in with an authorised MJ HUB administrator account.</p>
@@ -42,28 +43,44 @@ button:disabled{opacity:.65;cursor:wait}.error{min-height:20px;margin-top:12px;c
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY='sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 const SITE_KEY='0x4AAAAAAF0CXjc8jL8djc4l';
+if(!window.supabase){document.getElementById('loginError').textContent='Security library failed to load. Check your connection and refresh.';return;}
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.sessionStorage}});
 const mount=document.getElementById('adminCaptcha'),errorEl=document.getElementById('loginError'),button=document.getElementById('signInButton');
 let widgetId=null,token='',apiPromise=null,scriptFailed=false;
 function showError(message){errorEl.textContent=message||'Security verification could not load. Refresh and try again.';}
 function loadTurnstile(){
- if(window.turnstile&&typeof window.turnstile.render==='function')return new Promise(resolve=>window.turnstile.ready(()=>resolve(window.turnstile)));
+ if(window.turnstile&&typeof window.turnstile.render==='function')return Promise.resolve(window.turnstile);
+ if(scriptFailed)return Promise.reject(new Error('Turnstile script previously failed to load'));
  if(apiPromise)return apiPromise;
  apiPromise=new Promise((resolve,reject)=>{
-  let script=document.getElementById('mjAdminAuthTurnstile');
-  if(!script||scriptFailed){if(script)script.remove();script=document.createElement('script');script.id='mjAdminAuthTurnstile';script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.defer=true;}
-  let settled=false;const timer=setTimeout(()=>finish(new Error('Security check timed out.')),12000);
-  function finish(err){if(settled)return;settled=true;clearTimeout(timer);if(err){scriptFailed=true;apiPromise=null;reject(err);return;}scriptFailed=false;window.turnstile.ready(()=>resolve(window.turnstile));}
-  script.addEventListener('load',()=>finish(window.turnstile?null:new Error('Turnstile did not initialise')),{once:true});
-  script.addEventListener('error',()=>finish(new Error('Could not load security verification.')),{once:true});
-  if(window.turnstile)finish(null);else if(!script.isConnected)document.head.appendChild(script);
+  const existing=document.getElementById('mjAdminAuthTurnstile');
+  if(existing){
+   if(window.turnstile){resolve(window.turnstile);return;}
+   existing.addEventListener('load',()=>resolve(window.turnstile),{once:true});
+   existing.addEventListener('error',()=>{scriptFailed=true;reject(new Error('Turnstile script failed to load'));},{once:true});
+   return;
+  }
+  const script=document.createElement('script');
+  script.id='mjAdminAuthTurnstile';
+  script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async=true;
+  script.addEventListener('load',()=>{
+   try{window.turnstile.ready(()=>resolve(window.turnstile));}catch(e){resolve(window.turnstile);}
+  },{once:true});
+  script.addEventListener('error',()=>{scriptFailed=true;reject(new Error('Turnstile script failed to load'));},{once:true});
+  setTimeout(()=>{if(!window.turnstile){scriptFailed=true;reject(new Error('Turnstile load timed out'));}},12000);
+  document.head.appendChild(script);
  });
  return apiPromise;
 }
 async function initCaptcha(){
  try{
-  const api=await loadTurnstile();if(widgetId!==null)return;
-  widgetId=api.render(mount,{sitekey:SITE_KEY,theme:'auto',appearance:'always',execution:'render',retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
+  const api=await loadTurnstile();
+  if(!mount)return;
+  if(widgetId!==null){try{api.remove(widgetId);}catch(e){} widgetId=null;}
+  mount.replaceChildren();
+  widgetId=api.render(mount,{
+   sitekey:SITE_KEY,theme:'auto',appearance:'always',execution:'render',retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
    callback:value=>{token=value||'';},'expired-callback':()=>{token='';},'timeout-callback':()=>{token='';},
    'error-callback':code=>{token='';console.warn('[MJ HUB Admin Auth] Turnstile error:',code);return false;}
   });
@@ -94,7 +111,7 @@ document.getElementById('adminLoginForm').addEventListener('submit',async event=
   location.replace('/admin.html');
  }catch(e){showError(e.message||'Sign in failed.');button.disabled=false;button.textContent='Sign In';}
 });
-(async()=>{const handled=await verifyExistingSession();if(!handled)initCaptcha();})();
+(async()=>{try{const handled=await verifyExistingSession();if(!handled)initCaptcha();}catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');try{initCaptcha();}catch(err){}}})();
 })();
 </script>
 </body></html>
