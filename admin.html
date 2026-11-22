@@ -25,8 +25,6 @@ window.__mjAdminSmsPatch = true;
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <title>MJ HUB: Admin</title>
- <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
-<link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -965,25 +963,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
 
 
  <div id="toastStack" class="toast-stack"></div>
- <div id="loginScreen" class="login-wrap">
- <div class="login-card">
- <img class="login-logo-img" src="/img/IMG_3027.png" alt="MJ HUB">
- <p>Sign in with an admin account</p>
- <div class="field"><label>Email</label><input type="email" id="adminEmail" placeholder="admin@example.com" /></div>
- <div class="field">
- <label>Password</label>
- <div style="position:relative;">
- <input type="password" id="adminPassword" placeholder="••••••••" style="padding-right:44px;" />
- <button type="button" id="togglePasswordBtn" onclick="toggleAdminPasswordVisibility()" aria-label="Show password"
- style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;width:32px;height:32px;">
- <i class="fas fa-eye" id="togglePasswordIcon"></i>
- </button>
- </div>
- </div>
- <div id="adminLoginCaptcha" style="display:flex;justify-content:center;margin:0 0 16px;min-height:65px"></div>
- <button class="btn btn-primary" id="adminSignInBtn" onclick="handleLogin()"><i class="fas fa-lock"></i> Sign In</button>
- <div id="loginError" class="error-msg"></div>
- </div>
+ <div id="adminAuthRecovery" class="login-wrap hidden">
+  <div class="login-card">
+   <h1>Admin access check</h1>
+   <p id="adminAuthRecoveryMessage">We could not verify this admin session. Your session has not been cleared.</p>
+   <button class="btn btn-primary" type="button" onclick="location.reload()">Retry verification</button>
+   <button class="btn btn-ghost" type="button" style="width:100%;margin-top:10px" onclick="location.href='/admin/auth'">Return to admin sign in</button>
+  </div>
  </div>
 
  <div id="adminShell" class="shell hidden">
@@ -2253,94 +2239,6 @@ document.addEventListener('click', function(e) {
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
-(function(){
- 'use strict';
- var siteKey='0x4AAAAAAF0CXjc8jL8djc4l';
- var widgetId=null,apiPromise=null,loadTimeout=null,failed=false,currentAttempt=0;
- var adminLoginCaptchaToken='';
- function mount(){return document.getElementById('adminLoginCaptcha');}
- function showError(message){
-  var el=mount();if(!el)return;el.replaceChildren();
-  var note=document.createElement('div');
-  note.style.cssText='font-size:12px;color:#f87171;text-align:center;padding:8px 4px;';
-  note.textContent=message||'Security check could not load. Check your connection and refresh the page.';
-  el.appendChild(note);
- }
- function apiReady(){
-  if(window.turnstile&&typeof window.turnstile.render==='function'){
-   return new Promise(function(resolve){try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}});
-  }
-  if(apiPromise)return apiPromise;
-  apiPromise=new Promise(function(resolve,reject){
-   var script=document.getElementById('mjAdminTurnstileApi');
-   if(!script||failed){
-    if(script&&failed)script.remove();
-    script=document.createElement('script');script.id='mjAdminTurnstileApi';
-    script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-    script.async=true;script.defer=true;document.head.appendChild(script);
-   }
-   var settled=false;
-   function finish(error){
-    if(settled)return;settled=true;
-    if(loadTimeout)clearTimeout(loadTimeout);loadTimeout=null;
-    if(error){failed=true;apiPromise=null;reject(error);return;}
-    failed=false;
-    try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}
-   }
-   script.addEventListener('load',function(){finish(window.turnstile?null:new Error('Turnstile API did not initialise'));},{once:true});
-   script.addEventListener('error',function(){finish(new Error('Turnstile script failed to load'));},{once:true});
-   loadTimeout=setTimeout(function(){finish(new Error('Turnstile load timed out'));},12000);
-   if(window.turnstile)finish(null);
-  });
-  return apiPromise;
- }
- function render(api,attempt){
-  if(attempt!==currentAttempt)return;
-  var el=mount(),screen=document.getElementById('loginScreen');
-  if(!el||(screen&&screen.classList.contains('hidden'))||widgetId!==null)return;
-  el.replaceChildren();
-  try{
-   widgetId=api.render(el,{
-    sitekey:siteKey,theme:'auto',appearance:'always',execution:'render',
-    retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
-    callback:function(token){adminLoginCaptchaToken=token||'';},
-    'expired-callback':function(){adminLoginCaptchaToken='';},
-    'timeout-callback':function(){adminLoginCaptchaToken='';},
-    'error-callback':function(code){adminLoginCaptchaToken='';console.warn('[MJ HUB Admin] Turnstile client error code:',String(code||'unknown'));return false;}
-   });
-   if(widgetId===undefined||widgetId===null){widgetId=null;showError('Unable to start security verification. Refresh the page and try again.');}
-  }catch(error){widgetId=null;showError('Unable to start security verification. Refresh the page and try again.');console.error('[MJ HUB Admin] Turnstile render failed:',error);}
- }
- window.mjEnsureAdminLoginCaptcha=function(){
-  var el=mount(),screen=document.getElementById('loginScreen');
-  if(!el||(screen&&screen.classList.contains('hidden'))||widgetId!==null)return;
-  currentAttempt++;var attempt=currentAttempt;
-  apiReady().then(function(api){render(api,attempt);}).catch(function(error){
-   if(attempt!==currentAttempt)return;
-   showError('Security check could not load. Check your connection and refresh the page.');
-   console.error('[MJ HUB Admin] Turnstile load failed:',error);
-  });
- };
- window.mjGetAdminLoginCaptchaToken=function(){
-  if(adminLoginCaptchaToken)return adminLoginCaptchaToken;
-  if(window.turnstile&&widgetId!==null){
-   try{var response=window.turnstile.getResponse(widgetId);if(response){adminLoginCaptchaToken=response;return response;}}catch(e){}
-  }
-  return '';
- };
- window.resetAdminLoginCaptcha=function(){
-  adminLoginCaptchaToken='';
-  if(window.turnstile&&widgetId!==null){try{window.turnstile.reset(widgetId);}catch(e){}}
- };
- function scheduleInitialCaptcha(){
-  var start=function(){window.mjEnsureAdminLoginCaptcha();};
-  if('requestIdleCallback' in window)window.requestIdleCallback(start,{timeout:1000});
-  else window.setTimeout(start,250);
- }
- if(document.readyState==='complete'||document.readyState==='interactive')scheduleInitialCaptcha();
- else document.addEventListener('DOMContentLoaded',scheduleInitialCaptcha,{once:true});
-})();
-
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
  auth: {
  persistSession: true,
@@ -2518,9 +2416,11 @@ async function evaluateSession(session) {
  // Transient failure (network hiccup, etc.): do NOT sign the admin out
  // or destroy their session. Just let them retry; the session itself is
  // still valid and intact.
- document.getElementById('loginError').textContent =
- 'Could not verify admin access (connection issue). Please try refreshing again.';
- return showLogin();
+ const recovery = document.getElementById('adminAuthRecovery');
+ const message = document.getElementById('adminAuthRecoveryMessage');
+ if (message) message.textContent = 'Could not verify admin access because of a connection issue. Your session is preserved. Retry in a moment.';
+ if (recovery) recovery.classList.remove('hidden');
+ return;
  }
  if (!profile || !isAdminValue(profile.is_admin)) {
  // We successfully read the profile and confirmed this account is not
@@ -2528,7 +2428,6 @@ async function evaluateSession(session) {
  // here is correct.
  await sb.auth.signOut();
  try { sessionStorage.clear(); } catch (e) {}
- document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
  return showLogin();
  }
 
@@ -2561,12 +2460,10 @@ async function fetchAdminProfileWithRetry(userId, attempts = 3) {
 }
 
 function showLogin() {
- document.getElementById('loginScreen').classList.remove('hidden');
- document.getElementById('adminShell').classList.add('hidden');
  stopInactivityTimer();
+ window.location.replace('/admin/auth');
 }
 function showDashboard() {
- document.getElementById('loginScreen').classList.add('hidden');
  document.getElementById('adminShell').classList.remove('hidden');
  startInactivityTimer();
 }
@@ -2582,7 +2479,6 @@ function resetInactivityTimer() {
  if (inactivityTimer) clearTimeout(inactivityTimer);
  inactivityTimer = setTimeout(async () => {
  await sb.auth.signOut();
- document.getElementById('loginError').textContent = 'You were signed out after 10 minutes of inactivity.';
  showLogin();
  }, INACTIVITY_LIMIT_MS);
 }
@@ -2596,49 +2492,6 @@ function stopInactivityTimer() {
  INACTIVITY_EVENTS.forEach(evt => document.removeEventListener(evt, resetInactivityTimer));
 }
 
-function toggleAdminPasswordVisibility() {
- const input = document.getElementById('adminPassword');
- const icon = document.getElementById('togglePasswordIcon');
- if (!input || !icon) return;
- const isHidden = input.type === 'password';
- input.type = isHidden ? 'text' : 'password';
- icon.classList.toggle('fa-eye', !isHidden);
- icon.classList.toggle('fa-eye-slash', isHidden);
-}
-
-async function handleLogin() {
- const email = document.getElementById('adminEmail').value.trim();
- const password = document.getElementById('adminPassword').value;
- const errEl = document.getElementById('loginError');
- const btn = document.getElementById('adminSignInBtn');
- errEl.textContent = '';
- if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
- const captchaToken = window.mjGetAdminLoginCaptchaToken ? window.mjGetAdminLoginCaptchaToken() : '';
-  if (!captchaToken) {
-   errEl.textContent = 'Complete the security check before signing in.';
-   if (window.mjEnsureAdminLoginCaptcha) window.mjEnsureAdminLoginCaptcha();
-   return;
-  }
- if (btn) {
- if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
- btn.disabled = false;
- btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
- }
- try {
- const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: captchaToken } });
- resetAdminLoginCaptcha();
- if (error) {
- errEl.textContent = error.message;
- if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
- return;
- }
- await checkAuth();
- } catch (e) {
- resetAdminLoginCaptcha();
- errEl.textContent = e.message || 'Sign in failed';
- if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.idleHtml || '<i class="fas fa-lock"></i> Sign In'; }
- }
-}
 function closeLogoutConfirm() {
  document.getElementById('logoutConfirmModal')?.classList.remove('open');
 }
@@ -2651,7 +2504,7 @@ async function confirmLogout() {
  const btn = document.getElementById('logoutConfirmBtn');
  if (btn) { btn.disabled = true; btn.textContent = 'Signing out…'; }
  try { await sb.auth.signOut(); } catch (e) {}
- location.reload();
+ location.href = '/admin/auth';
 }
 
 let _adminDataLoading = false;
@@ -7949,8 +7802,7 @@ window.addEventListener('DOMContentLoaded', async () => {
  if (rateInput) rateInput.value = Math.round(liveRate);
  }
  } catch (e) {}
- document.getElementById('adminPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
- document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
+  document.getElementById('lookupCustomerId')?.addEventListener('keydown', e => { if (e.key === 'Enter') lookupByCustomerId(); });
 });
 
 (function patchBoostersTab(){
