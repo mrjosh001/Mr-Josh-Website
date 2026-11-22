@@ -331,7 +331,7 @@ function credentialsFromSupplier(payload) {
   return '';
 }
 
-async function recordTransaction(order, status, subtitle) {
+async function recordTransaction(order, status, subtitle, debit) {
   const amount = Number(order.total_ngn || 0);
   const completed = status === 'completed';
   const pending = status === 'pending';
@@ -343,7 +343,8 @@ async function recordTransaction(order, status, subtitle) {
     title: order.product_name + ' · ' + order.variant_name,
     subtitle,
     amount: '₦' + amount.toLocaleString('en-NG'),
-    amount_ngn: amount,
+    amount_ngn: debit ? Number(debit.ngn_debited || 0) : amount,
+    amount_usd: debit ? Number(debit.usd_debited || 0) : 0,
     status: completed ? 'completed' : (pending ? 'pending' : 'failed'),
     external_reference: order.order_ref,
     supplier_order: order.supplier_response || null,
@@ -503,7 +504,7 @@ async function handleOrder(req, res, body) {
     }).eq('id', order.id);
     const pendingOrder = { ...order, wallet_debit_id: debit.wallet_debit_id };
     await saveMyOrder(pendingOrder, 'processing', 'Supplier response is being verified. Do not purchase again.', null, null);
-    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier response is being verified.');
+    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier response is being verified.', debit);
     return res.status(202).json({ success: true, pending: true, message: 'The supplier response is not yet conclusive. Your order is being checked; please do not purchase again.', data: { order_id: orderRef, status: 'pending_review' } });
   }
 
@@ -518,7 +519,7 @@ async function handleOrder(req, res, body) {
       updated_at: new Date().toISOString()
     }).eq('id', order.id);
     if (refund.ok) await recordTransaction({ ...order, supplier_response: supplier.data }, 'failed',
-      'Supplier rejected the proxy order. Wallet refunded.');
+      'Supplier rejected the proxy order. Wallet refunded.', debit);
     return res.status(refund.ok ? 400 : 503).json({
       success: false,
       message: refund.ok
@@ -539,7 +540,7 @@ async function handleOrder(req, res, body) {
     }).eq('id', order.id);
     const pendingOrder = { ...order, wallet_debit_id: debit.wallet_debit_id };
     await saveMyOrder(pendingOrder, 'processing', 'Supplier accepted the order. Delivery details are being verified; do not purchase again.', supplierOrderId, activationUrl);
-    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier accepted the order. Delivery is being verified.');
+    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier accepted the order. Delivery is being verified.', debit);
     return res.status(202).json({ success: true, pending: true, message: 'Supplier accepted the order. Delivery details are being verified; do not submit another purchase.', data: { order_id: orderRef, status: 'pending_review' } });
   }
 
@@ -575,7 +576,7 @@ async function handleOrder(req, res, body) {
     updated_at: new Date().toISOString()
   }).eq('product_key', productKey);
 
-  await recordTransaction({ ...order, supplier_response: supplier.data }, 'completed', 'Residential proxy delivered.');
+  await recordTransaction({ ...order, supplier_response: supplier.data }, 'completed', 'Residential proxy delivered.', debit);
   const delivery = [credentials, activationUrl ? 'Activation URL: ' + activationUrl : ''].filter(Boolean).join('\n\n');
   return res.status(200).json({ success: true, data: {
     order_id: orderRef,
