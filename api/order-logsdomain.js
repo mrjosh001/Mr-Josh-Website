@@ -162,6 +162,13 @@ function bmSellPriceNgn(usd) {
 
 const BM_TIKTOK_CATEGORY = 'ALL COUNTRIES TIKTOK';
 
+// These two BulkMail mailbox products have approved retail prices and belong in Mails.
+// Visibility follows live supplier stock: positive stock = visible, zero stock = hidden.
+const BM_MAIL_PRODUCTS = {
+  bm_904: { price: 1000 },
+  bm_1333: { price: 2000 }
+};
+
 function isBulkmailTikTokProduct(name) {
   const value = String(name || '').trim();
   return /tiktok/i.test(value) && !/^(gmail|hotmail|outlook)\b/i.test(value);
@@ -228,7 +235,8 @@ async function handleBulkmailSync(req, res) {
       const stockQty = Math.max(0, Number(stockRaw) || 0);
       const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
       const isTikTok = isBulkmailTikTokProduct(name);
-      const sell = isTikTok ? bulkmailTikTokPrice(usd) : bmSellPriceNgn(usd);
+      const mailProduct = BM_MAIL_PRODUCTS[productKey] || null;
+      const sell = isTikTok ? bulkmailTikTokPrice(usd) : (mailProduct ? mailProduct.price : bmSellPriceNgn(usd));
       const description = cleanBulkmailText(p.description || '') || null;
 
       const { data: existing } = await supabase.from('products').select('product_key, admin_hidden').eq('product_key', productKey).maybeSingle();
@@ -245,6 +253,11 @@ async function handleBulkmailSync(req, res) {
           } else {
             patch.is_available = false;
           }
+        } else if (mailProduct) {
+          patch.category = 'MAILS';
+          patch.price = mailProduct.price;
+          patch.is_available = stockQty > 0;
+          patch.admin_hidden = stockQty <= 0;
         } else if (existing.admin_hidden) {
           // Preserve admin visibility decisions for every non-TikTok BulkMail product.
         } else if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
@@ -256,9 +269,9 @@ async function handleBulkmailSync(req, res) {
       } else {
         const { error } = await supabase.from('products').insert({
           product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
-          is_available: isTikTok ? stockQty > 0 : (BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0),
-          admin_hidden: isTikTok ? stockQty <= 0 : !BM_STOCK_VISIBILITY_KEYS.has(productKey),
-          category: isTikTok ? BM_TIKTOK_CATEGORY : 'BulkMail', source: 'bulkmail',
+          is_available: isTikTok ? stockQty > 0 : (mailProduct ? stockQty > 0 : (BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0)),
+          admin_hidden: isTikTok ? stockQty <= 0 : (mailProduct ? stockQty <= 0 : !BM_STOCK_VISIBILITY_KEYS.has(productKey)),
+          category: isTikTok ? BM_TIKTOK_CATEGORY : (mailProduct ? 'MAILS' : 'BulkMail'), source: 'bulkmail',
           description: description, updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalNew++;
