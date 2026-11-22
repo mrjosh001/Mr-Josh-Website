@@ -999,7 +999,13 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="nav-item" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Customers</button>
  <button class="nav-item" data-tab="lookup" onclick="switchTab('lookup')"><i class="fas fa-search"></i> Customer Lookup</button>
  <button class="nav-item" data-tab="products" onclick="switchTab('products')"><i class="fas fa-box"></i> Products & Stock</button>
- <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
+ <div class="nav-group" id="grpLogs">
+  <button class="nav-item nav-group-toggle" type="button" onclick="toggleNavGroup('grpLogs')"><i class="fas fa-book-open"></i> Logs <i class="fas fa-chevron-down nav-caret"></i></button>
+  <div class="nav-sub">
+   <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
+   <button class="nav-item" data-tab="bulkmail-proxy" onclick="switchTab('bulkmail-proxy')"><i class="fas fa-globe"></i> Residential Proxy</button>
+  </div>
+ </div>
 <div class="nav-group" id="grpSms">
 <button class="nav-item nav-group-toggle" type="button" onclick="toggleNavGroup('grpSms')"><i class="fas fa-sim-card"></i> MJ SMS <i class="fas fa-chevron-down nav-caret"></i></button>
 <div class="nav-sub">
@@ -1518,6 +1524,28 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
 
  
+ <div id="tab-bulkmail-proxy" class="tab-content">
+  <div class="panel">
+   <div class="panel-header" style="flex-wrap:wrap;gap:10px;">
+    <div><div class="panel-title">BulkMail Residential Proxy</div><div class="price-note">Residential proxy products and plans only. VPN and IPv4 are excluded.</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+     <button class="btn btn-primary btn-sm" id="btnSyncBulkmailProxy" onclick="syncBulkmailProxyCatalog()"><i class="fas fa-sync"></i> Sync Products</button>
+     <button class="btn btn-ghost btn-sm" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh</button>
+    </div>
+   </div>
+   <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+    <div class="metric-card"><div class="metric-label">Products</div><div class="metric-value" id="proxyAdminProducts">—</div></div>
+    <div class="metric-card"><div class="metric-label">Plans</div><div class="metric-value" id="proxyAdminVariants">—</div></div>
+    <div class="metric-card"><div class="metric-label">Available Stock</div><div class="metric-value" id="proxyAdminStock">—</div></div>
+   </div>
+   <div id="proxyAdminSyncStatus" class="price-note" role="status" style="margin:0 0 12px;">Loading catalogue…</div>
+   <div class="table-wrap"><table style="min-width:760px;"><thead><tr><th>Product</th><th>Plan / Variant</th><th>Supplier Cost</th><th>Retail Price</th><th>Stock</th><th>Status</th></tr></thead>
+    <tbody id="bulkmailProxyAdminTable"><tr><td colspan="6" class="empty-state">Loading Residential Proxy catalogue…</td></tr></tbody>
+   </table></div>
+   <div class="price-note" style="margin-top:10px;">Sync Products fetches the latest BulkMail residential catalogue. Supplier prices and stock are refreshed without changing other BulkMail categories.</div>
+  </div>
+ </div>
+
  <div id="tab-boosters" class="tab-content">
  <div class="panel">
  <div class="panel-header" style="flex-wrap:wrap;gap:8px;">
@@ -2276,6 +2304,7 @@ const tabTitles = {
  'telegram-orders': 'Telegram Orders',
  'esim-orders': 'eSIM Orders',
  orders: 'LOGS Orders',
+  'bulkmail-proxy': 'Residential Proxy',
  'sub-admins': 'Sub-Admins',
  settings: 'Settings'
 };
@@ -7575,6 +7604,47 @@ async function deleteCoupon(id, code) {
 }
 
 
+function showBulkmailProxyAdminError(error) {
+ const el=document.getElementById('proxyAdminSyncStatus');
+ if(el){el.textContent='Could not load Residential Proxy catalogue: '+(error&&error.message?error.message:'Unknown error');el.style.color='var(--danger,#ef4444)';}
+}
+async function loadBulkmailProxyAdminCatalog(){
+ const status=document.getElementById('proxyAdminSyncStatus'),body=document.getElementById('bulkmailProxyAdminTable');
+ if(status){status.textContent='Loading Residential Proxy catalogue…';status.style.color='var(--muted)';}
+ if(body)body.innerHTML='<tr><td colspan="6" class="empty-state">Loading…</td></tr>';
+ const headers=await adminSyncHeaders();
+ const response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_admin_catalog',{method:'GET',headers});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok||!data.success)throw new Error(data.message||('Request failed ('+response.status+')'));
+ const products=Array.isArray(data.products)?data.products:[],variants=Array.isArray(data.variants)?data.variants:[];
+ document.getElementById('proxyAdminProducts').textContent=String(products.length);
+ document.getElementById('proxyAdminVariants').textContent=String(variants.length);
+ document.getElementById('proxyAdminStock').textContent=variants.reduce((s,v)=>s+(v.is_available?Number(v.stock_quantity||0):0),0).toLocaleString('en-NG');
+ if(status){status.textContent='Last catalogue sync: '+(data.last_synced_at?new Date(data.last_synced_at).toLocaleString('en-NG'):'Not synced yet');status.style.color='var(--muted)';}
+ const names=new Map(products.map(p=>[p.product_key,p.name]));
+ if(!variants.length){body.innerHTML='<tr><td colspan="6" class="empty-state">No Residential Proxy plans found. Click Sync Products to fetch the BulkMail catalogue.</td></tr>';return;}
+ body.innerHTML=variants.map(v=>{
+  const available=!!v.is_available&&Number(v.stock_quantity)>0;
+  return '<tr><td>'+escapeHtml(names.get(v.product_key)||v.product_name||v.product_key)+'<div class="price-note">'+escapeHtml(v.product_key||'')+'</div></td><td>'+escapeHtml(v.variant_name||v.variant_id)+'<div class="price-note">Supplier variant: '+escapeHtml(v.variant_id||'')+'</div></td><td>$'+Number(v.supplier_price_usd||0).toFixed(4)+'</td><td class="price">₦'+Number(v.retail_price_ngn||0).toLocaleString('en-NG')+'</td><td>'+Number(v.stock_quantity||0).toLocaleString('en-NG')+'</td><td><span class="badge '+(available?'badge-on':'badge-off')+'">'+(available?'Available':'Out of stock')+'</span></td></tr>';
+ }).join('');
+}
+async function syncBulkmailProxyCatalog(){
+ const btn=document.getElementById('btnSyncBulkmailProxy'),idle='<i class="fas fa-sync"></i> Sync Products';
+ if(typeof setSyncButtonLoading==='function')setSyncButtonLoading(btn,true,idle);
+ const status=document.getElementById('proxyAdminSyncStatus');
+ if(status){status.textContent='Syncing residential proxy products from BulkMail…';status.style.color='var(--primary)';}
+ try{
+  const headers=await adminSyncHeaders(),response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_sync',{method:'GET',headers});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw new Error(data.message||('Sync failed ('+response.status+')'));
+  await loadBulkmailProxyAdminCatalog();
+  const summary='Sync complete · Products seen: '+(data.products_seen||0)+' · New: '+(data.products_created||0)+' · Updated: '+(data.products_updated||0)+' · Plans saved: '+(data.variants_saved||0)+' · Errors: '+(data.write_errors||0);
+  if(status){status.textContent=summary;status.style.color=data.write_errors?'var(--warning,#f59e0b)':'var(--success,#22c55e)';}
+  if(typeof showAdminToast==='function')showAdminToast(summary,data.write_errors?'warning':'success');
+ }catch(error){showBulkmailProxyAdminError(error);if(typeof showAdminToast==='function')showAdminToast(error.message||'Residential Proxy sync failed','error');}
+ finally{if(typeof setSyncButtonLoading==='function')setSyncButtonLoading(btn,false,idle);}
+}
+
 function switchTab(name) {
  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -7584,6 +7654,7 @@ function switchTab(name) {
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
  if (name === 'coupons') loadCoupons();
+ if (name === 'bulkmail-proxy') loadBulkmailProxyAdminCatalog().catch(showBulkmailProxyAdminError);
  closeSidebar();
  // Load large datasets only when the matching section is opened.
  if (name === 'products' && !_productsLoaded) {
