@@ -1750,7 +1750,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">Orders</div><div class="metric-value" id="tgMetTotal">—</div><div class="metric-sub">All Telegram orders</div></div>
  <div class="metric-card"><div class="metric-label">Open</div><div class="metric-value" id="tgMetOpen" style="color:#fbbf24;">—</div><div class="metric-sub">Pending / in progress (this page)</div></div>
  <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value" id="tgMetDone" style="color:#34d399;">—</div><div class="metric-sub">Delivered (this page)</div></div>
- <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="tgMetRev">—</div><div class="metric-sub">Paid on this page</div></div>
+ <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="tgMetRev">—</div><div class="metric-sub">Paid across all eSIM orders</div></div>
  </div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
  <input type="search" id="tgOrderSearch" placeholder="Search @username, order ID, customer ID or package…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){tgOrderPage=1;loadTelegramOrders()}">
@@ -7187,6 +7187,7 @@ async function loadEsimOrders() {
  }
  esimOrdersCache = data.data || [];
  esimOrdersCache._total = data.total || 0;
+ esimOrdersCache._summary = data.summary || null;
  renderEsimOrders();
  } catch (e) {
  if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
@@ -7199,19 +7200,24 @@ function renderEsimOrders() {
  const cards = document.getElementById('esimOrdersCards');
  const pager = document.getElementById('esimOrdersPager');
  const all = esimOrdersCache || [];
- const total = all._total || all.length;
+ const pageTotal = all._total || all.length;
+ const summary = all._summary || null;
  const renewalPending = all.filter(o => esimIsRenewal(o) && !esimIsClosed(o) && !esimIsDelivered(o));
  const waiting = all.filter(o => !esimIsRenewal(o) && !esimIsClosed(o) && !esimIsDelivered(o));
  const done = all.filter(o => esimIsDelivered(o));
- const rev = all.filter(o => !esimIsClosed(o)).reduce((n, o) => n + (Number(o.amount_ngn) || 0), 0);
+ const metricTotal = summary ? Number(summary.total || 0) : pageTotal;
+ const metricWaiting = summary ? Number(summary.waiting || 0) : waiting.length;
+ const metricRenewalPending = summary ? Number(summary.renewal_pending || 0) : renewalPending.length;
+ const metricDone = summary ? Number(summary.completed || 0) : done.length;
+ const rev = summary ? Number(summary.revenue_ngn || 0) : all.filter(o => !esimIsClosed(o)).reduce((n, o) => n + (Number(o.amount_ngn) || 0), 0);
  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
- set('esimMetTotal', Number(total).toLocaleString());
- set('esimMetWait', String(waiting.length));
- set('esimMetRenewalWait', String(renewalPending.length));
- set('esimMetDone', String(done.length));
+ set('esimMetTotal', Number(metricTotal).toLocaleString());
+ set('esimMetWait', String(metricWaiting));
+ set('esimMetRenewalWait', String(metricRenewalPending));
+ set('esimMetDone', String(metricDone));
  set('esimMetRev', '₦' + rev.toLocaleString());
  const badge = document.getElementById('esimNavBadge');
- const outstanding=waiting.length+renewalPending.length;
+ const outstanding=metricWaiting+metricRenewalPending;
  if (badge) { badge.textContent = String(outstanding); badge.style.display = outstanding ? 'inline-block' : 'none'; }
  const f = document.getElementById('esimOrderFilter')?.value || 'all';
  const rows = f === 'waiting' ? waiting : f === 'renewal_pending' ? renewalPending : f === 'done' ? done : all;
@@ -7250,10 +7256,10 @@ function renderEsimOrders() {
     <div style="margin-top:10px;">${esimActionBtn(o)}</div>
    </div>`).join('');
  }
- const maxPage = Math.max(1, Math.ceil(total / 20));
+ const maxPage = Math.max(1, Math.ceil(pageTotal / 20));
  if (pager) pager.innerHTML = `
   <button class="btn btn-ghost btn-sm" ${esimOrderPage<=1?'disabled':''} onclick="esimOrderPage=Math.max(1,esimOrderPage-1);loadEsimOrders()">Prev</button>
-  <span>Page ${esimOrderPage}/${maxPage} · ${total} orders</span>
+  <span>Page ${esimOrderPage}/${maxPage} · ${pageTotal} orders</span>
   <button class="btn btn-ghost btn-sm" ${esimOrderPage>=maxPage?'disabled':''} onclick="esimOrderPage++;loadEsimOrders()">Next</button>`;
 }
 function openEsimDeliver(id) {
