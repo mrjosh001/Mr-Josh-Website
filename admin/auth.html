@@ -92,7 +92,7 @@ async function verifyExistingSession(){
  const {data:{session}}=await sb.auth.getSession();if(!session)return false;
  const {data,error}=await sb.from('profiles').select('is_admin').eq('id',session.user.id).maybeSingle();
  if(error){showError('Could not verify your admin access. Sign in again to retry verification.');return false;}
- if(data&&isAdmin(data.is_admin)){location.replace('/admin.html');return true;}
+ if(data&&isAdmin(data.is_admin)){location.replace('/admin/home');return true;}
  await sb.auth.signOut();showError('Access denied. Admin privileges are required.');return false;
 }
 document.getElementById('adminLoginForm').addEventListener('submit',async event=>{
@@ -108,7 +108,7 @@ document.getElementById('adminLoginForm').addEventListener('submit',async event=
   const {data:profile,error:profileError}=await sb.from('profiles').select('is_admin').eq('id',data.user.id).maybeSingle();
   if(profileError)throw new Error('Signed in, but admin access could not be verified. Please retry.');
   if(!profile||!isAdmin(profile.is_admin)){await sb.auth.signOut();throw new Error('Access denied. Admin privileges are required.');}
-  location.replace('/admin.html');
+  location.replace('/admin/home');
  }catch(e){showError(e.message||'Sign in failed.');button.disabled=false;button.textContent='Sign In';}
 });
 (async()=>{try{const handled=await verifyExistingSession();if(!handled)initCaptcha();}catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');try{initCaptcha();}catch(err){}}})();
