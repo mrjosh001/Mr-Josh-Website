@@ -231,6 +231,79 @@ async function handleSync(req, res) {
   }
 }
 
+async function refreshOrderStatus(req, res) {
+  const auth = await requireUser(req);
+  if (auth.error) return res.status(auth.error.status).json({ success: false, message: auth.error.message });
+  const orderRef = String((req.query && req.query.order_ref) || '').trim();
+  if (!orderRef || orderRef.length > 100) return res.status(400).json({ success: false, message: 'Valid order reference is required' });
+
+  const { data: order, error } = await supabase.from('bulkmail_proxy_orders')
+    .select('*').eq('user_id', auth.user.id).eq('order_ref', orderRef).maybeSingle();
+  if (error || !order) return res.status(404).json({ success: false, message: 'Proxy order not found' });
+  if (order.status === 'completed') {
+    return res.status(200).json({ success: true, data: { status: 'completed', order_id: orderRef,
+      login_credentials: [order.credentials, order.activation_url ? 'Activation URL: ' + order.activation_url : ''].filter(Boolean).join('\n\n') } });
+  }
+  if (order.status === 'failed' || order.status === 'refund_pending') {
+    return res.status(200).json({ success: true, data: { status: order.status, refunded: order.refunded === true, order_id: orderRef } });
+  }
+  if (!order.supplier_order_id) {
+    return res.status(202).json({ success: true, pending: true, data: { status: order.status, order_id: orderRef } });
+  }
+
+  const supplier = await bmFetch('/proxy/orders/' + encodeURIComponent(order.supplier_order_id));
+  if (supplier.networkError || supplier.status >= 500 || !supplier.ok) {
+    return res.status(202).json({ success: true, pending: true, data: { status: order.status, order_id: orderRef } });
+  }
+  const payload = unwrapObject(supplier.data);
+  const supplierStatus = String(payload.status || payload.order_status || '').toLowerCase();
+  const credentials = credentialsFromSupplier(payload);
+  const activationUrl = String(payload.activation_url || payload.activationUrl || payload.url || '');
+
+  if (/complete|success|deliver|active/.test(supplierStatus) && (credentials || activationUrl)) {
+    const patch = {
+      status: 'completed',
+      credentials: credentials || null,
+      activation_url: activationUrl || null,
+      supplier_response: supplier.data,
+      updated_at: new Date().toISOString()
+    };
+    const { error: updateError } = await supabase.from('bulkmail_proxy_orders').update(patch).eq('id', order.id);
+    if (updateError) return res.status(202).json({ success: true, pending: true, data: { status: 'pending_review', order_id: orderRef } });
+    const completedText = [credentials, activationUrl ? 'Activation URL: ' + activationUrl : ''].filter(Boolean).join('\n\n');
+    const myOrderError = await saveMyOrder(order, 'completed', completedText, order.supplier_order_id, activationUrl);
+    if (myOrderError) console.error('[bulkmail proxy] order status refreshed but My Orders update failed', myOrderError.message);
+    await supabase.from('transactions').update({
+      status: 'completed',
+      subtitle: 'Residential proxy delivered.',
+      supplier_order: supplier.data
+    }).eq('user_id', order.user_id).eq('external_reference', orderRef);
+    return res.status(200).json({ success: true, data: { status: 'completed', order_id: orderRef, login_credentials: completedText } });
+  }
+
+  if (/fail|cancel|reject|declin|error/.test(supplierStatus)) {
+    const refund = order.wallet_debit_id
+      ? await refundWalletDebit(supabase, order.user_id, order.wallet_debit_id)
+      : { ok: false };
+    const status = refund.ok ? 'failed' : 'refund_pending';
+    await supabase.from('bulkmail_proxy_orders').update({
+      status,
+      refunded: refund.ok,
+      supplier_response: supplier.data,
+      updated_at: new Date().toISOString()
+    }).eq('id', order.id);
+    await saveMyOrder(order, status, refund.ok ? 'BulkMail rejected the order. Wallet refunded.' : 'BulkMail rejected the order. Refund requires support review.', order.supplier_order_id, null);
+    await supabase.from('transactions').update({
+      status: refund.ok ? 'failed' : 'pending',
+      subtitle: refund.ok ? 'Supplier rejected the order. Wallet refunded.' : 'Supplier rejected the order. Refund review required.',
+      supplier_order: supplier.data
+    }).eq('user_id', order.user_id).eq('external_reference', orderRef);
+    return res.status(200).json({ success: true, data: { status, refunded: refund.ok, order_id: orderRef } });
+  }
+
+  return res.status(202).json({ success: true, pending: true, data: { status: order.status, order_id: orderRef } });
+}
+
 async function handleVariants(req, res) {
   const productKey = String(req.query.product_key || '');
   if (!/^bm_proxy_[a-zA-Z0-9_-]{1,100}$/.test(productKey)) {
@@ -527,6 +600,7 @@ export default async function handler(req, res) {
     return handleSync(req, res);
   }
   if (req.method === 'GET' && action === 'variants') return handleVariants(req, res);
+  if (req.method === 'GET' && action === 'refresh_order') return refreshOrderStatus(req, res);
   if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
 
   let body;
