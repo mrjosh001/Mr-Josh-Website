@@ -1051,7 +1051,6 @@ async function loadResidentialProxyVariants(product){
       activeProxyVariant=selected||null;
       if(activeProduct&&selected){
         activeProduct.price=Number(selected.retail_price_ngn)||0;
-        activeProduct.stock_quantity=Number(selected.stock_quantity)||0;
       }
       if(help) help.textContent=selected?'Maximum '+Math.min(Number(selected.max_quantity||1),Number(selected.stock_quantity||0))+' per order for this plan.':'Select a plan to continue.';
       updatePurchaseTotal();
@@ -1082,7 +1081,9 @@ if(activeCoupon&&activeCoupon.code){
 const el=document.getElementById('psTotal');
 if(el) el.textContent=money(total);
 const buyBtn=document.getElementById('psBuyBtn');
-const stock=activeProduct?Number(activeProduct.stock_quantity):NaN;
+const stock=isResidentialProxyProduct(activeProduct)&&activeProxyVariant
+  ? Number(activeProxyVariant.stock_quantity)
+  : (activeProduct?Number(activeProduct.stock_quantity):NaN);
 if(buyBtn) buyBtn.disabled = (isResidentialProxyProduct(activeProduct)&&!activeProxyVariant) || (!Number.isNaN(stock) && stock <= 0);
 }
 
@@ -1100,7 +1101,7 @@ document.getElementById('psQtyMinus').addEventListener('click', function(){
 if(activeQty>1){activeQty--; activeCoupon=null; var cm=document.getElementById("psCouponMsg"); if(cm){cm.textContent="";cm.className="ps-coupon-msg";} updatePurchaseTotal()}
 });
 document.getElementById('psQtyPlus').addEventListener('click', function(){
-const stock=parseInt(activeProduct&&activeProduct.stock_quantity,10);
+const stock=parseInt(isResidentialProxyProduct(activeProduct)&&activeProxyVariant ? activeProxyVariant.stock_quantity : (activeProduct&&activeProduct.stock_quantity),10);
 const cap = Math.min(MAX_QTY, Number.isNaN(stock) ? MAX_QTY : stock);
 const planCap=isResidentialProxyProduct(activeProduct)&&activeProxyVariant?Number(activeProxyVariant.max_quantity||MAX_QTY):MAX_QTY;
 const effectiveCap=Math.min(cap,planCap);
