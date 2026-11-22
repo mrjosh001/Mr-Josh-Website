@@ -409,6 +409,9 @@ export default async function handler(req, res) {
   if (req.method === 'GET' && action === 'bulkmail_proxy_sync') {
     return handleBulkmailProxyAction(req, res, 'sync');
   }
+  if (req.method === 'GET' && action === 'bulkmail_proxy_admin_catalog') {
+    return handleBulkmailProxyAction(req, res, 'admin_catalog');
+  }
 
   // Catalog sync writes to the database and must be admin- or cron-authenticated.
   if (req.method === 'GET' || action === 'sync' || action === 'bulkmail_sync' || action === 'accszone_sync') {
