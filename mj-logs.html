@@ -1035,7 +1035,7 @@ async function loadResidentialProxyVariants(product){
   if(!wrap||!select) return;
   if(buyBtn) buyBtn.disabled=true;
   try{
-    const url='/api/bulkmail-proxy?action=variants&product_key='+encodeURIComponent(product.product_key);
+    const url='/api/order-logsdomain?action=bulkmail_proxy_variants&product_key='+encodeURIComponent(product.product_key);
     const targetKey=product.product_key;
     const response=await fetch(url,{headers:{Accept:'application/json'}});
     const json=await response.json().catch(function(){return {};});
@@ -1207,10 +1207,11 @@ async function confirmResidentialProxyBuy(){
     const {data:{session}}=await sbClient.auth.getSession();
     const token=session&&session.access_token;
     if(!token){showToast('Please sign in again','error');return;}
-    const response=await fetch('/api/bulkmail-proxy',{
+    const response=await fetch('/api/order-logsdomain',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
       body:JSON.stringify({
+        action:'bulkmail_proxy_order',
         product_key:product.product_key,
         variant_id:variant.variant_id,
         quantity:qty,
@@ -1474,7 +1475,7 @@ async function refreshResidentialProxyOrder(){
     const {data:{session}}=await sbClient.auth.getSession();
     const token=session&&session.access_token;
     if(!token){showToast('Sign in again to refresh this order.','error');return;}
-    const response=await fetch('/api/bulkmail-proxy?action=refresh_order&order_ref='+encodeURIComponent(orderRef),{
+    const response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_refresh_order&order_ref='+encodeURIComponent(orderRef),{
       headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}
     });
     const result=await response.json().catch(function(){return {};});
