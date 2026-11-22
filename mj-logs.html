@@ -1052,7 +1052,7 @@ async function loadResidentialProxyVariants(product){
       const selected=json.variants.find(function(v){return String(v.variant_id)===String(select.value);});
       activeProxyVariant=selected||null;
       if(activeProduct&&selected){
-        activeProduct.price=Number(selected.retail_price_ngn)||0;
+        // Keep the catalogue's "From" price unchanged; the modal total reads from activeProxyVariant.
       }
       if(help) help.textContent=selected?'Maximum '+Math.min(Number(selected.max_quantity||1),Number(selected.stock_quantity||0))+' per order for this plan.':'Select a plan to continue.';
       updatePurchaseTotal();
@@ -1512,6 +1512,7 @@ const receiptBadge=document.querySelector('#receiptModal .ps-pill');
 if(receiptBadge) receiptBadge.textContent=receiptStatus||'Delivered';
 const refreshBtn=document.getElementById('rcRefreshBtn');
 if(refreshBtn) refreshBtn.style.display=isResidentialProxyProduct(p)&&receiptStatus==='Processing'?'inline-flex':'none';
+if(!isResidentialProxyProduct(p)||receiptStatus!=='Processing') currentProxyPendingOrderRef=null;
 const receiptFormatTitle=document.querySelector('#receiptModal .ps-format-title');
 if(receiptFormatTitle) receiptFormatTitle.innerHTML=isResidentialProxyProduct(p)?'<i class="fa-solid fa-key"></i> Your proxy details':'<i class="fa-solid fa-key"></i> Your logs';
 document.getElementById('rcIcon').textContent = (displayProductName(p).charAt(0)||'M').toUpperCase();
