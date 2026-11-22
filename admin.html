@@ -25,8 +25,6 @@ window.__mjAdminSmsPatch = true;
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <title>MJ HUB: Admin</title>
- <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
-<link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -2418,9 +2416,11 @@ async function evaluateSession(session) {
  // Transient failure (network hiccup, etc.): do NOT sign the admin out
  // or destroy their session. Just let them retry; the session itself is
  // still valid and intact.
- document.getElementById('loginError').textContent =
- 'Could not verify admin access (connection issue). Please try refreshing again.';
- return showLogin();
+ const recovery = document.getElementById('adminAuthRecovery');
+ const message = document.getElementById('adminAuthRecoveryMessage');
+ if (message) message.textContent = 'Could not verify admin access because of a connection issue. Your session is preserved. Retry in a moment.';
+ if (recovery) recovery.classList.remove('hidden');
+ return;
  }
  if (!profile || !isAdminValue(profile.is_admin)) {
  // We successfully read the profile and confirmed this account is not
@@ -2428,7 +2428,6 @@ async function evaluateSession(session) {
  // here is correct.
  await sb.auth.signOut();
  try { sessionStorage.clear(); } catch (e) {}
- document.getElementById('loginError').textContent = 'Access denied. Admin privileges required.';
  return showLogin();
  }
 
@@ -2465,7 +2464,6 @@ function showLogin() {
  window.location.replace('/admin/auth');
 }
 function showDashboard() {
- document.getElementById('loginScreen').classList.add('hidden');
  document.getElementById('adminShell').classList.remove('hidden');
  startInactivityTimer();
 }
@@ -2481,7 +2479,6 @@ function resetInactivityTimer() {
  if (inactivityTimer) clearTimeout(inactivityTimer);
  inactivityTimer = setTimeout(async () => {
  await sb.auth.signOut();
- document.getElementById('loginError').textContent = 'You were signed out after 10 minutes of inactivity.';
  showLogin();
  }, INACTIVITY_LIMIT_MS);
 }
