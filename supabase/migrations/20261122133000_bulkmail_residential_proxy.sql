@@ -25,6 +25,7 @@ create table if not exists public.bulkmail_proxy_orders (
   user_id uuid not null references auth.users(id) on delete restrict,
   customer_id text,
   product_key text not null,
+  product_id uuid not null references public.products(id) on delete restrict,
   product_name text not null,
   variant_id text not null,
   variant_name text not null,
