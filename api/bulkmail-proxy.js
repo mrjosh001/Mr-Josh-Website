@@ -252,21 +252,52 @@ function credentialsFromSupplier(payload) {
 
 async function recordTransaction(order, status, subtitle) {
   const amount = Number(order.total_ngn || 0);
+  const completed = status === 'completed';
+  const pending = status === 'pending';
   const { error } = await supabase.from('transactions').insert({
     user_id: order.user_id,
     customer_id: order.customer_id || null,
-    type: status === 'completed' ? 'purchase' : 'purchase_failed',
+    type: completed || pending ? 'purchase' : 'purchase_failed',
     category: 'BulkMail Residential Proxy',
     title: order.product_name + ' · ' + order.variant_name,
     subtitle,
     amount: '₦' + amount.toLocaleString('en-NG'),
     amount_ngn: amount,
-    status: status === 'completed' ? 'completed' : 'failed',
+    status: completed ? 'completed' : (pending ? 'pending' : 'failed'),
     external_reference: order.order_ref,
     supplier_order: order.supplier_response || null,
     notes: 'BulkMail Residential Proxy order ' + order.order_ref
   });
   if (error) console.error('[bulkmail proxy] transaction record failed', error.message);
+}
+
+async function saveMyOrder(order, status, credentials, supplierRef, activationUrl) {
+  const row = {
+    order_id: order.order_ref,
+    user_id: order.user_id,
+    product_id: order.product_id,
+    product_code: order.product_key,
+    product_name: order.product_name + ' · ' + order.variant_name,
+    product_type: 'proxy',
+    quantity: order.quantity,
+    amount: order.total_ngn,
+    wallet_debit_id: order.wallet_debit_id,
+    status,
+    description: 'BulkMail Residential Proxy',
+    login_credentials: credentials || null,
+    login_credentials_raw: credentials || null,
+    supplier_ref: supplierRef || order.order_ref,
+    guide_url: activationUrl || null
+  };
+  const { data: existing, error: lookupError } = await supabase.from('orders')
+    .select('order_id').eq('order_id', order.order_ref).eq('user_id', order.user_id).maybeSingle();
+  if (lookupError) return lookupError;
+  if (existing) {
+    const { error } = await supabase.from('orders').update(row).eq('order_id', order.order_ref).eq('user_id', order.user_id);
+    return error;
+  }
+  const { error } = await supabase.from('orders').insert(row);
+  return error;
 }
 
 async function handleOrder(req, res, body) {
@@ -300,7 +331,7 @@ async function handleOrder(req, res, body) {
         activation_url: prior.activation_url || '', status: prior.status
       } });
     }
-    if (['created', 'processing', 'pending_review', 'refund_pending'].includes(prior.status)) {
+    if (['created', 'processing', 'pending_review', 'refund_pending', 'debit_review'].includes(prior.status)) {
       return res.status(202).json({ success: true, pending: true, message: 'This order is already being processed. Do not submit it again.', data: { order_id: prior.order_ref, status: prior.status } });
     }
     return res.status(409).json({ success: false, message: 'This order reference has already been used. Refresh the page before retrying.' });
@@ -316,6 +347,9 @@ async function handleOrder(req, res, body) {
   const unitPrice = Number(variant.retail_price_ngn);
   const total = Math.round(unitPrice * quantity * 100) / 100;
   if (!(total > 0) || !Number.isFinite(total)) return res.status(400).json({ success: false, message: 'This proxy plan has an invalid price.' });
+  const { data: product, error: productError } = await supabase.from('products')
+    .select('id, product_key, name').eq('product_key', productKey).eq('is_available', true).maybeSingle();
+  if (productError || !product) return res.status(409).json({ success: false, message: 'This proxy product is no longer available.' });
   const { data: profile, error: profileError } = await supabase.from('profiles')
     .select('customer_id').eq('id', userId).single();
   if (profileError || !profile) return res.status(400).json({ success: false, message: 'User profile not found' });
@@ -325,6 +359,7 @@ async function handleOrder(req, res, body) {
     user_id: userId,
     customer_id: profile.customer_id || null,
     product_key: productKey,
+    product_id: product.id,
     product_name: variant.product_name,
     variant_id: variantId,
     variant_name: variant.variant_name,
@@ -343,8 +378,21 @@ async function handleOrder(req, res, body) {
 
   const debit = await debitWallet(supabase, userId, total);
   if (!debit.ok) {
-    await supabase.from('bulkmail_proxy_orders').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', order.id);
-    return res.status(402).json({ success: false, message: debit.message || 'Insufficient wallet balance.', balance_ngn: debit.balance_ngn, balance_usd: debit.balance_usd });
+    const uncertain = !debit.insufficient;
+    await supabase.from('bulkmail_proxy_orders').update({
+      status: uncertain ? 'debit_review' : 'failed',
+      updated_at: new Date().toISOString()
+    }).eq('id', order.id);
+    return res.status(uncertain ? 503 : 402).json({
+      success: false,
+      pending: uncertain,
+      message: uncertain
+        ? 'We could not confirm the wallet debit response. This order is locked for reconciliation; do not submit it again.'
+        : (debit.message || 'Insufficient wallet balance.'),
+      balance_ngn: debit.balance_ngn,
+      balance_usd: debit.balance_usd,
+      order_id: orderRef
+    });
   }
 
   const { error: debitLinkError } = await supabase.from('bulkmail_proxy_orders')
@@ -372,6 +420,9 @@ async function handleOrder(req, res, body) {
       supplier_response: supplier.data,
       updated_at: new Date().toISOString()
     }).eq('id', order.id);
+    const pendingOrder = { ...order, wallet_debit_id: debit.wallet_debit_id };
+    await saveMyOrder(pendingOrder, 'processing', 'Supplier response is being verified. Do not purchase again.', null, null);
+    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier response is being verified.');
     return res.status(202).json({ success: true, pending: true, message: 'The supplier response is not yet conclusive. Your order is being checked; please do not purchase again.', data: { order_id: orderRef, status: 'pending_review' } });
   }
 
@@ -405,6 +456,9 @@ async function handleOrder(req, res, body) {
       supplier_response: supplier.data,
       updated_at: new Date().toISOString()
     }).eq('id', order.id);
+    const pendingOrder = { ...order, wallet_debit_id: debit.wallet_debit_id };
+    await saveMyOrder(pendingOrder, 'processing', 'Supplier accepted the order. Delivery details are being verified; do not purchase again.', supplierOrderId, activationUrl);
+    await recordTransaction({ ...pendingOrder, supplier_response: supplier.data }, 'pending', 'Supplier accepted the order. Delivery is being verified.');
     return res.status(202).json({ success: true, pending: true, message: 'Supplier accepted the order. Delivery details are being verified; do not submit another purchase.', data: { order_id: orderRef, status: 'pending_review' } });
   }
 
@@ -421,6 +475,24 @@ async function handleOrder(req, res, body) {
     console.error('[bulkmail proxy] supplier accepted but local completion write failed', { orderRef, error: completeError.message });
     return res.status(202).json({ success: true, pending: true, message: 'Supplier accepted the order. Delivery is being reconciled; do not submit another purchase.', data: { order_id: orderRef, status: 'pending_review' } });
   }
+
+  const completedOrder = { ...order, wallet_debit_id: debit.wallet_debit_id };
+  const myOrderError = await saveMyOrder(completedOrder, 'completed', credentials || ('Activation URL: ' + activationUrl), supplierOrderId, activationUrl);
+  if (myOrderError) {
+    console.error('[bulkmail proxy] supplier completed but My Orders write failed', { orderRef, error: myOrderError.message });
+    await supabase.from('bulkmail_proxy_orders').update({ status: 'pending_review', updated_at: new Date().toISOString() }).eq('id', order.id);
+    return res.status(202).json({ success: true, pending: true, message: 'Supplier accepted the order. Delivery is being reconciled; do not submit another purchase.', data: { order_id: orderRef, status: 'pending_review' } });
+  }
+
+  await supabase.from('bulkmail_proxy_variants').update({
+    stock_quantity: Math.max(0, Number(variant.stock_quantity) - quantity),
+    is_available: Number(variant.stock_quantity) - quantity > 0,
+    updated_at: new Date().toISOString()
+  }).eq('variant_id', variantId);
+  await supabase.from('products').update({
+    stock_quantity: Math.max(0, Number(product.stock_quantity || 0) - quantity),
+    updated_at: new Date().toISOString()
+  }).eq('product_key', productKey);
 
   await recordTransaction({ ...order, supplier_response: supplier.data }, 'completed', 'Residential proxy delivered.');
   const delivery = [credentials, activationUrl ? 'Activation URL: ' + activationUrl : ''].filter(Boolean).join('\n\n');
