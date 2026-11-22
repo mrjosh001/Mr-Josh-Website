@@ -1227,6 +1227,8 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
     <button class="btn btn-ghost btn-sm" type="button" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh status</button>
    </div>
    <div id="proxyAdminSyncStatus" class="price-note" role="status">Residential Proxy products are managed in the main Product Catalog above. Use the Plans action on a proxy product to edit individual plan prices.</div>
+   <div id="proxyVisibilitySummary" class="price-note" style="margin:10px 0 12px;">Choose which Residential Proxy products customers can see. Hiding a product does not delete it or affect existing orders.</div>
+   <div id="proxyVisibilityControls" class="mobile-cards"></div>
   </div>
  
  </div>
@@ -5299,6 +5301,7 @@ function renderProducts(list) {
  }).join('');
 
  renderProductCards(items);
+ renderBulkmailProxyVisibilityControls();
 }
 
 function renderProductCards(items) {
@@ -7618,6 +7621,32 @@ function showBulkmailProxyAdminError(error) {
  const el=document.getElementById('proxyAdminSyncStatus');
  if(el){el.textContent='Could not load Residential Proxy catalogue: '+(error&&error.message?error.message:'Unknown error');el.style.color='var(--danger,#ef4444)';}
 }
+function renderBulkmailProxyVisibilityControls(){
+ const wrap=document.getElementById('proxyVisibilityControls');
+ const summary=document.getElementById('proxyVisibilitySummary');
+ if(!wrap)return;
+ const proxies=(allProducts||[]).filter(p=>String(p.product_key||'').startsWith('bm_proxy_'))
+   .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ if(!proxies.length){
+  wrap.innerHTML='<div class="empty-state">No Residential Proxy products found. Sync the catalogue first.</div>';
+  if(summary)summary.textContent='Choose which Residential Proxy products customers can see. Hiding a product does not delete it or affect existing orders.';
+  return;
+ }
+ const visible=proxies.filter(p=>p.is_available!==false&&p.admin_hidden!==true).length;
+ if(summary)summary.textContent=visible+' of '+proxies.length+' proxy products visible to customers. Changes apply to the customer catalogue immediately.';
+ wrap.innerHTML=proxies.map(p=>{
+  const shown=p.is_available!==false&&p.admin_hidden!==true;
+  const stock=Number(p.stock_quantity||0);
+  const stockLabel=stock>0?stock.toLocaleString('en-NG')+' in stock':'Out of stock';
+  const id=String(p.id||p.product_key);
+  return '<div class="product-card" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+   +'<div style="min-width:0;flex:1;"><div style="font-weight:800;font-size:13px;">'+escapeHtml(p.name||p.product_key)+'</div>'
+   +'<div class="meta" style="margin:4px 0 0;">'+escapeHtml(p.category||'Residential Proxy')+' · '+escapeHtml(stockLabel)+'</div></div>'
+   +'<button type="button" class="btn '+(shown?'btn-ghost':'btn-primary')+' btn-sm" onclick="toggleProductAvailability(\''+escapeHtml(id)+'\', '+shown+')" '+(stock<=0&& !shown?'disabled title="Product has no stock"':'')+'><i class="fas '+(shown?'fa-eye-slash':'fa-eye')+'"></i> '+(shown?'Hide from customers':'Show to customers')+'</button>'
+   +'<span class="badge '+(shown?'badge-on':'badge-off')+'">'+(shown?'Visible':'Hidden')+'</span></div>';
+ }).join('');
+}
+
 async function loadBulkmailProxyAdminCatalog(){
  const status=document.getElementById('proxyAdminSyncStatus');
  if(status){status.textContent='Refreshing Residential Proxy catalogue…';status.style.color='var(--muted)';}
