@@ -286,7 +286,7 @@ function buildInvoiceEmail({ fullName, orderRef, planName, carrier, email, imei,
     },
     url: 'https://www.mjhub.store/esim-orders.html'
   };
-  const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, '\u003c');
+  const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 
   return `<!doctype html>
 <html>
