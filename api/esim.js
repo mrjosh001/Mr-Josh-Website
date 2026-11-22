@@ -286,7 +286,7 @@ function buildInvoiceEmail({ fullName, orderRef, planName, carrier, email, imei,
     },
     url: 'https://www.mjhub.store/esim-orders.html'
   };
-  const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+  const jsonLdStr = JSON.stringify(jsonLd).replace(/</g, '\u003c');
 
   return `<!doctype html>
 <html>
@@ -935,7 +935,7 @@ export default async function handler(req, res) {
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
         return res.status(400).json({ success: false, message: 'A valid eSIM order is required.' });
       }
-      if (!/^\\+?[0-9]{7,20}$/.test(phone.replace(/[\\s().-]/g, ''))) {
+      if (!/^\+?[0-9]{7,20}$/.test(phone.replace(/[\s().-]/g, ''))) {
         return res.status(400).json({ success: false, message: 'Enter a valid eSIM phone number (7–20 digits).' });
       }
       const { data: target, error: targetError } = await supabase.from('esim_orders')
