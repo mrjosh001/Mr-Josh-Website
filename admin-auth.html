@@ -19,7 +19,7 @@ h1{font-size:22px;margin:0 0 6px;text-align:center}p{font-size:13px;color:var(--
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 7px}
 .field{margin-bottom:16px}input{width:100%;padding:13px 14px;border-radius:11px;border:1px solid var(--border);background:#09090b;color:var(--text);font:inherit;outline:none}input:focus{border-color:var(--primary)}
 #adminCaptcha{display:flex;justify-content:center;min-height:65px;margin:4px 0 16px}
-button{width:100%;border:0;border-radius:11px;padding:13px 16px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font:700 14px inherit;cursor:pointer;min-height:46px}
+button{width:100%;border:0;border-radius:11px;padding:13px 16px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font:700 14px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;min-height:46px}
 button:disabled{opacity:.65;cursor:wait}.error{min-height:20px;margin-top:12px;color:var(--danger);font-size:12px;text-align:center}.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -74,9 +74,9 @@ function isAdmin(v){return v===true||v==='true'||v===1||v==='1';}
 async function verifyExistingSession(){
  const {data:{session}}=await sb.auth.getSession();if(!session)return false;
  const {data,error}=await sb.from('profiles').select('is_admin').eq('id',session.user.id).maybeSingle();
- if(error){showError('Could not verify your admin access. Refresh to retry.');return true;}
+ if(error){showError('Could not verify your admin access. Sign in again to retry verification.');return false;}
  if(data&&isAdmin(data.is_admin)){location.replace('/admin.html');return true;}
- await sb.auth.signOut();showError('Access denied. Admin privileges are required.');return true;
+ await sb.auth.signOut();showError('Access denied. Admin privileges are required.');return false;
 }
 document.getElementById('adminLoginForm').addEventListener('submit',async event=>{
  event.preventDefault();errorEl.textContent='';
