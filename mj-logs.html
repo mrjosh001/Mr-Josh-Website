@@ -1036,8 +1036,10 @@ async function loadResidentialProxyVariants(product){
   if(buyBtn) buyBtn.disabled=true;
   try{
     const url='/api/bulkmail-proxy?action=variants&product_key='+encodeURIComponent(product.product_key);
+    const targetKey=product.product_key;
     const response=await fetch(url,{headers:{Accept:'application/json'}});
     const json=await response.json().catch(function(){return {};});
+    if(!activeProduct||activeProduct.product_key!==targetKey) return;
     if(!response.ok||!json.success||!Array.isArray(json.variants)||!json.variants.length){
       select.innerHTML='<option value="">No plans currently available</option>';
       if(help) help.textContent=(json&&json.message)||'No residential proxy plans are currently available. Please try again later.';
