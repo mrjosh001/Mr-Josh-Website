@@ -5,6 +5,7 @@ import { quoteCoupon, redeemCoupon } from '../lib/coupons.js';
 import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '../lib/secure.js';
 import { formatCredentials } from '../lib/formatCredentials.js';
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
+import { handleBulkmailProxyAction } from '../lib/bulkmailProxy.js';
 
 /**
  * /api/order-logsdomain
@@ -398,6 +399,17 @@ export default async function handler(req, res) {
   } catch (e) {}
   const action = String(q.action || '').toLowerCase();
 
+  // Residential Proxy routes share this existing serverless function to stay within Vercel Hobby's 12-function cap.
+  if (req.method === 'GET' && action === 'bulkmail_proxy_variants') {
+    return handleBulkmailProxyAction(req, res, 'variants');
+  }
+  if (req.method === 'GET' && action === 'bulkmail_proxy_refresh_order') {
+    return handleBulkmailProxyAction(req, res, 'refresh_order');
+  }
+  if (req.method === 'GET' && action === 'bulkmail_proxy_sync') {
+    return handleBulkmailProxyAction(req, res, 'sync');
+  }
+
   // Catalog sync writes to the database and must be admin- or cron-authenticated.
   if (req.method === 'GET' || action === 'sync' || action === 'bulkmail_sync' || action === 'accszone_sync') {
     const gate = await requireAdminOrCron(req);
@@ -416,6 +428,10 @@ export default async function handler(req, res) {
     body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   } catch (_) {
     return res.status(400).json({ success: false, message: 'Invalid JSON request body' });
+  }
+
+  if (String(body.action || '').toLowerCase() === 'bulkmail_proxy_order') {
+    return handleBulkmailProxyAction(req, res, 'order', body);
   }
 
   let auth;
