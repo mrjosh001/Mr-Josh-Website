@@ -7294,7 +7294,7 @@ async function saveEsimPhoneNumber() {
  const o = esimPhoneEditCurrent;
  if (!o || esimPhoneEditBusy) return;
  const phone = document.getElementById('esimPhoneEditInput').value.trim();
- if (!/^\\+?[0-9]{7,20}$/.test(phone.replace(/[\\s().-]/g,''))) {
+ if (!/^\+?[0-9]{7,20}$/.test(phone.replace(/[\s().-]/g,''))) {
   showAdminToast('Enter a valid eSIM phone number (7–20 digits).', 'error'); return;
  }
  if (!window.confirm('Save this phone number to eSIM order ' + String(o.order_ref || '') + '? The customer will see it and it will be prefilled for future refills.')) return;
@@ -7501,7 +7501,7 @@ async function createCoupon() {
   const registrationStart = document.getElementById('cpRegistrationStart')?.value || '';
   const registrationEnd = document.getElementById('cpRegistrationEnd')?.value || '';
   if (audience === 'new_users') {
-    if (registrationMode === 'rolling' && (!/^\\d+$/.test(registrationDays) || Number(registrationDays) < 1 || Number(registrationDays) > 3650)) {
+    if (registrationMode === 'rolling' && (!/^\d+$/.test(registrationDays) || Number(registrationDays) < 1 || Number(registrationDays) > 3650)) {
       if (err) err.textContent = 'Enter a rolling registration window between 1 and 3650 days.';
       return;
     }
@@ -8112,10 +8112,10 @@ async function editBoosterService(id, provider) {
   }
   const cost = boosterCostNgn(s);
   const next = prompt(
-    'Selling price (₦) for:\\n' + (s.name || '') +
-    '\\n\\nSupplier: $' + Number(s.supplier_rate_usd || 0).toFixed(4) +
+    'Selling price (₦) for:\n' + (s.name || '') +
+    '\n\nSupplier: $' + Number(s.supplier_rate_usd || 0).toFixed(4) +
     ' (≈ ₦' + Math.round(cost).toLocaleString() + ' at rate ' + Math.round(boosterUsdRate()) + ')' +
-    '\\nCurrent profit: ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(),
+    '\nCurrent profit: ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(),
     String(s.price_ngn ?? '')
   );
   if (next === null) return;
