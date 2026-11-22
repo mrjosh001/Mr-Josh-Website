@@ -279,6 +279,13 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 <div class="ps-block-label">Description</div>
 <div class="ps-block-text" id="psDesc">—</div>
 </div>
+<div class="ps-block" id="psProxyVariantWrap" style="display:none">
+<label class="ps-block-label" for="psProxyVariantSelect">Residential proxy plan</label>
+<select id="psProxyVariantSelect" style="width:100%;padding:12px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;color:#0f172a;font:inherit">
+<option value="">Loading available plans…</option>
+</select>
+<div class="ps-block-text" id="psProxyVariantHelp">Select a plan to see its price and stock.</div>
+</div>
 <div class="ps-format" id="psFormatWrap" style="display:none">
 <div class="ps-format-title"><i class="fa-solid fa-circle-info"></i> Account Format</div>
 <div class="ps-format-box" id="psFormat">—</div>
@@ -370,6 +377,7 @@ let currentUserId = null;
 let currentBalanceNgn = 0;
 let isBuying = false;
 let activeCoupon = null;
+let activeProxyVariant = null;
 
 let purchaseNonce = null;
 let searchQuery = '';
@@ -388,6 +396,7 @@ function cleanText(str){
   return value.replace(/\s+/g,' ').trim();
 }
 function isSujanProduct(p){return !!p && (String(p.source||'').toLowerCase()==='sujandepartment' || /^sj_/i.test(String(p.product_key||'')))}
+function isResidentialProxyProduct(p){return !!p && String(p.source||'').toLowerCase()==='bulkmail' && /^bm_proxy_/i.test(String(p.product_key||''))}
 function isBulkmailTikTokProduct(p){
   const name=String(p && p.name || '');
   return String(p && p.source || '').toLowerCase()==='bulkmail' &&
@@ -742,14 +751,14 @@ const inStock=hasStock?stock>0:true;
 const cat=escapeHtml(p.category||'');
 const inCart=cart.some(i=>(p.id&&i.product_id===p.id)||i.title===displayProductName(p));
 html+='<div class="product-card">';
-html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, displayProductName(p))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+money(price)+'</div></div>';
+html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, displayProductName(p))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+(isResidentialProxyProduct(p)?'From '+money(price):money(price))+'</div></div>';
 if(descHtml) html+='<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">'+descHtml+'</div></details>';
 html+='<div class="product-badges">';
 if(cat) html+='<span class="badge badge-cat">'+cat+'</span>';
 if(hasStock) html+=inStock?'<span class="badge badge-stock">In Stock ('+stock+')</span>':'<span class="badge badge-out">Out of Stock</span>';
 html+='</div><div class="product-actions">';
 if(inStock){
-html+='<button class="btn btn-outline" data-index="'+index+'" data-action="cart"'+(inCart?' disabled':'')+'>'+(inCart?'In Cart':'Add to Cart')+'</button>';
+if(!isResidentialProxyProduct(p)) html+='<button class="btn btn-outline" data-index="'+index+'" data-action="cart"'+(inCart?' disabled':'')+'>'+(inCart?'In Cart':'Add to Cart')+'</button>';
 html+='<button class="btn btn-primary" data-index="'+index+'" data-action="buy">Buy Now</button>';
 } else html+='<button class="btn btn-primary" disabled>Out of Stock</button>';
 html+='</div></div>';
@@ -958,6 +967,13 @@ const price=parseFloat(p.price)||0;
 const stock=parseInt(p.stock_quantity,10);
 const hasStock=!Number.isNaN(stock);
 const format=getAccountFormat(p);
+activeProxyVariant=null;
+const proxyWrap=document.getElementById('psProxyVariantWrap');
+const proxySelect=document.getElementById('psProxyVariantSelect');
+const couponWrap=document.querySelector('.ps-coupon-wrap');
+if(proxyWrap) proxyWrap.style.display=isResidentialProxyProduct(p)?'block':'none';
+if(proxySelect) proxySelect.innerHTML='<option value="">Loading available plans…</option>';
+if(couponWrap) couponWrap.style.display=isResidentialProxyProduct(p)?'none':'';
 document.getElementById('psName').textContent=name;
 const psIconEl=document.getElementById('psIcon');
 const psIconInfo=logIcon(p.category, name);
@@ -992,7 +1008,7 @@ else{wrap.style.display='none'}
 updatePurchaseTotal();
 const rulesWrap = document.getElementById('psRulesWrap');
 const ack = document.getElementById('psRulesAck');
-if (productSkipsRules(p)){
+if (isResidentialProxyProduct(p) || productSkipsRules(p)){
   if (rulesWrap) rulesWrap.style.display = 'none';
   if (ack) ack.checked = true;
 } else {
@@ -1006,10 +1022,55 @@ if (productSkipsRules(p)){
   bindRulesAck();
 }
 document.getElementById('purchaseModal').classList.add('active');
+if(isResidentialProxyProduct(p)) loadResidentialProxyVariants(p);
+}
+
+async function loadResidentialProxyVariants(product){
+  const wrap=document.getElementById('psProxyVariantWrap');
+  const select=document.getElementById('psProxyVariantSelect');
+  const help=document.getElementById('psProxyVariantHelp');
+  const buyBtn=document.getElementById('psBuyBtn');
+  if(!wrap||!select) return;
+  if(buyBtn) buyBtn.disabled=true;
+  try{
+    const url='/api/bulkmail-proxy?action=variants&product_key='+encodeURIComponent(product.product_key);
+    const response=await fetch(url,{headers:{Accept:'application/json'}});
+    const json=await response.json().catch(function(){return {};});
+    if(!response.ok||!json.success||!Array.isArray(json.variants)||!json.variants.length){
+      select.innerHTML='<option value="">No plans currently available</option>';
+      if(help) help.textContent=(json&&json.message)||'No residential proxy plans are currently available. Please try again later.';
+      updatePurchaseTotal();
+      return;
+    }
+    select.innerHTML='<option value="">Choose a proxy plan</option>'+json.variants.map(function(v){
+      const label=String(v.variant_name||'Proxy plan');
+      return '<option value="'+escapeHtml(v.variant_id)+'">'+escapeHtml(label)+' · '+money(v.retail_price_ngn)+' · '+Number(v.stock_quantity||0)+' available</option>';
+    }).join('');
+    select.onchange=function(){
+      const selected=json.variants.find(function(v){return String(v.variant_id)===String(select.value);});
+      activeProxyVariant=selected||null;
+      if(activeProduct&&selected){
+        activeProduct.price=Number(selected.retail_price_ngn)||0;
+        activeProduct.stock_quantity=Number(selected.stock_quantity)||0;
+      }
+      if(help) help.textContent=selected?'Maximum '+Math.min(Number(selected.max_quantity||1),Number(selected.stock_quantity||0))+' per order for this plan.':'Select a plan to continue.';
+      updatePurchaseTotal();
+    };
+    if(help) help.textContent='Choose the residential proxy plan you want to purchase.';
+    activeProxyVariant=null;
+    updatePurchaseTotal();
+  }catch(error){
+    console.error('[mj-logs] residential proxy plans failed',error);
+    select.innerHTML='<option value="">Could not load plans</option>';
+    if(help) help.textContent='Could not load plans. Close this window and try again.';
+    updatePurchaseTotal();
+  }
 }
 
 function updatePurchaseTotal(){
-const price=parseFloat(activeProduct&&activeProduct.price)||0;
+const price=isResidentialProxyProduct(activeProduct)&&activeProxyVariant
+  ? Number(activeProxyVariant.retail_price_ngn)||0
+  : (parseFloat(activeProduct&&activeProduct.price)||0);
 let total=price*activeQty;
 const saveEl=document.getElementById('psSaveLine');
 if(activeCoupon&&activeCoupon.code){
@@ -1022,13 +1083,16 @@ const el=document.getElementById('psTotal');
 if(el) el.textContent=money(total);
 const buyBtn=document.getElementById('psBuyBtn');
 const stock=activeProduct?Number(activeProduct.stock_quantity):NaN;
-if(buyBtn) buyBtn.disabled = (!Number.isNaN(stock) && stock <= 0);
+if(buyBtn) buyBtn.disabled = (isResidentialProxyProduct(activeProduct)&&!activeProxyVariant) || (!Number.isNaN(stock) && stock <= 0);
 }
 
 function closePurchaseModal(){
 document.getElementById('purchaseModal').classList.remove('active');
 activeProduct=null;
 activeCoupon=null;
+activeProxyVariant=null;
+const couponWrap=document.querySelector('.ps-coupon-wrap');
+if(couponWrap) couponWrap.style.display='';
 }
 document.getElementById('purchaseCloseBtn').addEventListener('click', closePurchaseModal);
 document.getElementById('purchaseModal').addEventListener('click', function(e){ if(e.target===this) closePurchaseModal(); });
@@ -1038,8 +1102,10 @@ if(activeQty>1){activeQty--; activeCoupon=null; var cm=document.getElementById("
 document.getElementById('psQtyPlus').addEventListener('click', function(){
 const stock=parseInt(activeProduct&&activeProduct.stock_quantity,10);
 const cap = Math.min(MAX_QTY, Number.isNaN(stock) ? MAX_QTY : stock);
-if(activeQty>=cap){
-showToast(activeQty>=MAX_QTY ? ('Maximum '+MAX_QTY+' per order') : ('Only '+stock+' in stock'),'error');
+const planCap=isResidentialProxyProduct(activeProduct)&&activeProxyVariant?Number(activeProxyVariant.max_quantity||MAX_QTY):MAX_QTY;
+const effectiveCap=Math.min(cap,planCap);
+if(activeQty>=effectiveCap){
+showToast(activeQty>=MAX_QTY || activeQty>=planCap ? ('Maximum '+effectiveCap+' per order') : ('Only '+stock+' in stock'),'error');
 return;
 }
 activeQty++;updatePurchaseTotal();
@@ -1107,6 +1173,77 @@ async function applyPsCoupon(){
 document.getElementById('psCouponBtn')&&document.getElementById('psCouponBtn').addEventListener('click', applyPsCoupon);
 
 
+
+async function confirmResidentialProxyBuy(){
+  const product=activeProduct;
+  const variant=activeProxyVariant;
+  if(!product||!variant){
+    isBuying=false;
+    showToast('Choose an available residential proxy plan first.','error');
+    return;
+  }
+  const qty=Math.max(1,Math.min(100,parseInt(activeQty,10)||1));
+  const unitPrice=Number(variant.retail_price_ngn)||0;
+  const total=unitPrice*qty;
+  const buyBtn=document.getElementById('psBuyBtn');
+  const originalLabel=buyBtn?buyBtn.innerHTML:'';
+  if(buyBtn){buyBtn.disabled=true;buyBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Processing...';}
+  if(!purchaseNonce) purchaseNonce='MJ-PROXY-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
+  try{
+    await refreshBalance();
+    if(currentBalanceNgn<total){
+      showToast('Insufficient balance. Redirecting to deposit...','error');
+      setTimeout(function(){window.location.href='deposit.html';},900);
+      return;
+    }
+    const {data:{session}}=await sbClient.auth.getSession();
+    const token=session&&session.access_token;
+    if(!token){showToast('Please sign in again','error');return;}
+    const response=await fetch('/api/bulkmail-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({
+        product_key:product.product_key,
+        variant_id:variant.variant_id,
+        quantity:qty,
+        user_id:currentUserId,
+        external_order_id:purchaseNonce
+      })
+    });
+    const result=await response.json().catch(function(){return {};});
+    if(response.status===202||result.pending){
+      const pendingText='Your residential proxy order has been submitted and is being verified with BulkMail. Do not submit another purchase for this order. Order reference: '+(result.data&&result.data.order_id||purchaseNonce);
+      closePurchaseModal();
+      openReceiptModal(product,'Residential Proxy · '+variant.variant_name,pendingText,qty,result.data&&result.data.order_id,'Processing');
+      showToast('Order submitted. Delivery is being verified.','success');
+      purchaseNonce=null;
+      return;
+    }
+    if(!response.ok||!result.success){
+      showToast(result.message||'Proxy purchase failed. Please try again.','error');
+      return;
+    }
+    const data=result.data||{};
+    if(data.new_balance!=null) currentBalanceNgn=Number(data.new_balance);
+    const details=String(data.login_credentials||'').trim()||'Your order was accepted. Open My Orders if the delivery details do not appear here.';
+    closePurchaseModal();
+    openReceiptModal(product,'Residential Proxy · '+variant.variant_name,details,qty,data.order_id||purchaseNonce,'Delivered');
+    showToast('Residential proxy purchased successfully.','success');
+    const stock=Number(variant.stock_quantity)||0;
+    variant.stock_quantity=Math.max(0,stock-qty);
+    product.stock_quantity=Math.max(0,(Number(product.stock_quantity)||0)-qty);
+    renderProducts(getFilteredProducts());
+    purchaseNonce=null;
+    await refreshBalance();
+  }catch(error){
+    console.error('[mj-logs] residential proxy purchase failed',error);
+    showToast('Could not confirm the proxy order. Check My Orders before retrying.','error');
+  }finally{
+    isBuying=false;
+    if(buyBtn&&buyBtn.isConnected){buyBtn.disabled=false;buyBtn.innerHTML=originalLabel;}
+  }
+}
+
 async function confirmBuyNow(){
 // Lock FIRST — before any await — so double/triple taps only run once
 if(!activeProduct || isBuying) return;
@@ -1125,6 +1262,7 @@ showToast('Please sign in to buy','error');
 setTimeout(function(){ window.location.href='auth.html'; }, 900);
 return;
 }
+if(isResidentialProxyProduct(activeProduct)) return confirmResidentialProxyBuy();
 const purchasedProduct = activeProduct;
 const qtyRequested = Math.max(1, Math.min(10, parseInt(activeQty, 10) || 1));
 const price = parseFloat(purchasedProduct.price)||0;
@@ -1312,8 +1450,12 @@ async function formatReceiptCredentialsAsync(raw) {
   return formatReceiptCredentials(text);
 }
 
-function openReceiptModal(p, desc, creds, qty, orderId){
+function openReceiptModal(p, desc, creds, qty, orderId, receiptStatus){
 document.getElementById('rcName').textContent = displayProductName(p);
+const receiptBadge=document.querySelector('#receiptModal .ps-pill');
+if(receiptBadge) receiptBadge.textContent=receiptStatus||'Delivered';
+const receiptFormatTitle=document.querySelector('#receiptModal .ps-format-title');
+if(receiptFormatTitle) receiptFormatTitle.innerHTML=isResidentialProxyProduct(p)?'<i class="fa-solid fa-key"></i> Your proxy details':'<i class="fa-solid fa-key"></i> Your logs';
 document.getElementById('rcIcon').textContent = (displayProductName(p).charAt(0)||'M').toUpperCase();
 var metaWrap = document.getElementById('rcMetaWrap');
 var metaEl = document.getElementById('rcMeta');
