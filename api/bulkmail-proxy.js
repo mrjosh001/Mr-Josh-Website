@@ -70,7 +70,7 @@ function normalizeVariant(product, variant) {
   const id = variant && (variant.id ?? variant.variant_id);
   if (id === undefined || id === null || String(id).trim() === '') return null;
   const usd = firstNumber(variant, ['price', 'unit_price', 'cost'], firstNumber(product, ['price', 'unit_price', 'cost'], 0));
-  const stock = Math.floor(firstNumber(variant, ['stock_quantity', 'available_quantity', 'stock', 'quantity'], variant && variant.in_stock === true ? 1 : 0));
+  const stock = Math.floor(firstNumber(variant, ['stock_quantity', 'available_quantity', 'stock', 'available'], variant && variant.in_stock === true ? 1 : 0));
   const max = Math.max(1, Math.floor(firstNumber(variant, ['max_quantity', 'maximum_quantity'], stock || 1)));
   const label = String(variant.name || variant.title || variant.label || variant.description || ('Variant ' + id)).trim();
   return {
@@ -157,7 +157,15 @@ async function handleSync(req, res) {
       const lowest = activeVariants.slice().sort((a, b) => a.retail_price_ngn - b.retail_price_ngn)[0] ||
         entry.variants.slice().sort((a, b) => a.retail_price_ngn - b.retail_price_ngn)[0];
       const description = String(entry.product.description || entry.product.short_description || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000) || null;
-      if (!lowest) continue;
+      if (!lowest) {
+        await supabase.from('bulkmail_proxy_variants')
+          .update({ is_available: false, stock_quantity: 0, updated_at: now })
+          .eq('product_key', productKey);
+        await supabase.from('products')
+          .update({ stock_quantity: 0, is_available: false, updated_at: now })
+          .eq('product_key', productKey);
+        continue;
+      }
 
       const { data: existing, error: lookupError } = await supabase.from('products')
         .select('id, product_key').eq('product_key', productKey).maybeSingle();
@@ -257,8 +265,8 @@ async function recordTransaction(order, status, subtitle) {
   const { error } = await supabase.from('transactions').insert({
     user_id: order.user_id,
     customer_id: order.customer_id || null,
-    type: completed || pending ? 'purchase' : 'purchase_failed',
-    category: 'BulkMail Residential Proxy',
+    type: 'log',
+    category: 'log',
     title: order.product_name + ' · ' + order.variant_name,
     subtitle,
     amount: '₦' + amount.toLocaleString('en-NG'),
