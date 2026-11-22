@@ -19,6 +19,9 @@ function asArray(value) {
   if (Array.isArray(value)) return value;
   if (value && Array.isArray(value.data)) return value.data;
   if (value && value.data && Array.isArray(value.data.data)) return value.data.data;
+  if (value && Array.isArray(value.categories)) return value.categories;
+  if (value && Array.isArray(value.products)) return value.products;
+  if (value && Array.isArray(value.variants)) return value.variants;
   return [];
 }
 
@@ -255,7 +258,10 @@ async function refreshOrderStatus(req, res) {
   if (supplier.networkError || supplier.status >= 500 || !supplier.ok) {
     return res.status(202).json({ success: true, pending: true, data: { status: order.status, order_id: orderRef } });
   }
-  const payload = unwrapObject(supplier.data);
+  const payloadBase = unwrapObject(supplier.data);
+  const payload = payloadBase.order && typeof payloadBase.order === 'object'
+    ? { ...payloadBase, ...payloadBase.order }
+    : payloadBase;
   const supplierStatus = String(payload.status || payload.order_status || '').toLowerCase();
   const credentials = credentialsFromSupplier(payload);
   const activationUrl = String(payload.activation_url || payload.activationUrl || payload.url || '');
@@ -508,7 +514,10 @@ async function handleOrder(req, res, body) {
     return res.status(202).json({ success: true, pending: true, message: 'The supplier response is not yet conclusive. Your order is being checked; please do not purchase again.', data: { order_id: orderRef, status: 'pending_review' } });
   }
 
-  const supplierPayload = unwrapObject(supplier.data);
+  const supplierPayloadBase = unwrapObject(supplier.data);
+  const supplierPayload = supplierPayloadBase.order && typeof supplierPayloadBase.order === 'object'
+    ? { ...supplierPayloadBase, ...supplierPayloadBase.order }
+    : supplierPayloadBase;
   if (!supplier.ok || supplier.data.success === false || supplierPayload.success === false) {
     const refund = await refundWalletDebit(supabase, userId, debit.wallet_debit_id);
     const failedStatus = refund.ok ? 'failed' : 'refund_pending';
