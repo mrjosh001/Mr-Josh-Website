@@ -7246,22 +7246,23 @@ function renderEsimOrders() {
    ? `<div style="font-size:11px;color:var(--muted);">Renewal</div><div style="font-size:12px;font-weight:700;">${escapeHtml(o.order_ref || '')}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">Original</div><div style="font-size:12px;">${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</div>`
    : `<div style="font-size:12px;">${escapeHtml(o.order_ref || '')}</div>`;
   const planCell = (o) => `${esimIsRenewal(o) ? '<div style="font-size:10px;color:var(--info);font-weight:800;letter-spacing:.04em;margin-bottom:3px;">RENEWAL</div>' : ''}<div>${escapeHtml(o.plan_name || o.plan_id || '')}</div>`;
-  const deviceCell = (o) => \`<div style="font-size:11px;color:var(--muted);">Phone number</div><div style="font-family:ui-monospace,monospace;font-size:12px;">\${escapeHtml(o.phone_number || 'Not added yet')}</div>\${!esimIsRenewal(o) && !esimIsClosed(o) ? \`<button class="btn btn-ghost btn-sm" style="width:auto;margin-top:5px;" onclick="openEsimPhoneEditor('\${escapeHtml(o.id)}')">\${o.phone_number ? 'Edit number' : 'Add number'}</button>\` : ''}<div style="font-size:11px;color:var(--muted);margin-top:5px;">IMEI</div><div style="font-family:ui-monospace,monospace;font-size:12px;">\${escapeHtml(o.imei || '—')}</div>\`;\n  if (tbody) tbody.innerHTML = rows.map(o => `
+  const deviceCell = (o) => `<div style="font-size:11px;color:var(--muted);">Phone number</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.phone_number || 'Not added yet')}</div>${!esimIsRenewal(o) && !esimIsClosed(o) ? `<button class="btn btn-ghost btn-sm" style="width:auto;margin-top:5px;" onclick="openEsimPhoneEditor('${escapeHtml(o.id)}')">${o.phone_number ? 'Edit number' : 'Add number'}</button>` : ''}<div style="font-size:11px;color:var(--muted);margin-top:5px;">IMEI</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '—')}</div>`;
+  if (tbody) tbody.innerHTML = rows.map(o => `
    <tr><td>${o.created_at ? ngWhen(o.created_at) : ''}</td><td>${who(o)}</td><td>${planCell(o)}</td><td>${deviceCell(o)}</td><td class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</td><td>${refs(o)}</td><td>${esimStatusBadge(o)}</td><td>${esimActionBtn(o)}</td></tr>`).join('');
   if (cards) cards.innerHTML = rows.map(o => `
    <div class="mobile-card">
     ${esimIsRenewal(o) ? '<div style="font-size:11px;color:var(--info);font-weight:800;letter-spacing:.05em;margin-bottom:6px;">ESIM RENEWAL REQUEST</div>' : ''}
     <div style="font-weight:700;">${escapeHtml(o.full_name || 'No name on file')}</div><div class="meta">${escapeHtml(o.customer_email || '')}</div>
     <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
-    <div class="row-line"><span>Phone number</span><span style="font-family:ui-monospace,monospace;">\${escapeHtml(o.phone_number || 'Not added yet')}</span></div>
-    \${!esimIsRenewal(o) && !esimIsClosed(o) ? \`<div style="margin:4px 0 8px;"><button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimPhoneEditor('\${escapeHtml(o.id)}')">\${o.phone_number ? 'Edit phone number' : 'Add phone number'}</button></div>\` : ''}
-    \${esimIsRenewal(o) ? \`
-     <div class="row-line"><span>Original order</span><span>\${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</span></div>
-     <div class="row-line"><span>Renewal order</span><span>\${escapeHtml(o.order_ref || '')}</span></div>
-    \` : \`
-     <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">\${escapeHtml(o.imei || '')}</span></div>
-     <div class="row-line"><span>Ref</span><span>\${escapeHtml(o.order_ref || '')}</span></div>
-    \`}
+    <div class="row-line"><span>Phone number</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.phone_number || 'Not added yet')}</span></div>
+    ${!esimIsRenewal(o) && !esimIsClosed(o) ? `<div style="margin:4px 0 8px;"><button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimPhoneEditor('${escapeHtml(o.id)}')">${o.phone_number ? 'Edit phone number' : 'Add phone number'}</button></div>` : ''}
+    ${esimIsRenewal(o) ? `
+     <div class="row-line"><span>Original order</span><span>${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</span></div>
+     <div class="row-line"><span>Renewal order</span><span>${escapeHtml(o.order_ref || '')}</span></div>
+    ` : `
+     <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '')}</span></div>
+     <div class="row-line"><span>Ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>
+    `}
     <div class="row-line"><span>Amount paid</span><span class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</span></div>
     <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
     <div class="row-line"><span>Status</span><span>${esimStatusBadge(o)}</span></div>
