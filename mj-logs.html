@@ -353,6 +353,7 @@ details[open] .product-description-toggle::before{transform:rotate(90deg);displa
 </div>
 <div class="product-actions">
 <button type="button" class="btn btn-outline" id="rcCopyBtn">Copy</button>
+<button type="button" class="btn btn-outline" id="rcRefreshBtn" style="display:none">Refresh Delivery</button>
 <a class="btn btn-primary" href="dashboard.html#orders" style="text-align:center;text-decoration:none;">View My Orders</a>
 </div>
 </div>
@@ -378,6 +379,7 @@ let currentBalanceNgn = 0;
 let isBuying = false;
 let activeCoupon = null;
 let activeProxyVariant = null;
+let currentProxyPendingOrderRef = null;
 
 let purchaseNonce = null;
 let searchQuery = '';
@@ -1213,9 +1215,11 @@ async function confirmResidentialProxyBuy(){
     });
     const result=await response.json().catch(function(){return {};});
     if(response.status===202||result.pending){
-      const pendingText='Your residential proxy order has been submitted and is being verified with BulkMail. Do not submit another purchase for this order. Order reference: '+(result.data&&result.data.order_id||purchaseNonce);
+      const pendingRef=result.data&&result.data.order_id||purchaseNonce;
+      const pendingText='Your residential proxy order has been submitted and is being verified with BulkMail. Do not submit another purchase for this order. Order reference: '+pendingRef;
+      currentProxyPendingOrderRef=pendingRef;
       closePurchaseModal();
-      openReceiptModal(product,'Residential Proxy · '+variant.variant_name,pendingText,qty,result.data&&result.data.order_id,'Processing');
+      openReceiptModal(product,'Residential Proxy · '+variant.variant_name,pendingText,qty,pendingRef,'Processing');
       showToast('Order submitted. Delivery is being verified.','success');
       purchaseNonce=null;
       return;
@@ -1229,6 +1233,7 @@ async function confirmResidentialProxyBuy(){
     if(data.new_balance!=null) currentBalanceNgn=Number(data.new_balance);
     const details=String(data.login_credentials||'').trim()||'Your order was accepted. Open My Orders if the delivery details do not appear here.';
     closePurchaseModal();
+    currentProxyPendingOrderRef=null;
     openReceiptModal(product,'Residential Proxy · '+variant.variant_name,details,qty,data.order_id||purchaseNonce,'Delivered');
     showToast('Residential proxy purchased successfully.','success');
     const stock=Number(variant.stock_quantity)||0;
@@ -1452,17 +1457,68 @@ async function formatReceiptCredentialsAsync(raw) {
   return formatReceiptCredentials(text);
 }
 
+
+async function refreshResidentialProxyOrder(){
+  const orderRef=currentProxyPendingOrderRef;
+  const btn=document.getElementById('rcRefreshBtn');
+  if(!orderRef||!btn||btn.disabled) return;
+  const original=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='Checking…';
+  try{
+    const {data:{session}}=await sbClient.auth.getSession();
+    const token=session&&session.access_token;
+    if(!token){showToast('Sign in again to refresh this order.','error');return;}
+    const response=await fetch('/api/bulkmail-proxy?action=refresh_order&order_ref='+encodeURIComponent(orderRef),{
+      headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}
+    });
+    const result=await response.json().catch(function(){return {};});
+    if(!response.ok||!result.success){showToast(result.message||'Could not refresh this order.','error');return;}
+    const data=result.data||{};
+    const badge=document.querySelector('#receiptModal .ps-pill');
+    const creds=document.getElementById('rcCreds');
+    if(data.status==='completed'){
+      if(creds) creds.textContent=data.login_credentials||'Your residential proxy has been delivered.';
+      if(badge) badge.textContent='Delivered';
+      btn.style.display='none';
+      currentProxyPendingOrderRef=null;
+      showToast('Residential proxy delivery confirmed.','success');
+      return;
+    }
+    if(data.status==='failed'||data.status==='refund_pending'){
+      if(creds) creds.textContent=data.refunded
+        ? 'BulkMail rejected this order. Your wallet refund has been processed.'
+        : 'BulkMail rejected this order, but the refund still needs support review. Reference: '+orderRef;
+      if(badge) badge.textContent=data.refunded?'Refunded':'Refund Review';
+      btn.style.display='none';
+      currentProxyPendingOrderRef=null;
+      showToast(data.refunded?'Wallet refund confirmed.':'Refund requires support review.','error');
+      return;
+    }
+    showToast('BulkMail is still processing this order. Check again shortly.','success');
+  }catch(error){
+    console.error('[mj-logs] proxy order refresh failed',error);
+    showToast('Could not refresh delivery. Try again shortly.','error');
+  }finally{
+    btn.disabled=false;
+    btn.textContent=original;
+  }
+}
+document.getElementById('rcRefreshBtn')&&document.getElementById('rcRefreshBtn').addEventListener('click',refreshResidentialProxyOrder);
+
 function openReceiptModal(p, desc, creds, qty, orderId, receiptStatus){
 document.getElementById('rcName').textContent = displayProductName(p);
 const receiptBadge=document.querySelector('#receiptModal .ps-pill');
 if(receiptBadge) receiptBadge.textContent=receiptStatus||'Delivered';
+const refreshBtn=document.getElementById('rcRefreshBtn');
+if(refreshBtn) refreshBtn.style.display=isResidentialProxyProduct(p)&&receiptStatus==='Processing'?'inline-flex':'none';
 const receiptFormatTitle=document.querySelector('#receiptModal .ps-format-title');
 if(receiptFormatTitle) receiptFormatTitle.innerHTML=isResidentialProxyProduct(p)?'<i class="fa-solid fa-key"></i> Your proxy details':'<i class="fa-solid fa-key"></i> Your logs';
 document.getElementById('rcIcon').textContent = (displayProductName(p).charAt(0)||'M').toUpperCase();
 var metaWrap = document.getElementById('rcMetaWrap');
 var metaEl = document.getElementById('rcMeta');
 var metaParts = [];
-if (qty && Number(qty) > 0) metaParts.push(Number(qty) + ' log' + (Number(qty) === 1 ? '' : 's'));
+if (qty && Number(qty) > 0) metaParts.push(Number(qty) + (isResidentialProxyProduct(p) ? ' proxy' : ' log') + (Number(qty) === 1 ? '' : 's'));
 if (orderId) metaParts.push('ID: ' + orderId);
 if (metaWrap && metaEl) {
   if (metaParts.length) { metaWrap.style.display = 'block'; metaEl.textContent = metaParts.join(' · '); }
