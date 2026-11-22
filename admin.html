@@ -1003,7 +1003,6 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
   <button class="nav-item nav-group-toggle" type="button" onclick="toggleNavGroup('grpLogs')"><i class="fas fa-book-open"></i> Logs <i class="fas fa-chevron-down nav-caret"></i></button>
   <div class="nav-sub">
    <button class="nav-item" data-tab="orders" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> LOGS Orders</button>
-   <button class="nav-item" data-tab="bulkmail-proxy" onclick="switchTab('bulkmail-proxy')"><i class="fas fa-globe"></i> Residential Proxy</button>
   </div>
  </div>
 <div class="nav-group" id="grpSms">
@@ -1192,6 +1191,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-ghost btn-sm" id="btnSyncFadded" onclick="syncProductsNow()"><i class="fas fa-sync"></i> Sync Fadded</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncLogsDomain" onclick="syncLogsDomainNow()"><i class="fas fa-sync"></i> Sync Logs Domain</button>
 <button type="button" class="btn btn-ghost btn-sm" id="btnSyncBulkmail" onclick="syncBulkmailCatalog()"><i class="fas fa-sync"></i> Sync BulkMail</button>
+ <button type="button" class="btn btn-ghost btn-sm" id="btnSyncBulkmailProxy" onclick="syncBulkmailProxyCatalog()"><i class="fas fa-globe"></i> Sync Residential Proxy</button>
  <button type="button" class="btn btn-ghost btn-sm" id="btnSyncAccszone" onclick="syncAccszoneCatalog()"><i class="fas fa-sync"></i> Sync AccsZone</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncSujan" onclick="syncSujanNow()"><i class="fas fa-sync"></i> Sync Sujan Dept.</button>
  <button class="btn btn-ghost btn-sm" id="btnSyncClassy" onclick="syncClassyNow()"><i class="fas fa-sync"></i> Sync ClassyTee</button>
@@ -1212,7 +1212,28 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <table>
  <thead>
  <tr>
- <th>Product</th><th>Category</th><th>Cost</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><th>Action</th>
+ <th>Product</th><th>Category</th><th>Cost</th><th>Your Price</th><th>Profit</th><th>Stock</th><th>Status</th><t 
+ <div class="panel" id="bulkmailProxyAdminPanel">
+  <div class="panel">
+   <div class="panel-header" style="flex-wrap:wrap;gap:10px;">
+    <div><div class="panel-title">BulkMail Residential Proxy</div><div class="price-note">Residential proxy products and plans only. VPN and IPv4 are excluded.</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+     <button class="btn btn-primary btn-sm" id="btnSyncBulkmailProxy" onclick="syncBulkmailProxyCatalog()"><i class="fas fa-sync"></i> Sync Products</button>
+     <button class="btn btn-ghost btn-sm" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh</button>
+    </div>
+   </div>
+   <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
+    <div class="metric-card"><div class="metric-label">Products</div><div class="metric-value" id="proxyAdminProducts">—</div></div>
+    <div class="metric-card"><div class="metric-label">Plans</div><div class="metric-value" id="proxyAdminVariants">—</div></div>
+    <div class="metric-card"><div class="metric-label">Available Stock</div><div class="metric-value" id="proxyAdminStock">—</div></div>
+   </div>
+   <div id="proxyAdminSyncStatus" class="price-note" role="status" style="margin:0 0 12px;">Loading catalogue…</div>
+   <div class="table-wrap"><table style="min-width:760px;"><thead><tr><th>Product</th><th>Plan / Variant</th><th>Supplier Cost</th><th>Retail Price</th><th>Stock</th><th>Status</th></tr></thead>
+    <tbody id="bulkmailProxyAdminTable"><tr><td colspan="6" class="empty-state">Loading Residential Proxy catalogue…</td></tr></tbody>
+   </table></div>
+   <div class="price-note" style="margin-top:10px;">Sync Products fetches the latest BulkMail residential catalogue. Supplier prices and stock are refreshed without changing other BulkMail categories.</div>
+  </div></div>
+h>Action</th>
  </tr>
  </thead>
  <tbody id="productsTableBody"></tbody>
@@ -1527,29 +1548,7 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div id="tab-bulkmail-proxy" class="tab-content">
   <div class="panel">
    <div class="panel-header" style="flex-wrap:wrap;gap:10px;">
-    <div><div class="panel-title">BulkMail Residential Proxy</div><div class="price-note">Residential proxy products and plans only. VPN and IPv4 are excluded.</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-     <button class="btn btn-primary btn-sm" id="btnSyncBulkmailProxy" onclick="syncBulkmailProxyCatalog()"><i class="fas fa-sync"></i> Sync Products</button>
-     <button class="btn btn-ghost btn-sm" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh</button>
-    </div>
-   </div>
-   <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
-    <div class="metric-card"><div class="metric-label">Products</div><div class="metric-value" id="proxyAdminProducts">—</div></div>
-    <div class="metric-card"><div class="metric-label">Plans</div><div class="metric-value" id="proxyAdminVariants">—</div></div>
-    <div class="metric-card"><div class="metric-label">Available Stock</div><div class="metric-value" id="proxyAdminStock">—</div></div>
-   </div>
-   <div id="proxyAdminSyncStatus" class="price-note" role="status" style="margin:0 0 12px;">Loading catalogue…</div>
-   <div class="table-wrap"><table style="min-width:760px;"><thead><tr><th>Product</th><th>Plan / Variant</th><th>Supplier Cost</th><th>Retail Price</th><th>Stock</th><th>Status</th></tr></thead>
-    <tbody id="bulkmailProxyAdminTable"><tr><td colspan="6" class="empty-state">Loading Residential Proxy catalogue…</td></tr></tbody>
-   </table></div>
-   <div class="price-note" style="margin-top:10px;">Sync Products fetches the latest BulkMail residential catalogue. Supplier prices and stock are refreshed without changing other BulkMail categories.</div>
-  </div>
- </div>
-
- <div id="tab-boosters" class="tab-content">
- <div class="panel">
- <div class="panel-header" style="flex-wrap:wrap;gap:8px;">
- <div class="panel-title">MJ Boosters Catalog</div>
+    <div><ditle">MJ Boosters Catalog</div>
  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
  <button class="btn btn-primary btn-sm" id="btnOwletSync" onclick="syncBoosterProvider('owlet')"><i class="fas fa-sync"></i> Sync Owlet</button>
  </div>
@@ -2304,7 +2303,6 @@ const tabTitles = {
  'telegram-orders': 'Telegram Orders',
  'esim-orders': 'eSIM Orders',
  orders: 'LOGS Orders',
-  'bulkmail-proxy': 'Residential Proxy',
  'sub-admins': 'Sub-Admins',
  settings: 'Settings'
 };
@@ -7654,13 +7652,13 @@ function switchTab(name) {
  document.getElementById('pageTitle').textContent = tabTitles[name] || name;
  if (name === 'sub-admins') loadSubAdmins();
  if (name === 'coupons') loadCoupons();
- if (name === 'bulkmail-proxy') loadBulkmailProxyAdminCatalog().catch(showBulkmailProxyAdminError);
  closeSidebar();
  // Load large datasets only when the matching section is opened.
  if (name === 'products' && !_productsLoaded) {
    _productsLoaded = true;
    loadProducts().catch(function(e){ _productsLoaded = false; console.error('products', e); });
  }
+ if (name === 'products') loadBulkmailProxyAdminCatalog().catch(showBulkmailProxyAdminError);
  if (name === 'users' && !_profilesLoaded) {
    _profilesLoaded = true;
    loadProfiles().catch(function(e){ _profilesLoaded = false; console.error('profiles', e); });
