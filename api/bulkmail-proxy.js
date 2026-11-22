@@ -348,7 +348,7 @@ async function handleOrder(req, res, body) {
   const total = Math.round(unitPrice * quantity * 100) / 100;
   if (!(total > 0) || !Number.isFinite(total)) return res.status(400).json({ success: false, message: 'This proxy plan has an invalid price.' });
   const { data: product, error: productError } = await supabase.from('products')
-    .select('id, product_key, name').eq('product_key', productKey).eq('is_available', true).maybeSingle();
+    .select('id, product_key, name, stock_quantity').eq('product_key', productKey).eq('is_available', true).maybeSingle();
   if (productError || !product) return res.status(409).json({ success: false, message: 'This proxy product is no longer available.' });
   const { data: profile, error: profileError } = await supabase.from('profiles')
     .select('customer_id').eq('id', userId).single();
