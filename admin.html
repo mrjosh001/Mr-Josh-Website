@@ -7501,7 +7501,7 @@ async function createCoupon() {
   const registrationStart = document.getElementById('cpRegistrationStart')?.value || '';
   const registrationEnd = document.getElementById('cpRegistrationEnd')?.value || '';
   if (audience === 'new_users') {
-    if (registrationMode === 'rolling' && (!/^\d+$/.test(registrationDays) || Number(registrationDays) < 1 || Number(registrationDays) > 3650)) {
+    if (registrationMode === 'rolling' && (!/^\\d+$/.test(registrationDays) || Number(registrationDays) < 1 || Number(registrationDays) > 3650)) {
       if (err) err.textContent = 'Enter a rolling registration window between 1 and 3650 days.';
       return;
     }
@@ -8112,8 +8112,365 @@ async function editBoosterService(id, provider) {
   }
   const cost = boosterCostNgn(s);
   const next = prompt(
-    'Selling price (₦) for:\n' + (s.name || '') +
-    '\n\nSupplier: $' + Number(s.supplier_rate_usd || 0).toFixed(4) +
+    'Selling price (₦) for:\\n' + (s.name || '') +
+    '\\n\\nSupplier:  + Number(s.supplier_rate_usd || 0).toFixed(4) +
+    ' (≈ ₦' + Math.round(cost).toLocaleString() + ' at rate ' + Math.round(boosterUsdRate()) + ')' +
+    '\\nCurrent profit: ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(),
+    String(s.price_ngn ?? '')
+  );
+  if (next === null) return;
+  const price = parseFloat(next);
+  if (isNaN(price) || price < 0) {
+    showAdminToast('Enter a valid price', 'error');
+    return;
+  }
+  const { error } = await sb.from('booster_services').update({
+    price_ngn: price,
+    price_source: 'manual',
+    updated_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) {
+    if (/price_source/i.test(error.message || '')) {
+      const r2 = await sb.from('booster_services').update({ price_ngn: price, updated_at: new Date().toISOString() }).eq('id', id);
+      if (r2.error) {
+        showAdminToast(r2.error.message, 'error');
+        return;
+      }
+    } else {
+      showAdminToast(error.message, 'error');
+      return;
+    }
+  }
+  s.price_ngn = price;
+  s.price_source = 'manual';
+  if (provider === 'owlet') renderOwletServices();
+  else loadBoosterSourceFromDb(provider);
+  showAdminToast('Price updated · profit ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(), 'success');
+}
+async function editOwletService(id) { return editBoosterService(id, 'owlet'); }
+
+function boosterStatusBadge(status) {
+ const s = String(status || 'Pending');
+ const low = s.toLowerCase();
+ let cls = 'badge-pending';
+ if (/completed|success|done|partial/i.test(low)) cls = 'badge-on';
+ else if (/fail|cancel|refund|error/i.test(low)) cls = 'badge-off';
+ else if (/pending|progress|processing|in progress/i.test(low)) cls = 'badge-pending';
+ return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
+}
+
+
+function boosterDeliveryProgress(o) {
+  const qty = Math.max(0, Number(o && o.quantity) || 0);
+  const status = String((o && o.status) || '').toLowerCase();
+  let remains = (o && o.remains != null && o.remains !== '') ? Number(o.remains) : NaN;
+  // Partial = closed: delivered only what landed; remainder is not "left to deliver"
+  if (/partial/i.test(status)) {
+    if (Number.isNaN(remains)) remains = 0;
+    remains = Math.min(qty, Math.max(0, remains));
+    const delivered = Math.max(0, qty - remains);
+    return { qty, delivered, left: 0, known: true, partial: true };
+  }
+  if (Number.isNaN(remains) && /completed|success|done/i.test(status)) remains = 0;
+  if (!Number.isNaN(remains)) {
+    remains = Math.min(qty, Math.max(0, remains));
+    const delivered = Math.max(0, qty - remains);
+    return { qty, delivered, left: remains, known: true };
+  }
+  if (/cancel|fail|refund|error/i.test(status)) {
+    return { qty, delivered: 0, left: 0, known: true };
+  }
+  return { qty, delivered: 0, left: qty, known: false };
+}
+function boosterProgressHtml(o) {
+  const p = boosterDeliveryProgress(o);
+  if (!p.qty) return '<span style="color:var(--muted)">—</span>';
+  if (!p.known && /pending/i.test(String(o.status || ''))) {
+    return '<span style="font-size:12px;font-weight:700;">0 / ' + p.qty.toLocaleString() +
+      '</span><div style="font-size:10px;color:var(--muted);">waiting</div>';
+  }
+  const pct = p.qty ? Math.min(100, Math.round((p.delivered / p.qty) * 100)) : 0;
+  if (p.partial) {
+    return '<span style="font-size:12px;font-weight:800;">' + p.delivered.toLocaleString() + ' / ' + p.qty.toLocaleString() + '</span>' +
+      '<div style="font-size:10px;color:#fbbf24;font-weight:700;">partial · closed · ' + pct + '%</div>';
+  }
+  return '<span style="font-size:12px;font-weight:800;">' + p.delivered.toLocaleString() + ' / ' + p.qty.toLocaleString() + '</span>' +
+    '<div style="font-size:10px;color:' + (p.left > 0 ? '#fbbf24' : '#34d399') + ';font-weight:700;">' +
+    (p.left > 0 ? (p.left.toLocaleString() + ' left') : 'fully delivered') +
+    (p.known ? ' · ' + pct + '%' : '') + '</div>';
+}
+function updateBoosterOrderMetrics(rows, totalOrders) {
+  let ordered = 0, delivered = 0, left = 0, openOrders = 0;
+  (rows || []).forEach(function(o) {
+    const p = boosterDeliveryProgress(o);
+    ordered += p.qty;
+    delivered += p.delivered;
+    left += p.left;
+    if (/pending|progress|processing|in progress/i.test(String(o.status || ''))) openOrders += 1;
+  });
+  const el = function(id){ return document.getElementById(id); };
+  if (el('boBoostOrdered')) el('boBoostOrdered').textContent = ordered.toLocaleString();
+  if (el('boBoostDelivered')) el('boBoostDelivered').textContent = delivered.toLocaleString();
+  if (el('boBoostLeft')) el('boBoostLeft').textContent = left.toLocaleString();
+  if (el('boBoostOpen')) el('boBoostOpen').textContent = String(openOrders);
+  if (el('boBoostOpenSub')) el('boBoostOpenSub').textContent = 'On this page · ' + (totalOrders || 0) + ' total orders';
+}
+
+let boosterOrderPage = 1;
+async function loadBoosterOrders() {
+ const tbody = document.getElementById('boosterOrdersBody');
+ const cards = document.getElementById('boosterOrdersCards');
+ const pager = document.getElementById('boosterOrdersPager');
+ const btn = document.getElementById('btnRefreshBoosterOrders');
+ // This now makes a real Owlet API call per pending order to pull live
+ // status (previously it was an instant re-read of whatever was already
+ // in the database, which is why Refresh looked like it "did nothing" 
+ // it wasn't actually checking anything). Show it's genuinely working.
+ setBtnBusy(btn, true, 'Refreshing…');
+ try {
+ const headers = await authHeaders();
+ const q = (document.getElementById('boosterOrderSearch')?.value || '').trim();
+ const params = new URLSearchParams({ action: 'admin_orders', page: String(boosterOrderPage), page_size: '10', exclude_source: 'smmkings' });
+ if (q) params.set('q', q);
+ const res = await fetch('/api/owlet?' + params.toString(), { headers });
+ const data = await res.json();
+ if (!data.success) {
+ if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(data.message || 'Failed')}</td></tr>`;
+ if (cards) cards.innerHTML = `<div class="empty-state">${escapeHtml(data.message || 'Failed')}</div>`;
+ return;
+ }
+ // Telegram orders have their own tab; never list them here (also covers a server that ignores exclude_source)
+ const rows = (data.data || []).filter(function(o){ return String(o.source || '').toLowerCase() !== 'smmkings'; });
+ if (!rows.length) {
+ if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No booster orders yet.</td></tr>';
+ if (cards) cards.innerHTML = '<div class="empty-state">No booster orders yet.</div>';
+ } else {
+ if (data.delivery_summary) {
+  const s = data.delivery_summary;
+  const el = function(id){ return document.getElementById(id); };
+  if (el('boBoostOrdered')) el('boBoostOrdered').textContent = Number(s.ordered||0).toLocaleString();
+  if (el('boBoostDelivered')) el('boBoostDelivered').textContent = Number(s.delivered||0).toLocaleString();
+  if (el('boBoostLeft')) el('boBoostLeft').textContent = Number(s.left||0).toLocaleString();
+  if (el('boBoostOpen')) el('boBoostOpen').textContent = String(s.open_orders||0);
+  if (el('boBoostOpenSub')) el('boBoostOpenSub').textContent = 'Open orders · ' + (data.total||0) + ' total in DB';
+ } else {
+  updateBoosterOrderMetrics(rows, data.total);
+ }
+ if (tbody) tbody.innerHTML = rows.map(o => `
+ <tr>
+ <td>${o.created_at ? ngWhen(o.created_at) : ' '}</td>
+ <td>${escapeHtml(o.customer_id || (o.user_id || '').slice(0,8) || ' ')}</td>
+ <td style="font-weight:600;">${escapeHtml(o.service_name || o.service_id || ' ')}</td>
+ <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.link || '')}">${escapeHtml(o.link || ' ')}</td>
+ <td>${Number(o.quantity || 0).toLocaleString()}</td>
+ <td>${boosterProgressHtml(o)}</td>
+ <td class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</td>
+ <td>${boosterStatusBadge(o.status)}</td>
+ <td>${escapeHtml(o.supplier_order_id || ' ')}</td>
+ </tr>`).join('');
+ if (cards) cards.innerHTML = rows.map(o => `
+ <div class="mobile-card">
+ <div style="font-weight:700;">${escapeHtml(o.service_name || 'Boost')}</div>
+ <div class="row-line"><span>Date</span><span>${o.created_at ? ngWhen(o.created_at) : '—'}</span></div>
+ <div class="row-line"><span>Status</span>${boosterStatusBadge(o.status)}</div>
+ <div class="row-line"><span>Progress</span><span>${boosterProgressHtml(o)}</span></div>
+ <div class="row-line"><span>Paid</span><span class="price">₦${Number(o.price_ngn || 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Qty</span><span>${Number(o.quantity || 0).toLocaleString()}</span></div>
+ <div class="row-line"><span>Customer</span><span>${escapeHtml(o.customer_id || '—')}</span></div>
+ <div style="font-size:11px;color:var(--muted);margin-top:6px;word-break:break-all;">${escapeHtml(o.link || '')}</div>
+ </div>`).join('');
+ }
+ const maxPage = Math.max(1, Math.ceil((data.total || 0) / 10));
+ if (pager) pager.innerHTML = `
+ <button class="btn btn-ghost btn-sm" ${boosterOrderPage<=1?'disabled':''} onclick="boosterOrderPage=Math.max(1,boosterOrderPage-1);loadBoosterOrders()">Prev</button>
+ <span>Page ${boosterOrderPage}/${maxPage} · ${data.total||0} orders</span>
+ <button class="btn btn-ghost btn-sm" ${boosterOrderPage>=maxPage?'disabled':''} onclick="boosterOrderPage++;loadBoosterOrders()">Next</button>`;
+ } catch (e) {
+ if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message || String(e))}</td></tr>`;
+ } finally {
+ setBtnBusy(btn, false, '<i class="fas fa-sync"></i> Refresh');
+ }
+}
+
+
+(function(){
+ const _st = window.switchTab;
+ if (typeof _st !== 'function') return;
+ window.switchTab = function(tab) {
+ _st(tab);
+ if (tab === 'booster-orders') {
+ const t = document.getElementById('pageTitle');
+ if (t) t.textContent = 'Booster Orders';
+ if (typeof loadBoosterOrders === 'function') loadBoosterOrders();
+ }
+ };
+})();
+</script>
+
+<div class="logout-confirm-overlay" id="logoutConfirmModal" onclick="if(event.target===this)closeLogoutConfirm()">
+ <div class="logout-confirm-card" role="dialog">
+ <h3>Log out?</h3>
+ <p>You will need to sign in again to access the admin dashboard.</p>
+ <div class="logout-confirm-actions">
+ <button type="button" class="logout-btn-cancel" onclick="closeLogoutConfirm()">Cancel</button>
+ <button type="button" class="logout-btn-confirm" id="logoutConfirmBtn" onclick="confirmLogout()">Log out</button>
+ </div>
+ </div>
+</div>
+
+<script>
+/* Main Admin push uses /sw.js at scope /, so lock-screen alerts work while logged out. */
+window.enableAdminSupportPush = async function() {
+ const btn = document.getElementById('adminSupportPushBtn');
+ if (btn) { btn.disabled = true; btn.textContent = 'Enabling…'; }
+ try {
+   if (!window.MJHubPush) throw new Error('Push module is not loaded. Reload the admin page and try again.');
+   await window.MJHubPush.enable({ appId: 'admin_support' });
+   if (btn) btn.textContent = 'Admin Alerts Enabled';
+   if (window.showToast) showToast('Admin push notifications enabled', 'success');
+ } catch (e) {
+   if (btn) { btn.disabled = false; btn.textContent = 'Enable Admin Alerts'; }
+   alert(e.message || 'Could not enable support alerts');
+ }
+};
+async function refreshAdminSupportPushButton() {
+ const btn = document.getElementById('adminSupportPushBtn');
+ const testBtn = document.getElementById('adminSupportPushTestBtn');
+ if (!btn || !window.MJHubPush) return;
+ btn.disabled = false;
+ btn.textContent = 'Checking Admin Alerts…';
+ if (testBtn) testBtn.style.display = 'none';
+ try {
+   const state = await window.MJHubPush.status({ appId: 'admin_support' });
+   if (state.subscribed && state.permission === 'granted') {
+     btn.textContent = state.syncError ? 'Admin Alerts Sync Issue' : 'Admin Alerts Enabled';
+     btn.disabled = true;
+     btn.title = state.syncError
+       ? 'The browser subscription exists, but server sync failed: ' + state.syncError
+       : 'Browser subscription detected. Use Test Alerts to verify actual delivery.';
+     if (testBtn) testBtn.style.display = 'inline-flex';
+   } else if (state.permission === 'denied') {
+     btn.textContent = 'Notifications Blocked';
+     btn.title = 'Allow notifications for MJ HUB in your browser or device settings.';
+   } else {
+     btn.textContent = 'Enable Admin Alerts';
+     btn.title = 'Enable once. Your browser will retain this setting across visits and logout.';
+   }
+ } catch (e) {
+   btn.disabled = false;
+   btn.textContent = 'Enable Admin Alerts';
+   btn.title = e && e.message ? e.message : 'Could not check notification status.';
+ }
+}
+window.testAdminSupportPush = async function() {
+ const btn = document.getElementById('adminSupportPushTestBtn');
+ if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+ try {
+   await window.MJHubPush.testAdminSupport();
+   if (window.showToast) showToast('Test push sent. Check your device notifications.', 'success');
+   else alert('Test push sent. Check your device notifications.');
+ } catch (e) {
+   alert(e.message || 'Test push failed.');
+ } finally {
+   if (btn) { btn.disabled = false; btn.textContent = 'Test Alerts'; }
+ }
+}
+refreshAdminSupportPushButton();
+// Retry server-side subscription reconciliation after the saved admin session
+// has restored. This never requests notification permission again.
+if (typeof sb !== 'undefined' && sb.auth) {
+ sb.auth.onAuthStateChange(function(event) {
+   if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+     refreshAdminSupportPushButton();
+   }
+ });
+}
+
+/* Support desk unread indicator */
+(function() {
+ let badgePollInFlight = false;
+ async function pollSupportBadge() {
+   if (badgePollInFlight || document.visibilityState === 'hidden') return;
+   badgePollInFlight = true;
+   try {
+     if (typeof sb === 'undefined' || !sb) return;
+     const { data: { session } } = await sb.auth.getSession();
+     if (!session) return;
+
+     // Only active conversations can contribute to the admin unread badge.
+     // Closed tickets and browser-local seen timestamps must not create
+     // phantom unread counts after a device change or stale local storage.
+     const { data: tickets, error: ticketError } = await sb.from('support_tickets')
+       .select('id')
+       .in('status', ['open', 'pending'])
+       .limit(400);
+     if (ticketError) return;
+
+     let unreadCount = 0;
+     if (tickets && tickets.length) {
+       const ids = tickets.map(function(ticket){ return ticket.id; });
+       const { data: messages, error: messageError } = await sb.from('support_messages')
+         .select('ticket_id, sender_type, created_at, read_at')
+         .in('ticket_id', ids)
+         .order('created_at', { ascending: false })
+         .limit(800);
+       if (messageError) return;
+
+       const latestByTicket = {};
+       (messages || []).forEach(function(message) {
+         if (message && message.ticket_id && !latestByTicket[message.ticket_id]) {
+           latestByTicket[message.ticket_id] = message;
+         }
+       });
+       unreadCount = Object.keys(latestByTicket).filter(function(ticketId) {
+         const message = latestByTicket[ticketId];
+         const sender = String(message.sender_type || '').toLowerCase();
+         return (sender === 'user' || sender === 'customer') && !message.read_at;
+       }).length;
+     }
+
+     const badge = document.getElementById('supportNavBadge');
+     const bellCount = document.getElementById('supportTopBellCount');
+     const label = unreadCount > 99 ? '99+' : String(unreadCount);
+     if (badge) {
+       badge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+       badge.textContent = label;
+     }
+     if (bellCount) {
+       bellCount.textContent = label;
+       if (unreadCount > 0) bellCount.classList.add('show');
+       else bellCount.classList.remove('show');
+     }
+     document.title = unreadCount > 0
+       ? '(' + unreadCount + ') MJ HUB Admin'
+       : document.title.replace(/^\(\d+\+?\)\s*/, '');
+   } catch (e) {
+     console.warn('[support badge] refresh failed', e);
+   } finally {
+     badgePollInFlight = false;
+   }
+ }
+ setInterval(pollSupportBadge, 30000);
+ setTimeout(pollSupportBadge, 1800);
+ try {
+   if (typeof sb !== 'undefined' && sb) {
+     sb.channel('admin-support-badge')
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, pollSupportBadge)
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, pollSupportBadge)
+       .subscribe();
+   }
+ } catch (e) {}
+})();
+</script>
+<script type="module">
+  import { formatCredentials } from '/lib/formatCredentials.js';
+  window.formatCredentials = formatCredentials;
+</script>
+
+
+
+<!-- Pull-to-refresh is provided by the shared /js/mj-pull-refresh.js implementation. -->
+ + Number(s.supplier_rate_usd || 0).toFixed(4) +
     ' (≈ ₦' + Math.round(cost).toLocaleString() + ' at rate ' + Math.round(boosterUsdRate()) + ')' +
     '\nCurrent profit: ₦' + Math.round(boosterProfitNgn(s)).toLocaleString(),
     String(s.price_ngn ?? '')
