@@ -1995,6 +1995,21 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  </div>
 
+ <div id="esimPhoneEditModal" class="modal-backdrop hidden">
+ <div class="modal" style="max-width:420px;">
+  <h3>eSIM Phone Number</h3>
+  <div id="esimPhoneEditSummary" style="font-size:12px;color:var(--muted);margin-bottom:14px;"></div>
+  <div class="field">
+   <label>Dedicated eSIM phone number</label>
+   <input type="tel" id="esimPhoneEditInput" inputmode="tel" autocomplete="tel" maxlength="24" placeholder="Enter the number assigned to this eSIM">
+   <div class="price-note">This number will be saved to the original order, displayed to the customer, and automatically filled in the refill form.</div>
+  </div>
+  <div class="modal-actions">
+   <button class="btn btn-ghost btn-sm" type="button" onclick="closeEsimPhoneEditor()">Cancel</button>
+   <button class="btn btn-primary btn-sm" type="button" id="esimPhoneEditSave" onclick="saveEsimPhoneNumber()">Save phone number</button>
+  </div>
+ </div>
+ </div>
  <div id="esimDeliverModal" class="modal-backdrop hidden">
  <div class="modal" style="max-width:480px;">
  <h3 id="esimDeliverTitle">Deliver eSIM</h3>
@@ -7231,9 +7246,7 @@ function renderEsimOrders() {
    ? `<div style="font-size:11px;color:var(--muted);">Renewal</div><div style="font-size:12px;font-weight:700;">${escapeHtml(o.order_ref || '')}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">Original</div><div style="font-size:12px;">${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</div>`
    : `<div style="font-size:12px;">${escapeHtml(o.order_ref || '')}</div>`;
   const planCell = (o) => `${esimIsRenewal(o) ? '<div style="font-size:10px;color:var(--info);font-weight:800;letter-spacing:.04em;margin-bottom:3px;">RENEWAL</div>' : ''}<div>${escapeHtml(o.plan_name || o.plan_id || '')}</div>`;
-  const deviceCell = (o) => esimIsRenewal(o)
-   ? `<div style="font-size:11px;color:var(--muted);">Dedicated number</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.phone_number || 'Not provided')}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">IMEI</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '—')}</div>`
-   : `<div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '')}</div>`;
+  const deviceCell = (o) => `<div style="font-size:11px;color:var(--muted);">Phone number</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.phone_number || 'Not added yet')}</div>${!esimIsRenewal(o) && !esimIsClosed(o) ? `<button class="btn btn-ghost btn-sm" style="width:auto;margin-top:5px;" onclick="openEsimPhoneEditor('${escapeHtml(o.id)}')">${o.phone_number ? 'Edit number' : 'Add number'}</button>` : ''}<div style="font-size:11px;color:var(--muted);margin-top:5px;">IMEI</div><div style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(o.imei || '—')}</div>`;
   if (tbody) tbody.innerHTML = rows.map(o => `
    <tr><td>${o.created_at ? ngWhen(o.created_at) : ''}</td><td>${who(o)}</td><td>${planCell(o)}</td><td>${deviceCell(o)}</td><td class="price">₦${Number(o.amount_ngn || 0).toLocaleString()}</td><td>${refs(o)}</td><td>${esimStatusBadge(o)}</td><td>${esimActionBtn(o)}</td></tr>`).join('');
   if (cards) cards.innerHTML = rows.map(o => `
@@ -7241,11 +7254,11 @@ function renderEsimOrders() {
     ${esimIsRenewal(o) ? '<div style="font-size:11px;color:var(--info);font-weight:800;letter-spacing:.05em;margin-bottom:6px;">ESIM RENEWAL REQUEST</div>' : ''}
     <div style="font-weight:700;">${escapeHtml(o.full_name || 'No name on file')}</div><div class="meta">${escapeHtml(o.customer_email || '')}</div>
     <div class="row-line"><span>Plan</span><span>${escapeHtml(o.plan_name || '')}</span></div>
+    <div class="row-line"><span>Phone number</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.phone_number || 'Not added yet')}</span></div>
+    ${!esimIsRenewal(o) && !esimIsClosed(o) ? `<div style="margin:4px 0 8px;"><button class="btn btn-ghost btn-sm" style="width:auto;" onclick="openEsimPhoneEditor('${escapeHtml(o.id)}')">${o.phone_number ? 'Edit phone number' : 'Add phone number'}</button></div>` : ''}
     ${esimIsRenewal(o) ? `
-     <div class="row-line"><span>Dedicated number</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.phone_number || 'Not provided')}</span></div>
      <div class="row-line"><span>Original order</span><span>${escapeHtml(o.renewed_from_order_ref || 'Reference unavailable')}</span></div>
      <div class="row-line"><span>Renewal order</span><span>${escapeHtml(o.order_ref || '')}</span></div>
-     <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '—')}</span></div>
     ` : `
      <div class="row-line"><span>IMEI</span><span style="font-family:ui-monospace,monospace;">${escapeHtml(o.imei || '')}</span></div>
      <div class="row-line"><span>Ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>
@@ -7261,6 +7274,44 @@ function renderEsimOrders() {
   <button class="btn btn-ghost btn-sm" ${esimOrderPage<=1?'disabled':''} onclick="esimOrderPage=Math.max(1,esimOrderPage-1);loadEsimOrders()">Prev</button>
   <span>Page ${esimOrderPage}/${maxPage} · ${pageTotal} orders</span>
   <button class="btn btn-ghost btn-sm" ${esimOrderPage>=maxPage?'disabled':''} onclick="esimOrderPage++;loadEsimOrders()">Next</button>`;
+}
+let esimPhoneEditCurrent = null;
+let esimPhoneEditBusy = false;
+function openEsimPhoneEditor(id) {
+ const o = (esimOrdersCache || []).find(x => String(x.id) === String(id));
+ if (!o || esimIsRenewal(o) || esimIsClosed(o)) return;
+ esimPhoneEditCurrent = o;
+ document.getElementById('esimPhoneEditSummary').textContent = (o.order_ref || 'eSIM order') + ' · ' + (o.plan_name || 'eSIM plan');
+ document.getElementById('esimPhoneEditInput').value = o.phone_number || '';
+ document.getElementById('esimPhoneEditModal').classList.remove('hidden');
+}
+function closeEsimPhoneEditor() {
+ if (esimPhoneEditBusy) return;
+ document.getElementById('esimPhoneEditModal').classList.add('hidden');
+ esimPhoneEditCurrent = null;
+}
+async function saveEsimPhoneNumber() {
+ const o = esimPhoneEditCurrent;
+ if (!o || esimPhoneEditBusy) return;
+ const phone = document.getElementById('esimPhoneEditInput').value.trim();
+ if (!/^\\+?[0-9]{7,20}$/.test(phone.replace(/[\\s().-]/g,''))) {
+  showAdminToast('Enter a valid eSIM phone number (7–20 digits).', 'error'); return;
+ }
+ if (!window.confirm('Save this phone number to eSIM order ' + String(o.order_ref || '') + '? The customer will see it and it will be prefilled for future refills.')) return;
+ const btn = document.getElementById('esimPhoneEditSave');
+ esimPhoneEditBusy = true; setBtnBusy(btn, true, 'Saving…');
+ try {
+  const { data } = await esimAdminCall({ action: 'admin_set_phone_number', order_id: o.id, phone_number: phone });
+  if (!data.success) throw new Error(data.message || 'Could not save phone number.');
+  showAdminToast('eSIM phone number saved and linked to the order.', 'success');
+  document.getElementById('esimPhoneEditModal').classList.add('hidden');
+  esimPhoneEditCurrent = null;
+  await loadEsimOrders();
+ } catch (err) {
+  showAdminToast(err.message || 'Could not save phone number.', 'error');
+ } finally {
+  esimPhoneEditBusy = false; setBtnBusy(btn, false, 'Save phone number');
+ }
 }
 function openEsimDeliver(id) {
  const o = (esimOrdersCache || []).find(x => String(x.id) === String(id));
