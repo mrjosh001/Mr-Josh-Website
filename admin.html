@@ -32,10 +32,14 @@ window.__mjAdminSmsPatch = true;
 // The page is large, so defining this only near the bottom delays first render.
 window.mjAdminTurnstileReady = function () {
   window.__mjAdminTurnstileLoaded = true;
-  window.dispatchEvent(new Event('mj-admin-turnstile-ready'));
+  // Render immediately when the login initializer is ready. If Turnstile
+  // finishes loading before the body script, the loaded flag is checked below.
+  if (typeof window.mjAdminTurnstileRender === 'function') {
+    window.mjAdminTurnstileRender();
+  }
 };
 </script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async fetchpriority="high" onerror="document.getElementById('adminLoginCaptcha') && (document.getElementById('adminLoginCaptcha').textContent='Security check failed to load. Check your connection and refresh the page.')"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async fetchpriority="high" onerror="window.__mjAdminTurnstileScriptFailed=true;var m=document.getElementById('adminLoginCaptcha');if(m)m.textContent='Cloudflare security check could not load. Check your connection or content blocker, then refresh.'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -2298,9 +2302,15 @@ function renderAdminLoginCaptcha(attempt = 0) {
   }
  }
 }
-window.addEventListener('mj-admin-turnstile-ready', function(){renderAdminLoginCaptcha();});
-if (window.turnstile || window.__mjAdminTurnstileLoaded) renderAdminLoginCaptcha();
-else renderAdminLoginCaptcha();
+// Expose the renderer to the early Cloudflare onload callback. This avoids
+// relying on a custom DOM event that may fire before this script is ready.
+window.mjAdminTurnstileRender = renderAdminLoginCaptcha;
+if (window.__mjAdminTurnstileScriptFailed) {
+ const mount = document.getElementById('adminLoginCaptcha');
+ if (mount) mount.textContent = 'Cloudflare security check could not load. Check your connection or content blocker, then refresh.';
+} else {
+ renderAdminLoginCaptcha();
+}
 function resetAdminLoginCaptcha(){ adminLoginCaptchaToken=''; if(window.turnstile && adminLoginCaptchaWidget!==null){try{window.turnstile.reset(adminLoginCaptchaWidget);}catch(e){}} }
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
