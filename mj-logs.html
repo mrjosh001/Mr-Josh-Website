@@ -414,7 +414,7 @@ function hideCloneWord(value){
 function displayProductName(p){
   const raw=cleanText(p && p.name || 'Product');
   if(isResidentialProxyProduct(p)) {
-    return raw.replace(/\\bBulkMail\\b/ig,'').replace(/^Residential Proxy\\s*[·|:-]\\s*/i,'').replace(/\\s+/g,' ').trim() || 'Residential Proxy';
+    return raw.replace(/\bBulkMail\b/ig,'').replace(/^Residential Proxy\s*[·|:-]\s*/i,'').replace(/\s+/g,' ').trim() || 'Residential Proxy';
   }
   if(isBulkmailTikTokProduct(p) || isSujanProduct(p)) return hideCloneWord(raw) || 'Product';
   return raw;
