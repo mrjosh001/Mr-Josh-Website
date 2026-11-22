@@ -397,7 +397,7 @@ async function handleMyOrders(req, res, userId) {
       if (smsNewRes.error) console.warn('[order my_orders incremental] sms new', smsNewRes.error.message);
       if (smsOpenRes.error) console.warn('[order my_orders incremental] sms open', smsOpenRes.error.message);
 
-      const logs = logsRes.error ? [] : logsRes.data || [];
+      const logs = (logsRes.error ? [] : logsRes.data || []).filter((row) => !/^bm_/i.test(String(row.product_code || '')));
       const smsMap = new Map();
       for (const row of [...(smsOpenRes.data || []), ...(smsNewRes.data || [])]) {
         if (!row) continue;
@@ -433,7 +433,7 @@ async function handleMyOrders(req, res, userId) {
         .limit(150)
     ]);
 
-    const logs = logsRes.error ? [] : logsRes.data || [];
+    const logs = (logsRes.error ? [] : logsRes.data || []).filter((row) => !/^bm_/i.test(String(row.product_code || '')));
     const sms = smsRes.error ? [] : smsRes.data || [];
     if (logsRes.error) console.warn('[order my_orders] logs', logsRes.error.message);
     if (smsRes.error) console.warn('[order my_orders] sms', smsRes.error.message);
