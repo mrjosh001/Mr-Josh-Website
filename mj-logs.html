@@ -63,6 +63,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .product-header-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .product-name{font-size:14px;font-weight:700;line-height:1.35;flex:1;min-width:0;word-wrap:break-word}
 .product-price{font-size:15px;font-weight:800;color:var(--primary);white-space:nowrap}
+.proxy-plan-hint{display:flex;align-items:center;gap:7px;padding:9px 10px;border:1px solid var(--primary-glow);border-radius:10px;background:var(--primary-glow);color:var(--muted);font-size:11px;font-weight:650;line-height:1.4}
+.proxy-plan-hint i{color:var(--primary);font-size:12px;flex-shrink:0}
 .product-description-toggle{font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
 .product-description-toggle::-webkit-details-marker{display:none}
 .product-description-toggle::before{content:'▸';font-size:10px}
@@ -414,7 +416,8 @@ function hideCloneWord(value){
 function displayProductName(p){
   const raw=cleanText(p && p.name || 'Product');
   if(isResidentialProxyProduct(p)) {
-    return raw.replace(/\bBulkMail\b/ig,'').replace(/^Residential Proxy\s*[·|:-]\s*/i,'').replace(/\s+/g,' ').trim() || 'Residential Proxy';
+    // Supplier plan names belong in the plan selector, not the product title.
+    return raw.replace(/\bBulkMail\b/ig,'').replace(/^Residential Proxy\s*[·|:-]\s*/i,'').split(/\s*[·|]\s*/)[0].replace(/\s+/g,' ').trim() || 'Residential Proxy';
   }
   if(isBulkmailTikTokProduct(p) || isSujanProduct(p)) return hideCloneWord(raw) || 'Product';
   return raw;
@@ -757,6 +760,7 @@ const cat=escapeHtml(p.category||'');
 const inCart=cart.some(i=>(p.id&&i.product_id===p.id)||i.title===displayProductName(p));
 html+='<div class="product-card">';
 html+='<div class="product-header"><div class="product-header-left">'+renderLogIconHtml(p.category, displayProductName(p))+'<div class="product-name">'+name+'</div></div><div class="product-price">'+(isResidentialProxyProduct(p)?'From '+money(price):money(price))+'</div></div>';
+if(isResidentialProxyProduct(p)) html+='<div class="proxy-plan-hint"><i class="fa-solid fa-list-check"></i><span>Multiple plans available. Choose your plan after tapping Buy Now.</span></div>';
 if(descHtml) html+='<details><summary class="product-description-toggle">Description</summary><div class="product-description-body">'+descHtml+'</div></details>';
 html+='<div class="product-badges">';
 if(cat) html+='<span class="badge badge-cat">'+cat+'</span>';
