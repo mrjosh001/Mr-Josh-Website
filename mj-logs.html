@@ -1221,6 +1221,7 @@ async function confirmResidentialProxyBuy(){
       return;
     }
     if(!response.ok||!result.success){
+      if(!result.pending && response.status<500) purchaseNonce=null;
       showToast(result.message||'Proxy purchase failed. Please try again.','error');
       return;
     }
