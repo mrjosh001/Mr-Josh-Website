@@ -849,10 +849,40 @@ export default async function handler(req, res) {
         refill_completed_by_name: row.refill_completed_by ? (names[row.refill_completed_by]?.full_name || names[row.refill_completed_by]?.email || '') : ''
       }));
 
+      // Summary cards must cover every eSIM order, not just the current 20-row page
+      // (or the current search result). Read only the fields needed for aggregation
+      // in bounded batches so the summary remains correct as the order table grows.
+      const summaryRows = [];
+      const summaryBatchSize = 1000;
+      for (let summaryFrom = 0; ; summaryFrom += summaryBatchSize) {
+        const { data: batch, error: summaryError } = await supabase.from('esim_orders')
+          .select('status,amount_ngn,renewed_from_order_id')
+          .order('created_at', { ascending: false })
+          .range(summaryFrom, summaryFrom + summaryBatchSize - 1);
+        if (summaryError) {
+          console.error('[esim admin] summary calculation failed:', summaryError.message);
+          return res.status(500).json({ success: false, message: 'Could not calculate the eSIM order summary. Please refresh.' });
+        }
+        summaryRows.push(...(batch || []));
+        if (!batch || batch.length < summaryBatchSize) break;
+      }
+
+      const isClosedSummary = (row) => /^(failed|cancelled|canceled|expired|refunded)$/i.test(String(row.status || ''));
+      const isCompletedSummary = (row) => /^completed$/i.test(String(row.status || ''));
+      const isRenewalSummary = (row) => Boolean(row.renewed_from_order_id);
+      const summary = {
+        total: summaryRows.length,
+        waiting: summaryRows.filter((row) => !isRenewalSummary(row) && !isClosedSummary(row) && !isCompletedSummary(row)).length,
+        renewal_pending: summaryRows.filter((row) => isRenewalSummary(row) && !isClosedSummary(row) && !isCompletedSummary(row)).length,
+        completed: summaryRows.filter(isCompletedSummary).length,
+        revenue_ngn: summaryRows.filter((row) => !isClosedSummary(row)).reduce((sum, row) => sum + (Number(row.amount_ngn) || 0), 0)
+      };
+
       return res.status(200).json({
         success: true,
         data: out,
         total: count || 0,
+        summary,
         page,
         page_size: pageSize
       });
