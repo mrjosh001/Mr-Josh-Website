@@ -35,7 +35,7 @@ window.mjAdminTurnstileReady = function () {
   window.dispatchEvent(new Event('mj-admin-turnstile-ready'));
 };
 </script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async fetchpriority="high"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async fetchpriority="high" onerror="document.getElementById('adminLoginCaptcha') && (document.getElementById('adminLoginCaptcha').textContent='Security check failed to load. Check your connection and refresh the page.')"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -2264,18 +2264,43 @@ const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
 let adminLoginCaptchaToken = '';
 let adminLoginCaptchaWidget = null;
-function renderAdminLoginCaptcha() {
+let adminLoginCaptchaRetryTimer = null;
+function renderAdminLoginCaptcha(attempt = 0) {
  const mount = document.getElementById('adminLoginCaptcha');
- if (!mount || !window.turnstile || adminLoginCaptchaWidget !== null) return;
- adminLoginCaptchaWidget = window.turnstile.render(mount, {
-  sitekey: '0x4AAAAAAF0CXjc8jL8djc4l',
-  callback: function(token){adminLoginCaptchaToken=token||'';},
-  'expired-callback':function(){adminLoginCaptchaToken='';},
-  'error-callback':function(){adminLoginCaptchaToken='';}
- });
+ if (!mount || adminLoginCaptchaWidget !== null) return;
+ if (!window.turnstile || typeof window.turnstile.render !== 'function') {
+  if (attempt < 24 && adminLoginCaptchaRetryTimer === null) {
+   adminLoginCaptchaRetryTimer = setTimeout(function(){
+    adminLoginCaptchaRetryTimer = null;
+    renderAdminLoginCaptcha(attempt + 1);
+   }, 250);
+  } else if (attempt >= 24) {
+   mount.textContent = 'Security check could not load. Check your connection and refresh the page.';
+  }
+  return;
+ }
+ try {
+  adminLoginCaptchaWidget = window.turnstile.render(mount, {
+   sitekey: '0x4AAAAAAF0CXjc8jL8djc4l',
+   callback: function(token){adminLoginCaptchaToken=token||'';},
+   'expired-callback':function(){adminLoginCaptchaToken='';},
+   'error-callback':function(){adminLoginCaptchaToken='';}
+  });
+ } catch (error) {
+  adminLoginCaptchaWidget = null;
+  if (attempt < 24 && adminLoginCaptchaRetryTimer === null) {
+   adminLoginCaptchaRetryTimer = setTimeout(function(){
+    adminLoginCaptchaRetryTimer = null;
+    renderAdminLoginCaptcha(attempt + 1);
+   }, 250);
+  } else {
+   mount.textContent = 'Security check could not load. Refresh the page and try again.';
+  }
+ }
 }
-window.addEventListener('mj-admin-turnstile-ready', renderAdminLoginCaptcha);
+window.addEventListener('mj-admin-turnstile-ready', function(){renderAdminLoginCaptcha();});
 if (window.turnstile || window.__mjAdminTurnstileLoaded) renderAdminLoginCaptcha();
+else renderAdminLoginCaptcha();
 function resetAdminLoginCaptcha(){ adminLoginCaptchaToken=''; if(window.turnstile && adminLoginCaptchaWidget!==null){try{window.turnstile.reset(adminLoginCaptchaWidget);}catch(e){}} }
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
