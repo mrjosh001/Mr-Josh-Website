@@ -1071,8 +1071,9 @@ async function loadResidentialProxyVariants(product){
 }
 
 function updatePurchaseTotal(){
-const price=isResidentialProxyProduct(activeProduct)&&activeProxyVariant
-  ? Number(activeProxyVariant.retail_price_ngn)||0
+const isProxy=isResidentialProxyProduct(activeProduct);
+const price=isProxy
+  ? (activeProxyVariant ? Number(activeProxyVariant.retail_price_ngn)||0 : 0)
   : (parseFloat(activeProduct&&activeProduct.price)||0);
 let total=price*activeQty;
 const saveEl=document.getElementById('psSaveLine');
@@ -1083,9 +1084,9 @@ if(activeCoupon&&activeCoupon.code){
   if(saveEl){ saveEl.style.display='block'; saveEl.textContent='You save ₦'+Number(activeCoupon.discount||0).toLocaleString()+' with '+activeCoupon.code; }
 } else if(saveEl){ saveEl.style.display='none'; saveEl.textContent=''; }
 const unitEl=document.getElementById('psUnitPrice');
-if(unitEl) unitEl.textContent=money(price);
+if(unitEl) unitEl.textContent=isProxy&&!activeProxyVariant?'Select plan':money(price);
 const el=document.getElementById('psTotal');
-if(el) el.textContent=money(total);
+if(el) el.textContent=isProxy&&!activeProxyVariant?'Select plan':money(total);
 const stockEl=document.getElementById('psStock');
 if(isResidentialProxyProduct(activeProduct)&&activeProxyVariant&&stockEl){
   stockEl.className='ps-pill ps-pill-stock';
