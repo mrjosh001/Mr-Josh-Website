@@ -3571,7 +3571,7 @@ async function loadProducts() {
 function populateCategoryFilter() {
  const select = document.getElementById('categoryFilter');
  if (!select) return;
- const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort((a,b) => (a.toLowerCase()==='residential proxy'?-1:b.toLowerCase()==='residential proxy'?1:a.localeCompare(b)));
+ const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort((a,b) => { const rank=v=>/9\s*proxy/i.test(v)?0:/^residential\s+proxy$/i.test(v)?1:2; return rank(a)-rank(b)||a.localeCompare(b); });
  const current = select.value;
  select.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
  if (cats.includes(current)) select.value = current;
@@ -5258,8 +5258,8 @@ function formatProductSupplier(p) {
 
 function renderProducts(list) {
  const items = (list || allProducts).slice().sort((a,b) => {
-   const ap = String(a.category || '').toLowerCase() === 'residential proxy' ? 0 : 1;
-   const bp = String(b.category || '').toLowerCase() === 'residential proxy' ? 0 : 1;
+   const rank = v => /9\s*proxy/i.test(String(v || '')) ? 0 : /^residential\s+proxy$/i.test(String(v || '')) ? 1 : 2;
+   const ap = rank(a.category), bp = rank(b.category);
    return ap - bp || String(a.name || '').localeCompare(String(b.name || ''));
  });
  const tbody = document.getElementById('productsTableBody');
@@ -5388,7 +5388,7 @@ function filterProducts() {
 }
 
 function getKnownCategories() {
- return [...new Set(allProducts.map(p => (p.category || '').trim()).filter(Boolean))].sort();
+ return [...new Set(allProducts.map(p => (p.category || '').trim()).filter(Boolean))].sort((a,b) => { const rank=v=>/9\s*proxy/i.test(v)?0:/^residential\s+proxy$/i.test(v)?1:2; return rank(a)-rank(b)||a.localeCompare(b); });
 }
 
 function populateProductCategoryDropdown(selected) {
