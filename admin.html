@@ -5427,6 +5427,12 @@ function openProductModal(product) {
  document.getElementById('pDesc').value = stripHtmlKeepLines(product.display_description || product.description || '');
  document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
  document.getElementById('pPrice').value = product.price ?? '';
+ const proxyPriceInput = document.getElementById('pPrice');
+ const proxyPriceField = proxyPriceInput.closest('.field');
+ const isResidentialProxy = String(product.product_key || '').startsWith('bm_proxy_');
+ proxyPriceInput.disabled = isResidentialProxy;
+ const proxyPriceNote = proxyPriceField?.querySelector('.price-note');
+ if (proxyPriceNote) proxyPriceNote.textContent = isResidentialProxy ? 'This is the starting price shown to customers. Use the Plans button in Product Catalog to edit each plan price.' : 'This is what customers see.';
  const stockInput = document.getElementById('pStock');
  stockInput.value = product.stock_quantity ?? '';
  const isBulkMailProduct = String(product.source || '').toLowerCase() === 'bulkmail';
@@ -5454,6 +5460,9 @@ function openProductModal(product) {
  document.getElementById('pDesc').value = '';
  document.getElementById('pSupplierPrice').value = 0;
  document.getElementById('pPrice').value = '';
+ document.getElementById('pPrice').disabled = false;
+ const defaultPriceNote = document.getElementById('pPrice').closest('.field')?.querySelector('.price-note');
+ if (defaultPriceNote) defaultPriceNote.textContent = 'This is what customers see.';
  document.getElementById('pStock').value = '';
  document.getElementById('pStock').disabled = false;
  document.getElementById('pStock').title = '';
