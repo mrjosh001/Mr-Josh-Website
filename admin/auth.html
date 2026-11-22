@@ -6,6 +6,8 @@
 <meta name="robots" content="noindex,nofollow">
 <title>MJ HUB Admin Sign In</title>
 <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://atczodlljmlayvldxfmv.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -105,13 +107,18 @@ document.getElementById('adminLoginForm').addEventListener('submit',async event=
   const {data,error}=await sb.auth.signInWithPassword({email,password,options:{captchaToken:token}});
   token='';if(window.turnstile&&widgetId!==null)try{window.turnstile.reset(widgetId);}catch(e){}
   if(error)throw error;
-  const {data:profile,error:profileError}=await sb.from('profiles').select('is_admin').eq('id',data.user.id).maybeSingle();
-  if(profileError)throw new Error('Signed in, but admin access could not be verified. Please retry.');
-  if(!profile||!isAdmin(profile.is_admin)){await sb.auth.signOut();throw new Error('Access denied. Admin privileges are required.');}
+  // The dashboard performs the authoritative admin-role check on arrival.
+  // Avoid a second profiles query here so successful sign-in redirects immediately.
   location.replace('/admin');
  }catch(e){showError(e.message||'Sign in failed.');button.disabled=false;button.textContent='Sign In';}
 });
-(async()=>{try{const handled=await verifyExistingSession();if(!handled)initCaptcha();}catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');try{initCaptcha();}catch(err){}}})();
+(async()=>{
+ // Load the CAPTCHA while Supabase restores any saved session.
+ // If a valid admin session exists, the redirect below simply cancels this work.
+ initCaptcha();
+ try{await verifyExistingSession();}
+ catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');}
+})();
 })();
 </script>
 </body></html>
