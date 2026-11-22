@@ -27,19 +27,6 @@ window.__mjAdminSmsPatch = true;
  <title>MJ HUB: Admin</title>
  <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="//challenges.cloudflare.com">
-<script>
-// Register Turnstile's onload callback before its async script is requested.
-// The page is large, so defining this only near the bottom delays first render.
-window.mjAdminTurnstileReady = function () {
-  window.__mjAdminTurnstileLoaded = true;
-  // Render immediately when the login initializer is ready. If Turnstile
-  // finishes loading before the body script, the loaded flag is checked below.
-  if (typeof window.mjAdminTurnstileRender === 'function') {
-    window.mjAdminTurnstileRender();
-  }
-};
-</script>
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=mjAdminTurnstileReady" async fetchpriority="high" onerror="window.__mjAdminTurnstileScriptFailed=true;var m=document.getElementById('adminLoginCaptcha');if(m)m.textContent='Cloudflare security check could not load. Check your connection or content blocker, then refresh.'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // Force all date/time displays to Nigeria time (WAT, Africa/Lagos),
@@ -2266,52 +2253,93 @@ document.addEventListener('click', function(e) {
 const SUPABASE_URL = 'https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 
-let adminLoginCaptchaToken = '';
-let adminLoginCaptchaWidget = null;
-let adminLoginCaptchaRetryTimer = null;
-function renderAdminLoginCaptcha(attempt = 0) {
- const mount = document.getElementById('adminLoginCaptcha');
- if (!mount || adminLoginCaptchaWidget !== null) return;
- if (!window.turnstile || typeof window.turnstile.render !== 'function') {
-  if (attempt < 24 && adminLoginCaptchaRetryTimer === null) {
-   adminLoginCaptchaRetryTimer = setTimeout(function(){
-    adminLoginCaptchaRetryTimer = null;
-    renderAdminLoginCaptcha(attempt + 1);
-   }, 250);
-  } else if (attempt >= 24) {
-   mount.textContent = 'Security check could not load. Check your connection and refresh the page.';
-  }
-  return;
+(function(){
+ 'use strict';
+ var siteKey='0x4AAAAAAF0CXjc8jL8djc4l';
+ var widgetId=null,apiPromise=null,loadTimeout=null,failed=false,currentAttempt=0;
+ var adminLoginCaptchaToken='';
+ function mount(){return document.getElementById('adminLoginCaptcha');}
+ function showError(message){
+  var el=mount();if(!el)return;el.replaceChildren();
+  var note=document.createElement('div');
+  note.style.cssText='font-size:12px;color:#f87171;text-align:center;padding:8px 4px;';
+  note.textContent=message||'Security check could not load. Check your connection and refresh the page.';
+  el.appendChild(note);
  }
- try {
-  adminLoginCaptchaWidget = window.turnstile.render(mount, {
-   sitekey: '0x4AAAAAAF0CXjc8jL8djc4l',
-   callback: function(token){adminLoginCaptchaToken=token||'';},
-   'expired-callback':function(){adminLoginCaptchaToken='';},
-   'error-callback':function(){adminLoginCaptchaToken='';}
+ function apiReady(){
+  if(window.turnstile&&typeof window.turnstile.render==='function'){
+   return new Promise(function(resolve){try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}});
+  }
+  if(apiPromise)return apiPromise;
+  apiPromise=new Promise(function(resolve,reject){
+   var script=document.getElementById('mjAdminTurnstileApi');
+   if(!script||failed){
+    if(script&&failed)script.remove();
+    script=document.createElement('script');script.id='mjAdminTurnstileApi';
+    script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async=true;script.defer=true;document.head.appendChild(script);
+   }
+   var settled=false;
+   function finish(error){
+    if(settled)return;settled=true;
+    if(loadTimeout)clearTimeout(loadTimeout);loadTimeout=null;
+    if(error){failed=true;apiPromise=null;reject(error);return;}
+    failed=false;
+    try{window.turnstile.ready(function(){resolve(window.turnstile);});}catch(e){resolve(window.turnstile);}
+   }
+   script.addEventListener('load',function(){finish(window.turnstile?null:new Error('Turnstile API did not initialise'));},{once:true});
+   script.addEventListener('error',function(){finish(new Error('Turnstile script failed to load'));},{once:true});
+   loadTimeout=setTimeout(function(){finish(new Error('Turnstile load timed out'));},12000);
+   if(window.turnstile)finish(null);
   });
- } catch (error) {
-  adminLoginCaptchaWidget = null;
-  if (attempt < 24 && adminLoginCaptchaRetryTimer === null) {
-   adminLoginCaptchaRetryTimer = setTimeout(function(){
-    adminLoginCaptchaRetryTimer = null;
-    renderAdminLoginCaptcha(attempt + 1);
-   }, 250);
-  } else {
-   mount.textContent = 'Security check could not load. Refresh the page and try again.';
-  }
+  return apiPromise;
  }
-}
-// Expose the renderer to the early Cloudflare onload callback. This avoids
-// relying on a custom DOM event that may fire before this script is ready.
-window.mjAdminTurnstileRender = renderAdminLoginCaptcha;
-if (window.__mjAdminTurnstileScriptFailed) {
- const mount = document.getElementById('adminLoginCaptcha');
- if (mount) mount.textContent = 'Cloudflare security check could not load. Check your connection or content blocker, then refresh.';
-} else {
- renderAdminLoginCaptcha();
-}
-function resetAdminLoginCaptcha(){ adminLoginCaptchaToken=''; if(window.turnstile && adminLoginCaptchaWidget!==null){try{window.turnstile.reset(adminLoginCaptchaWidget);}catch(e){}} }
+ function render(api,attempt){
+  if(attempt!==currentAttempt)return;
+  var el=mount(),screen=document.getElementById('loginScreen');
+  if(!el||(screen&&screen.classList.contains('hidden'))||widgetId!==null)return;
+  el.replaceChildren();
+  try{
+   widgetId=api.render(el,{
+    sitekey:siteKey,theme:'auto',appearance:'always',execution:'render',
+    retry:'auto','retry-interval':8000,'refresh-expired':'auto','refresh-timeout':'auto',
+    callback:function(token){adminLoginCaptchaToken=token||'';},
+    'expired-callback':function(){adminLoginCaptchaToken='';},
+    'timeout-callback':function(){adminLoginCaptchaToken='';},
+    'error-callback':function(code){adminLoginCaptchaToken='';console.warn('[MJ HUB Admin] Turnstile client error code:',String(code||'unknown'));return false;}
+   });
+   if(widgetId===undefined||widgetId===null){widgetId=null;showError('Unable to start security verification. Refresh the page and try again.');}
+  }catch(error){widgetId=null;showError('Unable to start security verification. Refresh the page and try again.');console.error('[MJ HUB Admin] Turnstile render failed:',error);}
+ }
+ window.mjEnsureAdminLoginCaptcha=function(){
+  var el=mount(),screen=document.getElementById('loginScreen');
+  if(!el||(screen&&screen.classList.contains('hidden'))||widgetId!==null)return;
+  currentAttempt++;var attempt=currentAttempt;
+  apiReady().then(function(api){render(api,attempt);}).catch(function(error){
+   if(attempt!==currentAttempt)return;
+   showError('Security check could not load. Check your connection and refresh the page.');
+   console.error('[MJ HUB Admin] Turnstile load failed:',error);
+  });
+ };
+ window.mjGetAdminLoginCaptchaToken=function(){
+  if(adminLoginCaptchaToken)return adminLoginCaptchaToken;
+  if(window.turnstile&&widgetId!==null){
+   try{var response=window.turnstile.getResponse(widgetId);if(response){adminLoginCaptchaToken=response;return response;}}catch(e){}
+  }
+  return '';
+ };
+ window.resetAdminLoginCaptcha=function(){
+  adminLoginCaptchaToken='';
+  if(window.turnstile&&widgetId!==null){try{window.turnstile.reset(widgetId);}catch(e){}}
+ };
+ function scheduleInitialCaptcha(){
+  var start=function(){window.mjEnsureAdminLoginCaptcha();};
+  if('requestIdleCallback' in window)window.requestIdleCallback(start,{timeout:1000});
+  else window.setTimeout(start,250);
+ }
+ if(document.readyState==='complete'||document.readyState==='interactive')scheduleInitialCaptcha();
+ else document.addEventListener('DOMContentLoaded',scheduleInitialCaptcha,{once:true});
+})();
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
  auth: {
@@ -2585,14 +2613,19 @@ async function handleLogin() {
  const btn = document.getElementById('adminSignInBtn');
  errEl.textContent = '';
  if (!email || !password) { errEl.textContent = 'Enter email and password.'; return; }
- if (!adminLoginCaptchaToken) { errEl.textContent = 'Complete the security check before signing in.'; return; }
+ const captchaToken = window.mjGetAdminLoginCaptchaToken ? window.mjGetAdminLoginCaptchaToken() : '';
+  if (!captchaToken) {
+   errEl.textContent = 'Complete the security check before signing in.';
+   if (window.mjEnsureAdminLoginCaptcha) window.mjEnsureAdminLoginCaptcha();
+   return;
+  }
  if (btn) {
  if (!btn.dataset.idleHtml) btn.dataset.idleHtml = btn.innerHTML;
  btn.disabled = false;
  btn.innerHTML = '<span class="btn-spinner"></span> Signing in…';
  }
  try {
- const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: adminLoginCaptchaToken } });
+ const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: captchaToken } });
  resetAdminLoginCaptcha();
  if (error) {
  errEl.textContent = error.message;
