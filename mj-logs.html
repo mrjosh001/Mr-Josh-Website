@@ -683,7 +683,7 @@ categoryFilter.innerHTML='<option value="all">No categories</option>';
 return;
 }
 allProducts = products;
-const categories = [...new Set(products.map(p=>(p.category||'').trim()).filter(Boolean))].sort();
+const categories = [...new Set(products.map(p=>(p.category||'').trim()).filter(Boolean))].sort((a,b)=>(a.toLowerCase()==='residential proxy'?-1:b.toLowerCase()==='residential proxy'?1:a.localeCompare(b)));
 categoryFilter.innerHTML='<option value="all">All Categories ('+products.length+')</option>';
 categories.forEach(cat=>{
 const count=products.filter(p=>(p.category||'').trim()===cat).length;
@@ -746,6 +746,11 @@ const msg = searchQuery ? 'No products match "'+escapeHtml(searchQuery)+'"' : 'T
 productGrid.innerHTML='<div class="empty-state"><div class="empty-state-icon">🔍</div><h4>No Products Found</h4><p>'+msg+'</p></div>';
 productCountBadge.innerHTML='';return;
 }
+products=products.slice().sort((a,b)=>{
+const ap=String(a.category||'').toLowerCase()==='residential proxy'?0:1;
+const bp=String(b.category||'').toLowerCase()==='residential proxy'?0:1;
+return ap-bp||String(displayProductName(a)||'').localeCompare(String(displayProductName(b)||''));
+});
 productCountBadge.innerHTML='<span class="product-count-badge">'+products.length+' product'+(products.length!==1?'s':'')+'</span>';
 const cart=getCart();
 let html='<div class="product-grid">';

@@ -1222,23 +1222,11 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  </div>
  
  <div class="panel" id="bulkmailProxyAdminPanel">
-   <div class="panel-header" style="flex-wrap:wrap;gap:10px;">
-    <div><div class="panel-title">BulkMail Residential Proxy</div><div class="price-note">Residential proxy products and plans only. VPN and IPv4 are excluded.</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-     <button class="btn btn-primary btn-sm" id="btnSyncBulkmailProxy" onclick="syncBulkmailProxyCatalog()"><i class="fas fa-sync"></i> Sync Products</button>
-     <button class="btn btn-ghost btn-sm" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh</button>
-    </div>
+   <div class="panel-header" style="margin-bottom:8px;">
+    <div class="panel-title">Residential Proxy Catalogue</div>
+    <button class="btn btn-ghost btn-sm" type="button" onclick="loadBulkmailProxyAdminCatalog()"><i class="fas fa-rotate"></i> Refresh status</button>
    </div>
-   <div class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
-    <div class="metric-card"><div class="metric-label">Products</div><div class="metric-value" id="proxyAdminProducts">—</div></div>
-    <div class="metric-card"><div class="metric-label">Plans</div><div class="metric-value" id="proxyAdminVariants">—</div></div>
-    <div class="metric-card"><div class="metric-label">Available Stock</div><div class="metric-value" id="proxyAdminStock">—</div></div>
-   </div>
-   <div id="proxyAdminSyncStatus" class="price-note" role="status" style="margin:0 0 12px;">Loading catalogue…</div>
-   <div class="table-wrap"><table style="min-width:760px;"><thead><tr><th>Product</th><th>Plan / Variant</th><th>Supplier Cost</th><th>Retail Price</th><th>Stock</th><th>Status</th></tr></thead>
-    <tbody id="bulkmailProxyAdminTable"><tr><td colspan="6" class="empty-state">Loading Residential Proxy catalogue…</td></tr></tbody>
-   </table></div>
-   <div class="price-note" style="margin-top:10px;">Sync Products fetches the latest BulkMail residential catalogue. Supplier prices and stock are refreshed without changing other BulkMail categories.</div>
+   <div id="proxyAdminSyncStatus" class="price-note" role="status">Residential Proxy products are managed in the main Product Catalog above. Use the Plans action on a proxy product to edit individual plan prices.</div>
   </div>
  
  </div>
@@ -2059,6 +2047,15 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <button class="btn btn-primary btn-sm" type="button" id="esimDeliverSend" onclick="submitEsimDeliver()"><i class="fas fa-paper-plane"></i> Send eSIM email</button>
  </div>
  </div>
+ </div>
+
+ <div id="proxyPricingModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:760px;">
+   <h3 id="proxyPricingTitle">Manage Residential Proxy Plans</h3>
+   <p class="price-note" style="margin:-8px 0 14px;">Edit the customer-facing NGN price for each supplier plan. Manual prices are retained when the catalogue sync runs.</p>
+   <div class="table-wrap"><table style="min-width:620px;"><thead><tr><th>Plan</th><th>Supplier Cost</th><th>Stock</th><th>Retail Price (₦)</th><th>Action</th></tr></thead><tbody id="proxyPricingRows"></tbody></table></div>
+   <div class="modal-actions"><button class="btn btn-ghost btn-sm" type="button" onclick="closeProxyPricingModal()">Close</button></div>
+  </div>
  </div>
 
  <div id="productModal" class="modal-backdrop hidden">
@@ -3574,7 +3571,7 @@ async function loadProducts() {
 function populateCategoryFilter() {
  const select = document.getElementById('categoryFilter');
  if (!select) return;
- const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort();
+ const cats = [...new Set(allProducts.map(p => (p.category || 'OTHER').trim()).filter(Boolean))].sort((a,b) => (a.toLowerCase()==='residential proxy'?-1:b.toLowerCase()==='residential proxy'?1:a.localeCompare(b)));
  const current = select.value;
  select.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
  if (cats.includes(current)) select.value = current;
@@ -5260,7 +5257,11 @@ function formatProductSupplier(p) {
 }
 
 function renderProducts(list) {
- const items = list || allProducts;
+ const items = (list || allProducts).slice().sort((a,b) => {
+   const ap = String(a.category || '').toLowerCase() === 'residential proxy' ? 0 : 1;
+   const bp = String(b.category || '').toLowerCase() === 'residential proxy' ? 0 : 1;
+   return ap - bp || String(a.name || '').localeCompare(String(b.name || ''));
+ });
  const tbody = document.getElementById('productsTableBody');
 
  if (!items.length) {
@@ -5290,6 +5291,7 @@ function renderProducts(list) {
  <td>${stock}</td>
  <td><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></td>
  <td>
+ ${String(p.product_key || '').startsWith('bm_proxy_') ? `<button class="btn btn-secondary btn-sm" onclick="manageProxyPlans('${escapeHtml(String(p.product_key))}')"><i class="fas fa-tags"></i> Plans</button>` : ''}
  <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i></button>
  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i></button>
  </td>
@@ -5322,7 +5324,8 @@ function renderProductCards(items) {
  <div class="row-line"><span>Profit</span><span class="profit">₦${Math.round(profit).toLocaleString()}</span></div>
  <div class="row-line"><span>Stock</span><span>${stock}</span></div>
  <div class="row-line"><span>Status</span><button type="button" class="badge ${available ? 'badge-on' : 'badge-off'}" style="cursor:pointer;border:none;font:inherit;" title="Click to show/hide" onclick="event.stopPropagation();toggleProductAvailability('${rowId}', ${available})">${available ? 'Active' : 'Hidden'}</button></div>
- <div style="margin-top:10px;display:flex;gap:8px;">
+ <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+ ${String(p.product_key || '').startsWith('bm_proxy_') ? `<button class="btn btn-secondary btn-sm" onclick="manageProxyPlans('${escapeHtml(String(p.product_key))}')"><i class="fas fa-tags"></i> Plans</button>` : ''}
  <button class="btn btn-ghost btn-sm" onclick="editProduct('${escapeHtml(String(rowId))}')"><i class="fas fa-edit"></i> Edit</button>
  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteProduct('${escapeHtml(String(rowId))}', event)"><i class="fas fa-trash"></i> Delete</button>
  </div>
@@ -5424,6 +5427,12 @@ function openProductModal(product) {
  document.getElementById('pDesc').value = stripHtmlKeepLines(product.display_description || product.description || '');
  document.getElementById('pSupplierPrice').value = product.supplier_price ?? 0;
  document.getElementById('pPrice').value = product.price ?? '';
+ const proxyPriceInput = document.getElementById('pPrice');
+ const proxyPriceField = proxyPriceInput.closest('.field');
+ const isResidentialProxy = String(product.product_key || '').startsWith('bm_proxy_');
+ proxyPriceInput.disabled = isResidentialProxy;
+ const proxyPriceNote = proxyPriceField?.querySelector('.price-note');
+ if (proxyPriceNote) proxyPriceNote.textContent = isResidentialProxy ? 'This is the starting price shown to customers. Use the Plans button in Product Catalog to edit each plan price.' : 'This is what customers see.';
  const stockInput = document.getElementById('pStock');
  stockInput.value = product.stock_quantity ?? '';
  const isBulkMailProduct = String(product.source || '').toLowerCase() === 'bulkmail';
@@ -5451,6 +5460,9 @@ function openProductModal(product) {
  document.getElementById('pDesc').value = '';
  document.getElementById('pSupplierPrice').value = 0;
  document.getElementById('pPrice').value = '';
+ document.getElementById('pPrice').disabled = false;
+ const defaultPriceNote = document.getElementById('pPrice').closest('.field')?.querySelector('.price-note');
+ if (defaultPriceNote) defaultPriceNote.textContent = 'This is what customers see.';
  document.getElementById('pStock').value = '';
  document.getElementById('pStock').disabled = false;
  document.getElementById('pStock').title = '';
@@ -7607,27 +7619,56 @@ function showBulkmailProxyAdminError(error) {
  if(el){el.textContent='Could not load Residential Proxy catalogue: '+(error&&error.message?error.message:'Unknown error');el.style.color='var(--danger,#ef4444)';}
 }
 async function loadBulkmailProxyAdminCatalog(){
- const status=document.getElementById('proxyAdminSyncStatus'),body=document.getElementById('bulkmailProxyAdminTable');
- if(status){status.textContent='Loading Residential Proxy catalogue…';status.style.color='var(--muted)';}
- if(body)body.innerHTML='<tr><td colspan="6" class="empty-state">Loading…</td></tr>';
- const headers=await adminSyncHeaders();
- const response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_admin_catalog',{method:'GET',headers});
- const data=await response.json().catch(()=>({}));
- if(!response.ok||!data.success)throw new Error(data.message||('Request failed ('+response.status+')'));
- const products=Array.isArray(data.products)?data.products:[],variants=Array.isArray(data.variants)?data.variants:[];
- document.getElementById('proxyAdminProducts').textContent=String(products.length);
- document.getElementById('proxyAdminVariants').textContent=String(variants.length);
- document.getElementById('proxyAdminStock').textContent=variants.reduce((s,v)=>s+(v.is_available?Number(v.stock_quantity||0):0),0).toLocaleString('en-NG');
- if(status){status.textContent='Last catalogue sync: '+(data.last_synced_at?new Date(data.last_synced_at).toLocaleString('en-NG'):'Not synced yet');status.style.color='var(--muted)';}
- const names=new Map(products.map(p=>[p.product_key,p.name]));
- if(!variants.length){body.innerHTML='<tr><td colspan="6" class="empty-state">No Residential Proxy plans found. Click Sync Products to fetch the BulkMail catalogue.</td></tr>';return;}
- body.innerHTML=variants.map(v=>{
-  const available=!!v.is_available&&Number(v.stock_quantity)>0;
-  return '<tr><td>'+escapeHtml(names.get(v.product_key)||v.product_name||v.product_key)+'<div class="price-note">'+escapeHtml(v.product_key||'')+'</div></td><td>'+escapeHtml(v.variant_name||v.variant_id)+'<div class="price-note">Supplier variant: '+escapeHtml(v.variant_id||'')+'</div></td><td>$'+Number(v.supplier_price_usd||0).toFixed(4)+'</td><td class="price">₦'+Number(v.retail_price_ngn||0).toLocaleString('en-NG')+'</td><td>'+Number(v.stock_quantity||0).toLocaleString('en-NG')+'</td><td><span class="badge '+(available?'badge-on':'badge-off')+'">'+(available?'Available':'Out of stock')+'</span></td></tr>';
- }).join('');
+ const status=document.getElementById('proxyAdminSyncStatus');
+ if(status){status.textContent='Refreshing Residential Proxy catalogue…';status.style.color='var(--muted)';}
+ try{
+  const headers=await adminSyncHeaders();
+  const response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_admin_catalog',{method:'GET',headers});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw new Error(data.message||('Request failed ('+response.status+')'));
+  const products=Array.isArray(data.products)?data.products:[];
+  const variants=Array.isArray(data.variants)?data.variants:[];
+  const available=variants.filter(v=>v.is_available&&Number(v.stock_quantity)>0).length;
+  if(status){status.textContent=products.length+' proxy products · '+variants.length+' plans · '+available+' plans currently in stock'+(data.last_synced_at?' · Last sync '+new Date(data.last_synced_at).toLocaleString('en-NG'):'');status.style.color='var(--muted)';}
+ }catch(error){showBulkmailProxyAdminError(error);throw error;}
 }
+async function manageProxyPlans(productKey){
+ const product=allProducts.find(p=>String(p.product_key)===String(productKey));
+ if(!product)return showAdminToast('Residential Proxy product not found. Refresh Products & Stock.','error');
+ const modal=document.getElementById('proxyPricingModal'),body=document.getElementById('proxyPricingRows');
+ body.innerHTML='<tr><td colspan="5" class="empty-state">Loading plans…</td></tr>';
+ document.getElementById('proxyPricingTitle').textContent='Manage Plans · '+(product.name||productKey);
+ modal.classList.remove('hidden');
+ try{
+  const headers=await adminSyncHeaders();
+  const response=await fetch('/api/order-logsdomain?action=bulkmail_proxy_admin_catalog',{method:'GET',headers});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw new Error(data.message||'Could not load proxy plans');
+  const rows=(data.variants||[]).filter(v=>String(v.product_key)===String(productKey));
+  if(!rows.length){body.innerHTML='<tr><td colspan="5" class="empty-state">No plans found. Sync the Residential Proxy catalogue first.</td></tr>';return;}
+  body.innerHTML=rows.map(v=>{
+   const cost='$'+Number(v.supplier_price_usd||0).toFixed(4);
+   const state=v.is_available&&Number(v.stock_quantity)>0?'In stock':'Out of stock';
+   return '<tr><td>'+escapeHtml(v.variant_name||v.variant_id)+'<div class="price-note">ID: '+escapeHtml(v.variant_id)+'</div></td><td>'+cost+'</td><td>'+Number(v.stock_quantity||0).toLocaleString('en-NG')+'</td><td><input type="number" min="0" step="1" id="proxyPrice_'+escapeHtml(v.variant_id)+'" value="'+Number(v.retail_price_ngn||0)+'" style="width:120px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)"></td><td><button class="btn btn-primary btn-sm" onclick="saveProxyPlanPrice(\''+escapeHtml(v.variant_id)+'\',\''+escapeHtml(productKey)+'\')">Save</button><div class="price-note">'+state+(v.retail_price_manual?' · Manual price':' · Auto price')+'</div></td></tr>';
+  }).join('');
+ }catch(error){body.innerHTML='<tr><td colspan="5" class="empty-state">'+escapeHtml(error.message||'Could not load plans')+'</td></tr>';}
+}
+async function saveProxyPlanPrice(variantId,productKey){
+ const input=document.getElementById('proxyPrice_'+variantId),price=Number(input&&input.value);
+ if(!Number.isFinite(price)||price<0){showAdminToast('Enter a valid retail price.','error');return;}
+ try{
+  const headers=await adminSyncHeaders();
+  const response=await fetch('/api/order-logsdomain',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({action:'bulkmail_proxy_update_variant',variant_id:variantId,retail_price_ngn:price})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.success)throw new Error(data.message||'Could not save plan price');
+  showAdminToast('Plan retail price saved. Supplier sync will preserve it.','success');
+  await loadProducts();
+  await manageProxyPlans(productKey);
+ }catch(error){showAdminToast(error.message||'Could not save plan price','error');}
+}
+function closeProxyPricingModal(){document.getElementById('proxyPricingModal').classList.add('hidden');}
 async function syncBulkmailProxyCatalog(){
- const btn=document.getElementById('btnSyncBulkmailProxy'),idle='<i class="fas fa-sync"></i> Sync Products';
+ const btn=document.getElementById('btnSyncBulkmailProxy'),idle='<i class="fas fa-globe"></i> Sync Residential Proxy';
  if(typeof setSyncButtonLoading==='function')setSyncButtonLoading(btn,true,idle);
  const status=document.getElementById('proxyAdminSyncStatus');
  if(status){status.textContent='Syncing residential proxy products from BulkMail…';status.style.color='var(--primary)';}

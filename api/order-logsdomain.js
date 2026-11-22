@@ -248,17 +248,11 @@ async function handleBulkmailSync(req, res) {
           patch.category = BM_TIKTOK_CATEGORY;
           patch.price = sell;
           patch.description = description;
-          if (stockQty > 0) {
-            patch.is_available = true;
-            patch.admin_hidden = false;
-          } else {
-            patch.is_available = false;
-          }
+          patch.is_available = stockQty > 0 && existing.admin_hidden !== true;
         } else if (mailProduct) {
           patch.category = 'MAILS';
           patch.price = mailProduct.price;
-          patch.is_available = stockQty > 0;
-          patch.admin_hidden = stockQty <= 0;
+          patch.is_available = stockQty > 0 && existing.admin_hidden !== true;
         } else if (existing.admin_hidden) {
           // Preserve admin visibility decisions for every non-TikTok BulkMail product.
         } else if (BM_STOCK_VISIBILITY_KEYS.has(productKey)) {
@@ -433,9 +427,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, message: 'Invalid JSON request body' });
   }
 
-  if (String(body.action || '').toLowerCase() === 'bulkmail_proxy_order') {
-    return handleBulkmailProxyAction(req, res, 'order', body);
-  }
+  const proxyAction = String(body.action || '').toLowerCase();
+  if (proxyAction === 'bulkmail_proxy_order') return handleBulkmailProxyAction(req, res, 'order', body);
+  if (proxyAction === 'bulkmail_proxy_update_variant') return handleBulkmailProxyAction(req, res, 'update_variant', body);
 
   let auth;
   try {
