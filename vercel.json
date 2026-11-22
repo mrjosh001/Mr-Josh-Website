@@ -5,6 +5,14 @@
   "outputDirectory": ".",
   "rewrites": [
     {
+      "source": "/admin",
+      "destination": "/admin/auth"
+    },
+    {
+      "source": "/admin/",
+      "destination": "/admin/auth"
+    },
+    {
       "source": "/api/mj-mails",
       "destination": "/api/sms-bus"
     },
@@ -105,19 +113,15 @@
       "schedule": "30 4 * * *"
     },
     {
-      "path": "/api/order-logsdomain?action=sync",
+      "path": "/api/order-logsdomain?action=expire_stale",
       "schedule": "0 5 * * *"
     },
     {
-      "path": "/api/order-logsdomain?action=bulkmail_sync",
+      "path": "/api/order?action=expire_stale",
       "schedule": "15 5 * * *"
     },
     {
-      "path": "/api/order-logsdomain?action=bulkmail_proxy_sync",
-      "schedule": "20 5 * * *"
-    },
-    {
-      "path": "/api/classy",
+      "path": "/api/sujan?action=expire_stale",
       "schedule": "30 5 * * *"
     },
     {
