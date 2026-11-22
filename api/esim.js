@@ -925,6 +925,42 @@ export default async function handler(req, res) {
       });
     }
 
+    // ---- Admin: save the dedicated phone number on the original eSIM order ----
+    if (String(body.action || '') === 'admin_set_phone_number') {
+      if (!(await isAdminUser(user))) {
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+      const orderId = String(body.order_id || '').trim();
+      const phone = String(body.phone_number || '').trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(orderId)) {
+        return res.status(400).json({ success: false, message: 'A valid eSIM order is required.' });
+      }
+      if (!/^\+?[0-9]{7,20}$/.test(phone.replace(/[\s().-]/g, ''))) {
+        return res.status(400).json({ success: false, message: 'Enter a valid eSIM phone number (7–20 digits).' });
+      }
+      const { data: target, error: targetError } = await supabase.from('esim_orders')
+        .select('id,order_ref,status,renewed_from_order_id')
+        .eq('id', orderId).maybeSingle();
+      if (targetError || !target) return res.status(404).json({ success: false, message: 'eSIM order not found.' });
+      if (target.renewed_from_order_id) return res.status(409).json({ success: false, message: 'Add or update the number on the original eSIM purchase, not the renewal record.' });
+      if (/^(failed|cancelled|canceled|expired|refunded)$/i.test(String(target.status || ''))) {
+        return res.status(409).json({ success: false, message: 'This eSIM order is closed and cannot be edited.' });
+      }
+      const { data: updated, error: updateError } = await supabase.from('esim_orders')
+        .update({ phone_number: phone })
+        .eq('id', orderId)
+        .is('renewed_from_order_id', null)
+        .not('status', 'in', '(failed,cancelled,canceled,expired,refunded)')
+        .select('id,order_ref,phone_number')
+        .maybeSingle();
+      if (updateError) {
+        console.error('[esim admin] phone number update failed:', updateError.message);
+        return res.status(500).json({ success: false, message: 'Could not save the eSIM phone number.' });
+      }
+      if (!updated) return res.status(409).json({ success: false, message: 'The order changed before the number was saved. Refresh and try again.' });
+      return res.status(200).json({ success: true, order: updated, message: 'eSIM phone number saved.' });
+    }
+
     // ---- Admin: confirm a manually fulfilled renewal ----
     if (String(body.action || '') === 'admin_confirm_refill') {
       if (!(await isAdminUser(user))) {
