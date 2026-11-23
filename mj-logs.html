@@ -645,7 +645,8 @@ source: source
 };
 }
 
-/* Combines the active category filter with the search box query */
+/* Combines the active category filter with the search box query.
+   Category order is preserved; products are price-sorted within each category. */
 function getFilteredProducts(){
 const c = categoryFilter.value;
 let list = c==='all' ? allProducts : allProducts.filter(p=>(p.category||'').trim()===c);
@@ -656,12 +657,6 @@ displayProductName(p).toLowerCase().includes(q) ||
 getDisplayDescription(p).replace(/\s+/g,' ').toLowerCase().includes(q) ||
 (p.category||'').toLowerCase().includes(q)
 );
-}
-// Search results always show the cheapest matching products first,
-// including searches across All Categories. Category browsing also keeps
-// its existing lowest-to-highest price order.
-if(searchQuery || c!=='all'){
-list = [...list].sort((a,b) => (parseFloat(a.price)||0) - (parseFloat(b.price)||0));
 }
 return list;
 }
@@ -748,8 +743,11 @@ productCountBadge.innerHTML='';return;
 }
 products=products.slice().sort((a,b)=>{
 const rank=v=>/9\s*proxy/i.test(String(v||''))?0:/^residential\s+proxy$/i.test(String(v||''))?1:2;
-const ap=rank(a.category),bp=rank(b.category);
-return ap-bp||String(displayProductName(a)||'').localeCompare(String(displayProductName(b)||''));
+const ac=String(a.category||'').trim(),bc=String(b.category||'').trim();
+const categoryOrder=rank(ac)-rank(bc)||ac.localeCompare(bc);
+if(categoryOrder) return categoryOrder;
+const priceOrder=(Number(a.price)||0)-(Number(b.price)||0);
+return priceOrder||String(displayProductName(a)||'').localeCompare(String(displayProductName(b)||''));
 });
 productCountBadge.innerHTML='<span class="product-count-badge">'+products.length+' product'+(products.length!==1?'s':'')+'</span>';
 const cart=getCart();
