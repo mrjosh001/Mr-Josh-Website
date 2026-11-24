@@ -413,8 +413,27 @@ function hideCloneWord(value){
   return String(value || '').replace(/\bclone\b/gi,' ').replace(/\s+/g,' ')
     .replace(/\s+([,;:])/g,'$1').replace(/^[\s|–—-]+|[\s|–—-]+$/g,'').trim();
 }
+// Customer-facing titles for the 11 BulkMail Facebook products in CREATE PAGE FACEBOOK.
+// Match by immutable product_key so supplier names remain untouched for sync and fulfilment.
+const BULKMAIL_CREATE_PAGE_DISPLAY_NAMES = {
+  bm_1163: 'Facebook Account with Page Ready | Vietnamese Profile | 2FA | Hotmail Access',
+  bm_1165: 'Facebook Account with Page Created | 1,000–5,000 Friends | No 2FA | Hotmail',
+  bm_1149: 'Foreign Facebook Account with Page Ready | 500–1,000 Friends | 2FA | Email Code Access',
+  bm_1114: 'Foreign Facebook Account with Page Ready | 1,000–5,000 Friends | 2FA | Email Code Access',
+  bm_1166: 'Facebook Account with Page Created | 500–1,000 Friends | No 2FA | Hotmail',
+  bm_1168: 'US Facebook Account with Page Created | Gmail Verified | 2FA | Phone Registered',
+  bm_1162: 'Facebook Account with Page Created | Random Friends | No 2FA | Hotmail',
+  bm_1186: 'Facebook Account with Page Created | 100–1,000 Friends | No 2FA | Verified Hotmail',
+  bm_1170: 'Foreign Facebook Account with Page Ready | 1,000–5,000 Friends',
+  bm_1115: 'Foreign Facebook Account with Page Ready | 100–1,000 Friends | 2FA | Email Code Access',
+  bm_1169: 'Foreign Facebook Account with Page Ready | 500–1,000 Friends'
+};
 function displayProductName(p){
   const raw=cleanText(p && p.name || 'Product');
+  const productKey=String(p && p.product_key || '');
+  if(Object.prototype.hasOwnProperty.call(BULKMAIL_CREATE_PAGE_DISPLAY_NAMES,productKey)) {
+    return BULKMAIL_CREATE_PAGE_DISPLAY_NAMES[productKey];
+  }
   if(isResidentialProxyProduct(p)) {
     // Supplier plan names belong in the plan selector, not the product title.
     return raw.replace(/\bBulkMail\b/ig,'').replace(/^Residential Proxy\s*[·|:-]\s*/i,'').split(/\s*[·|]\s*/)[0].replace(/\s+/g,' ').trim() || 'Residential Proxy';
