@@ -416,7 +416,7 @@ function hideCloneWord(value){
 // Customer-facing titles for the 11 BulkMail Facebook products in CREATE PAGE FACEBOOK.
 // Match by immutable product_key so supplier names remain untouched for sync and fulfilment.
 const BULKMAIL_CREATE_PAGE_DISPLAY_NAMES = {
-  bm_1163: 'Facebook Account with Page Ready | Vietnamese Profile | 2FA | Hotmail Access',
+bm_1163: 'Facebook Account with Page Ready | Vietnamese Profile | 2FA | Hotmail Access',
   bm_1165: 'Facebook Account with Page Created | 1,000–5,000 Friends | No 2FA | Hotmail',
   bm_1149: 'Foreign Facebook Account with Page Ready | 500–1,000 Friends | 2FA | Email Code Access',
   bm_1114: 'Foreign Facebook Account with Page Ready | 1,000–5,000 Friends | 2FA | Email Code Access',
@@ -428,9 +428,62 @@ const BULKMAIL_CREATE_PAGE_DISPLAY_NAMES = {
   bm_1115: 'Foreign Facebook Account with Page Ready | 100–1,000 Friends | 2FA | Email Code Access',
   bm_1169: 'Foreign Facebook Account with Page Ready | 500–1,000 Friends'
 };
+};
+const BULKMAIL_FACEBOOK_DISPLAY_NAMES = {
+  bm_1110: "USA Facebook Account | 0–10 Friends | 2FA | Verified Trusted Hotmail | Farmed",
+  bm_1130: "USA Facebook Account | USA IP | Verified Hotmail | Tut Suitable | 282 Passed",
+  bm_1137: "USA Facebook Account | 2025 Registration | 2FA | Very Hotmail | Full Changer | Receives Page/BM",
+  bm_1138: "USA Facebook Account | US Registration & Location | Real Phone | Verified Hotmail | Full Avatar",
+  bm_1142: "USA Facebook Account | iOS Registration | Random IP | Verified Hotmail | Full Avatar & Info",
+  bm_1161: "USA Facebook Account | 0–20 Friends | US Avatar | Mail Access | Farmed",
+  bm_1188: "USA Facebook Account | US Location | Real Phone Registered & Verified | Trusted Hotmail | 2FA",
+  bm_268: "USA-Name Facebook Account | 0–20 Friends | Uploaded Avatar | 2FA | Very Hotmail Trust",
+  bm_265: "Foreign Facebook Account | 0–30 Friends | Receives Email Code & Page | Full Changer | Cover Rename | Very Hotmail",
+  bm_1121: "Vietnam Facebook Account | 0–30 Friends | Verified Hotmail | No 2FA | Email-Code Login",
+  bm_1124: "Vietnam Facebook Account | 0–30 Friends | Verified Hotmail | 2FA",
+  bm_1157: "Foreign Facebook Account | 0–30 Friends | 20+ US Posts | Trusted Hotmail | 2FA | Phone-Farmed | Cookie/Name Changed",
+  bm_259: "Foreign Facebook Account | 30+ Friends | Receives Email Code & Page | Full Changer | Cover Rename | Very Hotmail",
+  bm_275: "Foreign Facebook Account | 1,000–5,000 Friends | Verified Hotmail | No 2FA",
+  bm_276: "Grand Facebook Account | 500–1,000 Friends | Trusted Hotmail | 2FA",
+  bm_277: "Foreign Facebook Account | 500–1,000 Friends | Trusted Hotmail | No 2FA",
+  bm_278: "Foreign Facebook Account | 100–500 Friends | Hotmail Trust | 2FA",
+  bm_279: "Foreign Facebook Account | 100–500 Friends | Trusted Hotmail | No 2FA",
+  bm_1119: "Vietnam Facebook Account | 1,000–5,000 Friends | Verified Trusted Hotmail | 2FA",
+  bm_1120: "Vietnam Facebook Account | 1,000–5,000 Friends | Verified Trusted Hotmail | No 2FA | Email-Code Login",
+  bm_1122: "Vietnam Facebook Account | 30–100 Friends | Verified Trusted Hotmail | No 2FA | Email-Code Login",
+  bm_1123: "Vietnam Facebook Account | 100–500 Friends | Verified Trusted Hotmail | No 2FA | Email-Code Login",
+  bm_1126: "Vietnam Facebook Account | 100–500 Friends | Verified Trusted Hotmail | 2FA",
+  bm_1131: "International Facebook Account | 100+ Friends | No 2FA | Fully Changeable by Email | Supports Page",
+  bm_1136: "Facebook Account | 1,000–5,000 Real Friends | 2FA | Email-Code Changer | Receives BM Page | High Durability",
+  bm_1158: "Foreign Facebook Account | 30–100 Friends | 15–50 US Posts | Trusted Hotmail | 2FA | Phone-Farmed",
+  bm_1159: "Foreign Facebook Account | 100–400 Friends | 15–50 US Posts | Trusted Hotmail | 2FA | Phone-Farmed",
+  bm_1174: "India Facebook Account | 100+ Real Friends | 2FA | Verified Hotmail | Phone-Farmed | CP 956 Mail",
+  bm_1194: "Sierra Leone Facebook Account | 100+ Friends | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_1196: "Myanmar Facebook Account | 100+ Friends | Aged | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_1199: "Afghanistan Facebook Account | 100+ Friends | Aged | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_1112: "Foreign Facebook Account | 2FA | Email-Code Changer | Page Acceptance | Email & Mail Access",
+  bm_1135: "Foreign Facebook Account | 6157 | 2FA | Very Hotmail | Receives Email Code & Page | Full Changer | Original Domain Mail",
+  bm_1151: "Foreign Facebook Account | Android Registered | Phone Verified | Trusted Hotmail | Password Changed | 2FA | 1 Fanpage Included",
+  bm_1171: "Facebook Account | 6157 | Registered Mar–Apr 2025 | Random Friends | 2FA | 20–50 Posts | Trusted Hotmail | Full Changer",
+  bm_1181: "Facebook Account | 2025 Android Registration | Aged 10 Months–1 Year | 2FA | Email Verified",
+  bm_1189: "Foreign Facebook Account | Gmail | No 2FA | USA Name | Random IP | Highly Durable",
+  bm_261: "Vietnamese-Name Facebook Account | 6155–6156 | No 2FA | Very Hotmail",
+  bm_1143: "Vietnamese-Name Facebook Account | Gmail | No 2FA | High Durability",
+  bm_1175: "Vietnamese-Name Facebook Account | 6157 | 2FA | Hotmail | Phone-Farmed | 282 Verified | Full Changer",
+  bm_1179: "Vietnamese-Name Facebook Account | 6159 | 2FA | Email Verified via TempMail.Plus",
+  bm_1180: "Vietnamese-Name Facebook Account | 6157 | Registered Jun–Jul 2025 | Email Verified | Code Accessible | 3–5 Posts",
+  bm_1182: "Vietnamese Facebook Account | 2025 Android Registration | Aged 10 Months–1 Year | 2FA | Email Verified | 3–5 Posts",
+  bm_1195: "Sierra Leone Facebook Account | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_1197: "Myanmar Facebook Account | Aged | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_1198: "Afghanistan Facebook Account | Aged | 2FA | Phone-Farmed | Location Not Guaranteed",
+  bm_281: "Foreign Facebook Account | 0–100 Friends | Trusted Hotmail | No 2FA"
+};
 function displayProductName(p){
   const raw=cleanText(p && p.name || 'Product');
   const productKey=String(p && p.product_key || '');
+  if(Object.prototype.hasOwnProperty.call(BULKMAIL_FACEBOOK_DISPLAY_NAMES,productKey)) {
+    return BULKMAIL_FACEBOOK_DISPLAY_NAMES[productKey];
+  }
   if(Object.prototype.hasOwnProperty.call(BULKMAIL_CREATE_PAGE_DISPLAY_NAMES,productKey)) {
     return BULKMAIL_CREATE_PAGE_DISPLAY_NAMES[productKey];
   }
