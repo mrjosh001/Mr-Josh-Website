@@ -11,17 +11,17 @@
 <link rel="dns-prefetch" href="//challenges.cloudflare.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
 <style>
 :root{color-scheme:dark;--bg:#09090b;--card:#121216;--text:#fafafa;--muted:#a1a1aa;--border:#27272a;--primary:#3b82f6;--danger:#f87171}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse 80% 50% at 20% -10%,rgba(59,130,246,.1),transparent),var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse 80% 50% at 20% -10%,rgba(59,130,246,.1),transparent),var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .card{width:min(100%,400px);padding:32px 26px;background:#15151c;border:1px solid #3f3f46;border-radius:20px;box-shadow:0 18px 55px #000a;position:relative;z-index:1}
 .logo{display:block;width:auto;height:42px;max-width:190px;object-fit:contain;margin:0 auto 20px}
 h1{font-size:22px;margin:0 0 6px;text-align:center}p{font-size:13px;color:var(--muted);text-align:center;margin:0 0 25px}
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 7px}
 .field{margin-bottom:16px}input{width:100%;padding:13px 14px;border-radius:11px;border:1px solid var(--border);background:#09090b;color:var(--text);font:inherit;outline:none}input:focus{border-color:var(--primary)}
 #adminCaptcha{display:flex;justify-content:center;min-height:65px;margin:4px 0 16px}
-button{width:100%;border:0;border-radius:11px;padding:13px 16px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font:700 14px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;min-height:46px}
+button{width:100%;border:0;border-radius:11px;padding:13px 16px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;font:700 14px system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer;min-height:46px}
 button:disabled{opacity:.65;cursor:wait}.error{min-height:20px;margin-top:12px;color:var(--danger);font-size:12px;text-align:center}.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -38,16 +38,27 @@ button:disabled{opacity:.65;cursor:wait}.error{min-height:20px;margin-top:12px;c
 <div class="error" id="loginError" role="alert" aria-live="polite"></div>
 </form>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
 (function(){
 'use strict';
 const SUPABASE_URL='https://atczodlljmlayvldxfmv.supabase.co';
 const SUPABASE_KEY='sb_publishable_dwbeKLcSG7-nfKzZz8x8Zw_U9FtwJTy';
 const SITE_KEY='0x4AAAAAAF0CXjc8jL8djc4l';
-if(!window.supabase){document.getElementById('loginError').textContent='Security library failed to load. Check your connection and refresh.';return;}
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.sessionStorage}});
 const mount=document.getElementById('adminCaptcha'),errorEl=document.getElementById('loginError'),button=document.getElementById('signInButton');
+let sb=null;
+const sbReady=new Promise((resolve,reject)=>{
+ if(window.supabase&&typeof window.supabase.createClient==='function'){resolve(window.supabase);return;}
+ const script=document.createElement('script');
+ script.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+ script.async=true;
+ script.onload=()=>window.supabase&&typeof window.supabase.createClient==='function'?resolve(window.supabase):reject(new Error('Security library failed to initialise.'));
+ script.onerror=()=>reject(new Error('Security library failed to load. Check your connection and refresh.'));
+ document.head.appendChild(script);
+}).then(api=>{
+ sb=api.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.sessionStorage}});
+ return sb;
+});
 let widgetId=null,token='',apiPromise=null,scriptFailed=false;
 function showError(message){errorEl.textContent=message||'Security verification could not load. Refresh and try again.';}
 function loadTurnstile(){
@@ -104,6 +115,7 @@ document.getElementById('adminLoginForm').addEventListener('submit',async event=
  if(!token){showError('Complete the security check before signing in.');initCaptcha();return;}
  button.disabled=true;button.innerHTML='<span class="spinner"></span> Signing in…';
  try{
+  await sbReady;
   const {data,error}=await sb.auth.signInWithPassword({email,password,options:{captchaToken:token}});
   token='';if(window.turnstile&&widgetId!==null)try{window.turnstile.reset(widgetId);}catch(e){}
   if(error)throw error;
@@ -113,11 +125,13 @@ document.getElementById('adminLoginForm').addEventListener('submit',async event=
  }catch(e){showError(e.message||'Sign in failed.');button.disabled=false;button.textContent='Sign In';}
 });
 (async()=>{
- // Load the CAPTCHA while Supabase restores any saved session.
- // If a valid admin session exists, the redirect below simply cancels this work.
+ // Start Cloudflare verification immediately, in parallel with the Supabase SDK download.
+ // This removes the old serial dependency where the CAPTCHA waited for Supabase's CDN.
  initCaptcha();
- try{await verifyExistingSession();}
- catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');}
+ try{
+  await sbReady;
+  await verifyExistingSession();
+ }catch(e){console.error(e);showError(e.message||'Could not start sign-in. Refresh and try again.');}
 })();
 })();
 </script>
