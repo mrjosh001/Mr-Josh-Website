@@ -1419,15 +1419,16 @@ async function smsOrdersInboxCountHandle(body = {}) {
 }
 
 async function wipeUnusedSmsNumbersHandle() {
-  // Remove cancelled/expired SMS number orders older than 15 days with no received code.
-  // Completed / waiting / recent rows stay. Also drop matching transaction history rows.
-  // Note: number_orders uses `code` only — do not select missing columns (sms_code etc).
+  // Remove only old, terminal SMS number orders with no received code.
+  // Delete transaction history only when it is explicitly linked to the same
+  // SMS order through number_order_id / sms_order / idempotency metadata.
+  // Never use wallet_debit_id alone: it can point at an unrelated transaction.
   const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
   const deadStatuses = ['expired', 'cancelled', 'canceled', 'refunded', 'failed'];
 
   const { data: rows, error: selErr } = await supabase
     .from('number_orders')
-    .select('id, status, code, created_at, user_id')
+    .select('id, status, code, created_at, user_id, order_id, idempotency_key')
     .lt('created_at', cutoff)
     .in('status', deadStatuses)
     .limit(5000);
@@ -1436,54 +1437,105 @@ async function wipeUnusedSmsNumbersHandle() {
     return { status: 500, body: { success: false, message: 'Could not scan SMS orders: ' + selErr.message } };
   }
 
-  const toWipe = (rows || []).filter((r) => {
-    const code = String(r.code || r.sms || r.message || '').trim();
-    return !code;
-  });
-
+  const toWipe = (rows || []).filter((r) => !String(r.code || '').trim());
   if (!toWipe.length) {
-    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, message: 'Nothing to remove.' } };
+    return { status: 200, body: { success: true, wiped: 0, transactions_removed: 0, transactions_unmatched: 0, message: 'Nothing to remove.' } };
   }
 
-  const ids = toWipe.map((r) => r.id).filter(Boolean);
-  let wiped = 0;
-  let transactions_removed = 0;
+  // Resolve every transaction match before deleting anything. The transactions
+  // schema has no order_id/reference columns, so use its real linkage fields.
+  const transactionIds = new Set();
+  let transactions_unmatched = 0;
 
-  // Delete in chunks to avoid URL/body limits
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200);
-    const { error: delErr, count } = await supabase
-      .from('number_orders')
+  for (const order of toWipe) {
+    if (!order.id || !order.user_id) continue;
+    const matchedForOrder = new Set();
+    const base = () => supabase
+      .from('transactions')
+      .select('id, user_id, category, type, notes, meta')
+      .eq('user_id', order.user_id)
+      .eq('category', 'MJ SMS');
+
+    const lookups = [
+      base().filter('meta->>number_order_id', 'eq', String(order.id)),
+      base().ilike('notes', '%number_order_id:' + String(order.id) + '%')
+    ];
+
+    if (order.order_id) {
+      lookups.push(base().ilike('notes', '%sms_order:' + String(order.order_id) + '%'));
+    }
+    if (order.idempotency_key) {
+      lookups.push(base().ilike('notes', '%' + String(order.idempotency_key) + '%'));
+    }
+
+    for (const lookup of lookups) {
+      const { data: matches, error } = await lookup;
+      if (error) {
+        return {
+          status: 500,
+          body: {
+            success: false,
+            message: 'Could not identify linked SMS transactions. No SMS orders were deleted: ' + error.message,
+            wiped: 0,
+            transactions_removed: 0
+          }
+        };
+      }
+      for (const tx of matches || []) {
+        // A defensive second check prevents cross-user or non-SMS history removal.
+        if (tx.id != null && tx.user_id === order.user_id && String(tx.category || '').toLowerCase() === 'mj sms') {
+          matchedForOrder.add(tx.id);
+        }
+      }
+    }
+
+    if (matchedForOrder.size === 0) transactions_unmatched += 1;
+    for (const id of matchedForOrder) transactionIds.add(id);
+  }
+
+  let transactions_removed = 0;
+  const txIds = Array.from(transactionIds);
+  for (let i = 0; i < txIds.length; i += 200) {
+    const chunk = txIds.slice(i, i + 200);
+    const { error, count } = await supabase
+      .from('transactions')
       .delete({ count: 'exact' })
       .in('id', chunk);
-    if (delErr) {
+    if (error) {
       return {
         status: 500,
         body: {
           success: false,
-          message: 'Partial wipe failed: ' + delErr.message,
-          wiped,
+          message: 'Transaction cleanup failed. SMS orders were kept; some matching transaction rows may already have been removed: ' + error.message,
+          wiped: 0,
           transactions_removed
         }
       };
     }
-    wiped += typeof count === 'number' ? count : chunk.length;
+    transactions_removed += typeof count === 'number' ? count : chunk.length;
+  }
 
-    // Best-effort: remove related transaction rows (order id / reference)
-    try {
-      const { count: txCount } = await supabase
-        .from('transactions')
-        .delete({ count: 'exact' })
-        .in('order_id', chunk.map(String));
-      if (typeof txCount === 'number') transactions_removed += txCount;
-    } catch (_) {}
-    try {
-      const { count: txCount2 } = await supabase
-        .from('transactions')
-        .delete({ count: 'exact' })
-        .in('reference', chunk.map(String));
-      if (typeof txCount2 === 'number') transactions_removed += txCount2;
-    } catch (_) {}
+  let wiped = 0;
+  const ids = toWipe.map((r) => r.id).filter(Boolean);
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const { error, count } = await supabase
+      .from('number_orders')
+      .delete({ count: 'exact' })
+      .in('id', chunk);
+    if (error) {
+      return {
+        status: 500,
+        body: {
+          success: false,
+          message: 'SMS order cleanup failed after transaction cleanup: ' + error.message,
+          wiped,
+          transactions_removed,
+          transactions_unmatched
+        }
+      };
+    }
+    wiped += typeof count === 'number' ? count : chunk.length;
   }
 
   return {
@@ -1492,11 +1544,11 @@ async function wipeUnusedSmsNumbersHandle() {
       success: true,
       wiped,
       transactions_removed,
-      message: wiped + ' unused number(s) removed.'
+      transactions_unmatched,
+      message: wiped + ' unused number(s) removed; ' + transactions_removed + ' linked transaction record(s) removed.'
     }
   };
 }
-
 
 async function listBoosterOrdersHandle() {
   let { data, error } = await supabase
