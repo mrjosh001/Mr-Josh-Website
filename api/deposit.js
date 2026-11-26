@@ -778,7 +778,7 @@ async function creditUser(userId, amountNgn, reference) {
     const nextUsd = currentUsd + amountUsd;
     const { error: balErr } = await supabase
       .from('profiles')
-      .update({ balance_usd: nextUsd })
+      .update({ balance_usd: nextUsd, updated_at: new Date().toISOString() })
       .eq('id', userId);
     if (balErr) throw new Error('USD balance update failed: ' + balErr.message);
 
@@ -838,7 +838,7 @@ async function creditUser(userId, amountNgn, reference) {
   const next = current + amountNgn;
   const { error: balErr } = await supabase
     .from('profiles')
-    .update({ balance: next })
+    .update({ balance: next, updated_at: new Date().toISOString() })
     .eq('id', userId);
   if (balErr) throw new Error('balance update failed: ' + balErr.message);
 
