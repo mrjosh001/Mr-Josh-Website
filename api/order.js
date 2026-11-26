@@ -1274,13 +1274,22 @@ async function handleFaddedSync(req, res) {
     let updatedCount = 0;
     let skippedCount = skippedMissingKey;
 
-    // Fetch existing keys in batches so admin visibility settings are preserved.
-    const allKeys = catalogueProducts.map((item) => item.product_key);
+    // Fadded identifiers may arrive as "253" while older MJ HUB rows use
+    // "prod_253". Look up both forms so a supplier ID change cannot create a
+    // second catalogue row and leave the original row's stock stale.
+    const aliasKeysFor = (key) => {
+      const value = String(key);
+      const aliases = new Set([value]);
+      if (value.startsWith('prod_')) aliases.add(value.slice(5));
+      else aliases.add(`prod_${value}`);
+      return Array.from(aliases);
+    };
+    const lookupKeys = Array.from(new Set(catalogueProducts.flatMap((item) => aliasKeysFor(item.product_key))));
     const existingKeySet = new Set();
     const adminHiddenSet = new Set();
     const EXISTS_CHECK_BATCH = 500;
-    for (let i = 0; i < allKeys.length; i += EXISTS_CHECK_BATCH) {
-      const keyBatch = allKeys.slice(i, i + EXISTS_CHECK_BATCH);
+    for (let i = 0; i < lookupKeys.length; i += EXISTS_CHECK_BATCH) {
+      const keyBatch = lookupKeys.slice(i, i + EXISTS_CHECK_BATCH);
       const { data: existingRows, error: existErr } = await supabase
         .from('products')
         .select('product_key, admin_hidden')
@@ -1316,18 +1325,22 @@ async function handleFaddedSync(req, res) {
       const now = new Date().toISOString();
       const key = item.product_key;
 
-      if (existingKeySet.has(key)) {
-        // Existing customer-facing price, category, name and descriptions remain admin-controlled.
-        // A missing supplier price is not converted to zero and cannot erase a valid stored cost.
-        const patch = {
-          stock_quantity: stock,
-          source: 'fadded',
-          updated_at: now
-        };
-        if (supplierPrice !== null) patch.supplier_price = supplierPrice;
-        if (stock <= 0) patch.is_available = false;
-        else if (!adminHiddenSet.has(key)) patch.is_available = true;
-        toUpdate.push({ product_key: key, patch });
+      const matchedKeys = aliasKeysFor(key).filter((candidate) => existingKeySet.has(candidate));
+      if (matchedKeys.length) {
+        // Refresh every legacy/current alias row for this supplier product.
+        // This prevents a prefixed legacy row from retaining stale stock.
+        for (const matchedKey of matchedKeys) {
+          // Existing customer-facing price, category, name and descriptions remain admin-controlled.
+          const patch = {
+            stock_quantity: stock,
+            source: 'fadded',
+            updated_at: now
+          };
+          if (supplierPrice !== null) patch.supplier_price = supplierPrice;
+          if (stock <= 0) patch.is_available = false;
+          else if (!adminHiddenSet.has(matchedKey)) patch.is_available = true;
+          toUpdate.push({ product_key: matchedKey, patch });
+        }
       } else {
         // New catalogue items retain the existing initial markup behaviour.
         const initialSupplierPrice = supplierPrice === null ? 0 : supplierPrice;
