@@ -341,7 +341,7 @@ function buildInvoiceEmail({ fullName, orderRef, planName, carrier, email, imei,
 }
 
 /** EMAIL 2 — Welcome */
-function buildWelcomeEmail({ fullName, orderRef, planName, carrier }) {
+function buildWelcomeEmail({ fullName, orderRef, planName, carrier, deliveryMethod = 'qr_code' }) {
   const name = escapeHtml(String(fullName || '').trim());
   const greeting = name ? 'Dear ' + name + ',' : 'Hello,';
   const ref = escapeHtml(orderRef || '');
@@ -375,7 +375,7 @@ function buildWelcomeEmail({ fullName, orderRef, planName, carrier }) {
     <div style="background:#0f172a;padding:28px 24px 32px;font-size:16px;line-height:1.7">
       <p style="margin:0 0 16px">${greeting}</p>
       <p style="margin:0 0 16px">Thank you for choosing MJ HUB Wireless. Your order is confirmed and your line is being set up.</p>
-      <p style="margin:0 0 16px">In a separate email you will receive your eSIM QR code, your number when it is assigned, and clear install steps for iPhone and Android.</p>
+      <p style="margin:0 0 16px">${deliveryMethod === 'carrier_notification' ? 'Your carrier will send an eSIM activation notification directly to your device. A separate email will contain the installation guide.' : 'In a separate email you will receive your eSIM QR code, your number when it is assigned, and clear install steps for iPhone and Android.'}</p>
       <p style="margin:0 0 8px"><strong style="color:#fff">Your order</strong></p>
       <ul style="margin:0 0 20px;padding-left:20px;color:#cbd5e1">
         <li style="margin-bottom:6px">Order ID: <strong style="color:#fff">#${ref}</strong></li>
@@ -479,6 +479,65 @@ function buildDeliveryEmail({ fullName, orderRef, planName, phone, carrier, imei
  * Validates and decodes the QR image uploaded by the admin dashboard.
  * Accepts only PNG, JPEG and WEBP data URLs and rejects malformed/oversized data.
  */
+/** EMAIL 4 — carrier notification installation guide; deliberately has no QR image or attachment. */
+function buildNotificationDeliveryEmail({ fullName, orderRef, planName, phone, carrier, imei }) {
+  const name = escapeHtml(String(fullName || '').trim());
+  const greeting = name ? 'Dear ' + name + ',' : 'Hello,';
+  const phoneHtml = phone ? '<p style="margin:0 0 18px;text-align:center;font-size:16px">Phone Number<br><strong style="color:#93c5fd;font-size:22px">' + escapeHtml(phone) + '</strong></p>' : '';
+  const imeiHtml = imei ? '<p style="margin:0 0 18px;padding:14px;background:#1c1917;border:1px solid #92400e;border-radius:8px;color:#fde68a;font-size:14px"><strong>Important:</strong> This eSIM will only activate on IMEI <strong>' + escapeHtml(imei) + '</strong>. Do not remove or delete it after installation.</p>' : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>:root{color-scheme:light dark;supported-color-schemes:light dark}@media(prefers-color-scheme:light){body{background:#f8fafc!important;color:#1e293b!important}div[style*="background:#0f172a"]{background:#fff!important}div[style*="background:#1e293b"]{background:#e2e8f0!important}[style*="color:#e2e8f0"],[style*="color:#cbd5e1"]{color:#334155!important}[style*="color:#fff"]{color:#0f172a!important}[style*="color:#93c5fd"]{color:#1d4ed8!important}}</style></head>
+<body style="margin:0;padding:0;background:#0f172a"><div style="max-width:600px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#e2e8f0">
+${brandHeader('')}<div style="background:#1e293b;padding:28px 24px;text-align:center"><h1 style="margin:0;font-size:26px;font-weight:400;color:#93c5fd">eSIM Installation</h1></div>
+<div style="background:#0f172a;padding:28px 24px 32px;font-size:16px;line-height:1.7"><p style="margin:0 0 16px">${greeting}</p><p style="margin:0 0 18px">Your carrier has sent the eSIM activation notification directly to your device. Follow the steps below to install your line.</p>${phoneHtml}${imeiHtml}
+<div style="margin:0 0 16px;padding:16px 18px;background:#1e293b;border-radius:10px"><p style="margin:0 0 12px;font-family:Arial,sans-serif;font-weight:700;color:#93c5fd">How to install</p><ol style="margin:0;padding-left:18px;color:#cbd5e1;font-size:15px">
+<li style="margin-bottom:10px">Connect your phone to a stable <strong style="color:#fff">Wi-Fi network</strong>.</li>
+<li style="margin-bottom:10px">Connect <strong style="color:#fff">Super VPN</strong> and set location to <strong style="color:#fff">USA Dallas</strong>.</li>
+<li style="margin-bottom:10px">Keep both <strong style="color:#fff">Wi-Fi and VPN turned on</strong> throughout installation.</li>
+<li style="margin-bottom:10px">Check your phone for the carrier's eSIM activation notification.</li>
+<li style="margin-bottom:10px">Tap the notification and follow the on-screen instructions to install your eSIM.</li>
+<li style="margin-bottom:10px">After activation, turn on <strong style="color:#fff">Wi-Fi Calling</strong>.</li>
+<li style="margin-bottom:10px">Add a <strong style="color:#fff">USA address</strong> when asked, then continue.</li>
+<li style="margin-bottom:0">Your eSIM is ready to use.</li></ol></div>
+<p style="margin:0 0 16px;padding:14px 16px;background:#0b1220;border:1px solid #334155;border-radius:8px;font-size:14px;color:#cbd5e1"><strong style="color:#fff">Note:</strong> If Wi-Fi Calling will not turn on, switch the phone off, turn it back on, then try again.</p>
+<p style="margin:0 0 8px;font-size:14px;color:#94a3b8">Order #${escapeHtml(orderRef || '')}${planName ? ' · ' + escapeHtml(planName) : ''}${carrier ? ' · ' + escapeHtml(carrier) : ''}</p>
+<p style="margin:0 0 16px;font-size:14px;color:#94a3b8">Your carrier notification is the installation method for this eSIM. No QR code is required. Do not delete the eSIM after installation. Contact support if you face any issue.</p><p style="margin:0">Best regards,<br>The MJ HUB Wireless Team</p></div>${brandFooter()}</div></body></html>`;
+}
+
+async function handleNotificationDeliver(body, adminUser, res) {
+  const orderId = String(body.order_id || '').trim();
+  if (!/^[0-9a-f-]{8,40}$/i.test(orderId)) return res.status(400).json({ success: false, message: 'Missing or invalid order.' });
+  if (body.notification_confirmed !== true) return res.status(400).json({ success: false, message: 'Confirm that the carrier notification has actually been sent before emailing the customer.' });
+  const resend = body.resend === true;
+  const phone = String(body.phone || '').replace(/[^0-9+ ()-]/g, '').trim().slice(0, 24);
+  const { data: order, error: orderError } = await supabase.from('esim_orders').select('*').eq('id', orderId).maybeSingle();
+  if (orderError || !order) return res.status(404).json({ success: false, message: 'eSIM order not found.' });
+  if (/^(failed|cancelled|canceled|expired|refunded)$/i.test(String(order.status || ''))) return res.status(400).json({ success: false, message: 'This order is ' + order.status + ' and cannot be delivered.' });
+  if (/^completed$/i.test(String(order.status || '')) && !resend) return res.status(409).json({ success: false, message: 'This eSIM was already delivered. Use Resend if you need to send the email again.' });
+  const customerEmail = String(order.customer_email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) return res.status(400).json({ success: false, message: 'This order has no valid customer email.' });
+  let fullName = '';
+  if (order.user_id) {
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', order.user_id).maybeSingle();
+    fullName = String(profile?.full_name || '').trim();
+  }
+  const labels = { tmobile: 'T-Mobile', att: 'AT&T', lyca: 'Lyca Mobile' };
+  const carrierLabel = order.carrier_label || labels[String(order.carrier || '').toLowerCase()] || order.carrier || '';
+  const welcomeHtml = buildWelcomeEmail({ fullName, orderRef: order.order_ref, planName: order.plan_name, carrier: carrierLabel, deliveryMethod: 'carrier_notification' });
+  const html = buildNotificationDeliveryEmail({ fullName, orderRef: order.order_ref, planName: order.plan_name, phone: phone || order.phone_number || '', carrier: carrierLabel, imei: order.imei });
+  try {
+    await sendEmail({ to: customerEmail, subject: 'Welcome to MJ HUB Wireless', html: welcomeHtml, replyTo: ADMIN_EMAIL, fromName: 'MJ HUB Wireless' });
+    await sendEmail({ to: customerEmail, subject: 'Set Up Your eSIM – Carrier Notification Ready', html, replyTo: ADMIN_EMAIL, fromName: 'MJ HUB Wireless' });
+  } catch (error) {
+    console.error('[esim notification deliver] email failed for ' + order.order_ref + ':', error?.message || error);
+    await supabase.from('esim_orders').update({ email_error: String(error?.message || error).slice(0, 1000) }).eq('id', order.id);
+    return res.status(502).json({ success: false, message: 'The notification email could not be sent: ' + (error?.message || 'unknown error') + '. Nothing was marked as delivered.' });
+  }
+  const { error: updateError } = await supabase.from('esim_orders').update({ status: 'completed', email_error: null, phone_number: phone || order.phone_number || null }).eq('id', order.id);
+  if (updateError) return res.status(200).json({ success: true, emailed: true, warning: 'Email sent, but the order status could not be updated: ' + updateError.message });
+  if (order.user_id) await notifyUserPush(order.user_id, 'Your eSIM is ready', 'Check your email for the carrier notification installation guide.', '/dashboard.html', 'esim');
+  return res.status(200).json({ success: true, emailed: true, message: 'Welcome + carrier notification setup emails sent to ' + customerEmail });
+}
+
 function decodeQrDataUrl(value) {
   if (typeof value !== 'string') return null;
   const match = value.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i);
@@ -1012,6 +1071,9 @@ export default async function handler(req, res) {
           .select('renewed_from_order_id').eq('id', orderId).maybeSingle();
         if (targetError) return res.status(500).json({ success: false, message: 'Could not verify this eSIM order.' });
         if (target?.renewed_from_order_id) return res.status(409).json({ success: false, message: 'Renewal orders use Confirm Refill Completed, not QR delivery.' });
+      }
+      if (String(body.delivery_method || 'qr_code') === 'carrier_notification') {
+        return handleNotificationDeliver(body, user, res);
       }
       return handleDeliver(body, user, res);
     }

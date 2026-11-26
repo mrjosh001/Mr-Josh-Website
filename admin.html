@@ -2012,12 +2012,24 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <h3 id="esimDeliverTitle">Deliver eSIM</h3>
  <div id="esimDeliverSummary" style="font-size:13px;margin-bottom:14px;"></div>
  <div class="field">
+ <label>Delivery method</label>
+ <select id="esimDeliveryMethod" onchange="esimDeliveryMethodChanged()">
+  <option value="qr_code">QR code email (existing)</option>
+  <option value="carrier_notification">Carrier notification email (new)</option>
+ </select>
+ <div class="price-note">The existing QR delivery remains unchanged. Choose carrier notification only when the carrier has sent the activation notification to the customer's device.</div>
+ </div>
+ <div id="esimQrUploadField" class="field">
  <label>eSIM QR code image</label>
  <input type="file" id="esimQrFile" accept="image/png,image/jpeg,image/webp" onchange="esimQrPicked(this)">
  <div id="esimQrHint" style="font-size:11px;color:var(--muted);margin-top:6px;">PNG, JPG or WEBP, up to 2 MB.</div>
  <div id="esimQrPreviewWrap" class="hidden" style="margin-top:10px;text-align:center;">
  <img id="esimQrPreview" alt="QR preview" style="width:200px;max-width:100%;border-radius:10px;background:#fff;padding:6px;">
  </div>
+ </div>
+ <div id="esimNotificationConfirmField" class="field hidden">
+  <label style="display:flex;align-items:flex-start;gap:8px;"><input type="checkbox" id="esimNotificationConfirmed" style="margin-top:3px;"> I confirm the carrier activation notification has actually been sent to the customer's device.</label>
+  <div class="price-note">Do not tick this just because you are sending this email. Confirm the carrier-side notification first.</div>
  </div>
  <div class="field">
  <label>eSIM phone number (optional)</label>
@@ -7298,6 +7310,9 @@ function openEsimDeliver(id) {
  <div class="row-line"><span>Order ref</span><span>${escapeHtml(o.order_ref || '')}</span></div>`;
  document.getElementById('esimQrFile').value = '';
  document.getElementById('esimQrPreviewWrap').classList.add('hidden');
+ document.getElementById('esimDeliveryMethod').value = 'qr_code';
+ document.getElementById('esimNotificationConfirmed').checked = false;
+ esimDeliveryMethodChanged();
  document.getElementById('esimPhoneInput').value = '';
  document.getElementById('esimQrHint').textContent = resend
  ? 'Upload the QR image again to resend it. It is emailed directly and never saved.'
@@ -7306,6 +7321,17 @@ function openEsimDeliver(id) {
  ? `The email will greet them as <strong>Hi ${escapeHtml(o.full_name)},</strong> with the setup steps, the QR code in the middle of the message, and the QR attached as a file.`
  : '<span style="color:#fbbf24;">This customer has no name saved on their account, so the email will say “Hi there,”.</span>');
  document.getElementById('esimDeliverModal').classList.remove('hidden');
+}
+function esimDeliveryMethodChanged() {
+ const notification = document.getElementById('esimDeliveryMethod').value === 'carrier_notification';
+ document.getElementById('esimQrUploadField').classList.toggle('hidden', notification);
+ document.getElementById('esimNotificationConfirmField').classList.toggle('hidden', !notification);
+ document.getElementById('esimDeliverNote').innerHTML = notification
+  ? 'The customer will receive the carrier-notification installation guide. It includes Super VPN set to USA Dallas, Wi-Fi, Wi-Fi Calling and USA address instructions. No QR image or attachment will be sent.'
+  : 'The existing QR email is unchanged: the QR appears in the message and is also attached as a file.';
+ document.getElementById('esimDeliverSend').innerHTML = notification
+  ? '<i class="fas fa-paper-plane"></i> Send notification email'
+  : '<i class="fas fa-paper-plane"></i> Send eSIM email';
 }
 function closeEsimDeliver() {
  if (esimDeliverBusy) return;
@@ -7332,8 +7358,12 @@ async function submitEsimDeliver() {
  const o = esimDeliverCurrent;
  if (!o || esimDeliverBusy) return;
  const resend = esimIsDelivered(o);
- if (!esimQrDataUrl) { showAdminToast('Upload the eSIM QR code image first', 'error'); return; }
- const msg = (resend ? 'Resend' : 'Send') + ' the eSIM QR email to ' + (o.customer_email || 'the customer') + '?';
+ const deliveryMethod = document.getElementById('esimDeliveryMethod').value || 'qr_code';
+ const notificationConfirmed = document.getElementById('esimNotificationConfirmed').checked;
+ if (deliveryMethod === 'qr_code' && !esimQrDataUrl) { showAdminToast('Upload the eSIM QR code image first', 'error'); return; }
+ if (deliveryMethod === 'carrier_notification' && !notificationConfirmed) { showAdminToast('Confirm the carrier notification has actually been sent first.', 'error'); return; }
+ const deliveryLabel = deliveryMethod === 'carrier_notification' ? 'carrier notification setup email' : 'eSIM QR email';
+ const msg = (resend ? 'Resend' : 'Send') + ' the ' + deliveryLabel + ' to ' + (o.customer_email || 'the customer') + '?';
  if (!window.confirm(msg)) return;
  const btn = document.getElementById('esimDeliverSend');
  esimDeliverBusy = true;
@@ -7342,8 +7372,10 @@ async function submitEsimDeliver() {
  const { data } = await esimAdminCall({
  action: 'deliver',
  order_id: o.id,
+ delivery_method: deliveryMethod,
+ notification_confirmed: deliveryMethod === 'carrier_notification' ? notificationConfirmed : false,
  phone: document.getElementById('esimPhoneInput').value.trim(),
- qr_image: esimQrDataUrl || undefined,
+ qr_image: deliveryMethod === 'qr_code' ? (esimQrDataUrl || undefined) : undefined,
  resend
  });
  if (!data.success) { showAdminToast(data.message || 'Delivery failed', 'error'); return; }
