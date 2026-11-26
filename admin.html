@@ -1780,14 +1780,14 @@ function withLagos(opts) { return Object.assign({ timeZone: 'Africa/Lagos' }, op
  <div class="metric-card"><div class="metric-label">Revenue</div><div class="metric-value" id="esimMetRev">—</div><div class="metric-sub">Paid on this page</div></div>
  </div>
  <div class="search-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
- <input type="search" id="esimOrderSearch" placeholder="Search order ref, email, IMEI or plan…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){esimOrderPage=1;loadEsimOrders()}">
+ <input type="search" id="esimOrderSearch" placeholder="Search order ref, email, IMEI or plan…" style="flex:1;min-width:200px;" onkeydown="if(event.key==='Enter'){triggerEsimOrderSearch()}">
  <select id="esimOrderFilter" onchange="renderEsimOrders()" style="width:auto;">
  <option value="all">All orders</option>
  <option value="waiting" selected>Awaiting QR delivery</option>
  <option value="renewal_pending">Renewal Pending</option>
  <option value="done">Completed</option>
  </select>
- <button class="btn btn-primary btn-sm" style="width:auto;" onclick="esimOrderPage=1;loadEsimOrders()"><i class="fas fa-search"></i> Search</button>
+ <button class="btn btn-primary btn-sm" style="width:auto;" onclick="triggerEsimOrderSearch()"><i class="fas fa-search"></i> Search</button>
  </div>
  <div class="desktop-only desktop-table table-wrap">
  <table>
@@ -7168,6 +7168,16 @@ async function confirmEsimRefill(id) {
  } catch(e) {
   showAdminToast(e.message||'Could not confirm refill completion.','error');
  }
+}
+function triggerEsimOrderSearch() {
+ const input = document.getElementById('esimOrderSearch');
+ // Search across all statuses rather than silently retaining the default waiting filter.
+ if (input && input.value.trim()) {
+  const filter = document.getElementById('esimOrderFilter');
+  if (filter) filter.value = 'all';
+ }
+ esimOrderPage = 1;
+ return loadEsimOrders();
 }
 async function loadEsimOrders() {
  const tbody = document.getElementById('esimOrdersBody');
