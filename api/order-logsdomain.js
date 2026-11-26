@@ -85,13 +85,14 @@ async function handleLdSync(req, res) {
       if (id == null) continue;
       const productKey = 'ld_' + id;
       const name = String(item.name || item.title || ('Logs Domain #' + id)).trim();
+      const description = stripHtml(item.description || '') || null;
       const stock = readLdStock(item);
       const supplierPrice = Number(item.price ?? item.unit_price ?? item.cost ?? 0) || 0;
       const sell = applyLdMarkup(supplierPrice);
 
       const { data: existing, error: existingError } = await supabase
         .from('products')
-        .select('product_key, admin_hidden')
+        .select('product_key, admin_hidden, description, display_description')
         .eq('product_key', productKey)
         .maybeSingle();
 
@@ -104,13 +105,21 @@ async function handleLdSync(req, res) {
       }
 
       if (existing) {
-        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
+        // Refresh supplier name and description while keeping MJ HUB price/category
+        // and any deliberate custom display-description override.
         const patch = {
+          name,
+          description,
           supplier_price: supplierPrice,
           stock_quantity: stock,
           source: 'logsdomain',
           updated_at: now
         };
+        const previousDescription = String(existing.description || '').trim();
+        const previousDisplayDescription = String(existing.display_description || '').trim();
+        if (!previousDisplayDescription || previousDisplayDescription === previousDescription) {
+          patch.display_description = description;
+        }
         if (stock <= 0) patch.is_available = false;
         else if (existing.admin_hidden) { /* stay hidden */ }
         else patch.is_available = true;
@@ -126,7 +135,8 @@ async function handleLdSync(req, res) {
           stock_quantity: stock,
           is_available: stock > 0,
           source: 'logsdomain',
-          description: stripHtml(item.description || '') || null,
+          description,
+          display_description: description,
           updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
