@@ -542,7 +542,8 @@ export default async function handler(req, res) {
     deducted = true;
 
     // 4. Call Logs Domain
-    const orderRef = external_order_id || `MJ-LD-${String(user_id).slice(0, 8)}-${Date.now()}`;
+    const orderRef = `MJ-LD-${String(user_id).slice(0, 8)}-${Date.now()}`;
+    const idempotencyKey = external_order_id || orderRef;
     const supplierRes = await fetch(`${LD_BASE}/logs/orders`, {
       method: 'POST',
       headers: {
@@ -553,7 +554,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         category_id: categoryId,
         quantity: qty,
-        idempotency_key: orderRef
+        idempotency_key: idempotencyKey
       })
     });
 
@@ -591,7 +592,7 @@ export default async function handler(req, res) {
     supplierAccepted = true;
     // 6. Success → save orders
     const items = Array.isArray(orderData.data?.items) ? orderData.data.items : [];
-    const supplierOrderId = orderData.data?.order_id || orderRef;
+    const supplierOrderId = orderData.data?.order_id || null;
     const detailsText = items.map((i) => i.details).filter(Boolean).join('\n\n');
     const reviewRequired = !items.length || !detailsText;
     const rawSupplierPayload = items.length ? JSON.stringify(items) : JSON.stringify(orderData.data || orderData);
@@ -603,7 +604,7 @@ export default async function handler(req, res) {
     // they bought, this line in the Vercel logs (search by order_id) shows
     // whether we asked the supplier for the right category_id or not.
     console.log('[order-logsdomain] fulfilling', {
-      order_id: supplierOrderId,
+      order_id: orderRef,
       product_key,
       category_id: categoryId,
       product_name: productName,
@@ -615,7 +616,7 @@ export default async function handler(req, res) {
         const item = items[itemIndex];
         const rawDetails = String(item.details || '').trim();
         const row = {
-          order_id: supplierOrderId,
+          order_id: orderRef,
           user_id,
           product_id: product.id,
           product_code: product_key,
@@ -696,15 +697,15 @@ export default async function handler(req, res) {
         await redeemCoupon(supabase, {
           couponId: couponQuote.coupon.id,
           userId: user_id,
-          orderRef: (typeof orderRef !== 'undefined' && orderRef) || (typeof supplierOrderId !== 'undefined' ? supplierOrderId : null),
+          orderRef: orderRef,
           amountSaved: couponDiscount || 0
         });
       } catch (_) {}
     }
 
     if (reviewRequired) {
-      try { await sendPushToAdmins(supabase, { title: 'Log purchase needs review', body: productName + ' supplier purchase succeeded but returned no usable items. Ref: ' + supplierOrderId, url: '/admin.html', type: 'admin_review' }); } catch (_) {}
-      return res.status(200).json({ success: true, completed: true, delivery_pending_review: true, message: 'Your purchase was successful. Delivery is being checked by MJ HUB. Do not purchase again.', order_id: supplierOrderId, wallet_debit_id: walletDebitId, total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd });
+      try { await sendPushToAdmins(supabase, { title: 'Log purchase needs review', body: productName + ' supplier purchase succeeded but returned no usable items. Ref: ' + orderRef, url: '/admin.html', type: 'admin_review' }); } catch (_) {}
+      return res.status(200).json({ success: true, completed: true, delivery_pending_review: true, message: 'Your purchase was successful. Delivery is being checked by MJ HUB. Do not purchase again.', order_id: orderRef, supplier_order_id: supplierOrderId, wallet_debit_id: walletDebitId, total_amount: total, new_balance: newBalance, new_balance_usd: newBalanceUsd });
     }
 
     try {
@@ -735,7 +736,8 @@ return res.status(200).json({
         new_balance: newBalance,
         new_balance_usd: newBalanceUsd,
         wallet_debit_id: walletDebitId,
-        order_id: supplierOrderId,
+        order_id: orderRef,
+        supplier_order_id: supplierOrderId,
         source: 'logsdomain'
       }
     });
