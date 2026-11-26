@@ -865,14 +865,35 @@ export default async function handler(req, res) {
       const to = from + pageSize - 1;
       const q = String(body.q || '').replace(/[%_,()]/g, ' ').trim();
 
+      // Search customer profile names as well as fields stored on the order.
+      let matchingUserIds = [];
+      if (q) {
+        const { data: matchingProfiles, error: profileSearchError } = await supabase
+          .from('profiles')
+          .select('id')
+          .or('full_name.ilike.%' + q + '%,email.ilike.%' + q + '%')
+          .limit(500);
+        if (profileSearchError) {
+          console.error('[esim admin] customer search failed:', profileSearchError.message);
+          return res.status(500).json({ success: false, message: 'Could not search eSIM customers. Please try again.' });
+        }
+        matchingUserIds = (matchingProfiles || []).map((profile) => profile.id).filter(Boolean);
+      }
+
       let query = supabase.from('esim_orders')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
       if (q) {
-        query = query.or(
-          'order_ref.ilike.%' + q + '%,customer_email.ilike.%' + q + '%,imei.ilike.%' + q + '%,plan_name.ilike.%' + q + '%'
-        );
+        const searchTerms = [
+          'order_ref.ilike.%' + q + '%',
+          'customer_email.ilike.%' + q + '%',
+          'imei.ilike.%' + q + '%',
+          'plan_name.ilike.%' + q + '%',
+          'phone_number.ilike.%' + q + '%'
+        ];
+        if (matchingUserIds.length) searchTerms.push('user_id.in.(' + matchingUserIds.join(',') + ')');
+        query = query.or(searchTerms.join(','));
       }
       const { data, error, count } = await query;
       if (error) {
