@@ -1318,7 +1318,7 @@ async function handleFaddedSync(req, res) {
     for (const item of catalogueProducts) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
-      const supplierName = String(item.name || item.product_name || item.title || key).trim();
+      const supplierName = String(item.name || item.product_name || item.title || item.product_key || '').trim();
       const rawSupplierPrice = item.unit_price ?? item.unitPrice ?? item.reseller_price ??
         item.resellerPrice ?? item.buy_price ?? item.buyPrice ?? item.cost_price ??
         item.cost ?? item.price ?? item.amount ?? item.original_price;
