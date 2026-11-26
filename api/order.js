@@ -1286,13 +1286,14 @@ async function handleFaddedSync(req, res) {
     };
     const lookupKeys = Array.from(new Set(catalogueProducts.flatMap((item) => aliasKeysFor(item.product_key))));
     const existingKeySet = new Set();
+    const existingProductMap = new Map();
     const adminHiddenSet = new Set();
     const EXISTS_CHECK_BATCH = 500;
     for (let i = 0; i < lookupKeys.length; i += EXISTS_CHECK_BATCH) {
       const keyBatch = lookupKeys.slice(i, i + EXISTS_CHECK_BATCH);
       const { data: existingRows, error: existErr } = await supabase
         .from('products')
-        .select('product_key, admin_hidden')
+        .select('product_key, admin_hidden, description, display_description')
         .in('product_key', keyBatch);
       if (existErr) {
         console.error('[fadded sync] existing-product lookup failed; aborting before writes', existErr.message);
@@ -1302,7 +1303,11 @@ async function handleFaddedSync(req, res) {
         });
       }
       (existingRows || []).forEach((row) => {
-        if (row.product_key) existingKeySet.add(String(row.product_key));
+        if (row.product_key) {
+          const productKey = String(row.product_key);
+          existingKeySet.add(productKey);
+          existingProductMap.set(productKey, row);
+        }
         if (row.product_key && row.admin_hidden) adminHiddenSet.add(String(row.product_key));
       });
     }
@@ -1313,6 +1318,7 @@ async function handleFaddedSync(req, res) {
     for (const item of catalogueProducts) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
+      const supplierName = String(item.name || item.product_name || item.title || item.product_key || '').trim();
       const rawSupplierPrice = item.unit_price ?? item.unitPrice ?? item.reseller_price ??
         item.resellerPrice ?? item.buy_price ?? item.buyPrice ?? item.cost_price ??
         item.cost ?? item.price ?? item.amount ?? item.original_price;
@@ -1333,12 +1339,21 @@ async function handleFaddedSync(req, res) {
         const canonicalKey = matchedKeys.includes(`prod_${key.replace(/^prod_/, '')}`)
           ? `prod_${key.replace(/^prod_/, '')}`
           : matchedKeys[0];
-        // Existing customer-facing price, category, name and descriptions remain admin-controlled.
+        // Refresh supplier identity on every sync, while preserving deliberate
+        // MJ HUB display-description overrides and all admin merchandising fields.
+        const existingProduct = existingProductMap.get(canonicalKey);
         const patch = {
+          name: supplierName,
+          description: cleanDescription,
           stock_quantity: stock,
           source: 'fadded',
           updated_at: now
         };
+        const previousDescription = String(existingProduct?.description || '').trim();
+        const previousDisplayDescription = String(existingProduct?.display_description || '').trim();
+        if (!previousDisplayDescription || previousDisplayDescription === previousDescription) {
+          patch.display_description = displayDescription;
+        }
         if (supplierPrice !== null) patch.supplier_price = supplierPrice;
         if (stock <= 0) patch.is_available = false;
         else if (!adminHiddenSet.has(canonicalKey)) patch.is_available = true;
@@ -1348,7 +1363,7 @@ async function handleFaddedSync(req, res) {
         const initialSupplierPrice = supplierPrice === null ? 0 : supplierPrice;
         toInsert.push({
           product_key: key,
-          name: item.name || item.product_name || item.title || key,
+          name: supplierName,
           description: cleanDescription,
           display_description: displayDescription,
           supplier_price: initialSupplierPrice,
