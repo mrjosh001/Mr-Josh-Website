@@ -6085,7 +6085,7 @@ if (method === 'GET' && ga === 'gotsms_my_orders') {
         const full = url.searchParams.get('full') === '1' || url.searchParams.get('full') === 'true';
         let page = Math.max(1, Number(url.searchParams.get('page') || 1));
         const perPage = Math.min(100, Math.max(20, Number(url.searchParams.get('per_page') || 100)));
-        const maxPages = full ? 200 : 1; // safety cap
+        const maxPages = full ? 2 : 1; // bounded batch: resume via next_page before Vercel's function timeout
 
         let totalNew = 0;
         let totalUpdated = 0;
