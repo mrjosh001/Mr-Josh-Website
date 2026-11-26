@@ -1645,14 +1645,53 @@ async function tryJsonEndpoints(urls, headers, currencyGuess) {
 }
 
 async function getFaddedBalance() {
-  const apiKey = process.env.FADDED_API_KEY;
+  const apiKey = String(process.env.FADDED_API_KEY || '').trim();
   if (!apiKey) return { ok: false, error: 'Missing FADDED_API_KEY' };
-  const base = 'https://fadded.net/api/v1/reseller';
-  return tryJsonEndpoints(
-    [`${base}/balance`, `${base}/profile`, `${base}/me`, `${base}/account`],
-    { 'X-Api-Key': apiKey, Accept: 'application/json' },
-    'NGN'
-  );
+
+  // Fadded's documented reseller API uses api.fadded.net (not fadded.net).
+  // GET /balance returns { success, data: { balance, currency } }.
+  const url = 'https://api.fadded.net/api/v1/reseller/balance';
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Api-Key': apiKey,
+        Accept: 'application/json'
+      }
+    });
+    const raw = await res.text();
+    let json;
+    try { json = JSON.parse(raw); } catch (_) { json = null; }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: (json && (json.message || json.error)) || `Fadded balance request failed (HTTP ${res.status})`,
+        raw: safeSlice(raw, 300)
+      };
+    }
+    if (!json || json.success !== true) {
+      return {
+        ok: false,
+        error: (json && (json.message || json.error)) || 'Fadded returned an unsuccessful balance response',
+        raw: safeSlice(raw, 300)
+      };
+    }
+
+    const balance = json?.data?.balance;
+    if (balance == null || !Number.isFinite(Number(balance))) {
+      return { ok: false, error: 'Fadded balance response did not contain a valid data.balance', raw: safeSlice(raw, 300) };
+    }
+
+    return {
+      ok: true,
+      balance: Number(balance),
+      currency: String(json?.data?.currency || 'NGN').toUpperCase(),
+      source_url: url
+    };
+  } catch (err) {
+    return { ok: false, error: safeSlice(String(err?.message || err), 500) };
+  }
 }
 
 
