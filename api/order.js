@@ -1129,6 +1129,7 @@ async function handleFaddedSync(req, res) {
     const FADDED_PAGE_SIZE = 100;
     const FADDED_MAX_PAGES = 50;
     const seenPageSignatures = new Set();
+    let paginationWarning = null;
 
     for (let page = 1; page <= FADDED_MAX_PAGES; page++) {
       pagesFetched = page;
@@ -1176,16 +1177,18 @@ async function handleFaddedSync(req, res) {
         item?.product_key ?? item?.id ?? item?.product_id ?? item?.code ?? item?.name ?? ''
       )).join('\\u001f');
       if (pageSignature && seenPageSignatures.has(pageSignature)) {
-        console.error('[fadded sync] repeated catalogue page; aborting before database writes', {
+        // Fadded can return the complete catalogue again even when a later
+        // page is requested. The repeated batch adds no new products, so stop
+        // pagination and sync the unique catalogue already collected instead
+        // of failing the entire sync or applying duplicate updates.
+        paginationWarning = `Fadded repeated the catalogue on page ${page}; stopped pagination and retained ${products.length} unique products from earlier pages.`;
+        console.warn('[fadded sync] repeated catalogue page; stopping pagination without duplicating products', {
           page,
-          products_in_page: batch.length
+          products_in_repeated_page: batch.length,
+          unique_products_collected: products.length,
+          expected_last_page: expectedLastPage
         });
-        return res.status(502).json({
-          success: false,
-          message: `Fadded repeated catalogue results on page ${page}; no database updates were applied.`,
-          pages_fetched: page,
-          products_in_repeated_page: batch.length
-        });
+        break;
       }
       if (pageSignature) seenPageSignatures.add(pageSignature);
       products.push(...batch);
@@ -1364,6 +1367,7 @@ async function handleFaddedSync(req, res) {
       synced: products.length,
       pages_fetched: pagesFetched,
       supplier_last_page: expectedLastPage || null,
+      pagination_warning: paginationWarning,
       new_products: newCount,
       updated_products: updatedCount,
       in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
