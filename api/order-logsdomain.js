@@ -240,8 +240,8 @@ async function handleBulkmailSync(req, res) {
       if (p.id == null) continue;
       const productKey = 'bm_' + p.id;
       const usd = Number(p.price || 0) || 0;
-      const stockRaw = p.stock_quantity != null ? p.stock_quantity : (p.stock != null ? p.stock : 0);
-      const stockQty = Math.max(0, Number(stockRaw) || 0);
+      // Use the shared parser for available_stock and nested stock payloads too.
+      const stockQty = readSupplierStock(p);
       const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
       const isTikTok = isBulkmailTikTokProduct(name);
       const mailProduct = BM_MAIL_PRODUCTS[productKey] || null;
@@ -339,10 +339,7 @@ async function handleAccszoneSync(req, res) {
       if (id == null) continue;
       const productKey = 'az_' + id;
       const usd = Number(item.price != null ? item.price : (item.unit_price != null ? item.unit_price : 0)) || 0;
-      let stockQty = 0;
-      for (const k of ['stock', 'stock_quantity', 'available', 'available_quantity', 'quantity']) {
-        if (item[k] != null && !Number.isNaN(Number(item[k]))) { stockQty = Math.max(0, Number(item[k])); break; }
-      }
+      const stockQty = readSupplierStock(item);
       const sell = azSellPriceNgn(usd);
       const name = String(item.name || item.title || item.slug || ('AccsZone #' + id)).trim();
       const category = String(
