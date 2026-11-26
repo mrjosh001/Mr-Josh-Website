@@ -638,14 +638,14 @@ export default async function handler(req, res) {
           ({ error: insertErr } = await supabase.from('orders').insert(rest));
         }
         if (insertErr) {
-          console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+          console.error('[order-logsdomain] FAILED to save order row — customer was charged and delivered credentials, but this will not appear in My Orders / admin Orders:', insertErr.message, { order_id: orderRef, supplier_order_id: supplierOrderId, user_id, product_key });
         }
       }
     } else {
       // fallback single row if API returns no items array
       const rawDetails = String(detailsText || '').trim();
       const row = {
-        order_id: supplierOrderId,
+        order_id: orderRef,
         user_id,
         product_id: product.id,
         product_code: product_key,
@@ -666,7 +666,7 @@ export default async function handler(req, res) {
         ({ error: insertErr } = await supabase.from('orders').insert(rest));
       }
       if (insertErr) {
-        console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: supplierOrderId, user_id, product_key });
+        console.error('[order-logsdomain] FAILED to save order row (fallback branch):', insertErr.message, { order_id: orderRef, supplier_order_id: supplierOrderId, user_id, product_key });
       }
     }
 
