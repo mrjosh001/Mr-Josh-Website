@@ -1013,6 +1013,9 @@ export default async function handler(req, res) {
         if (targetError) return res.status(500).json({ success: false, message: 'Could not verify this eSIM order.' });
         if (target?.renewed_from_order_id) return res.status(409).json({ success: false, message: 'Renewal orders use Confirm Refill Completed, not QR delivery.' });
       }
+      if (String(body.delivery_method || 'qr_code') === 'carrier_notification') {
+        return handleNotificationDeliver(body, user, res);
+      }
       return handleDeliver(body, user, res);
     }
 
