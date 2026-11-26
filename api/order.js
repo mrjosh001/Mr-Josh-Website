@@ -46,7 +46,7 @@ const supabase = createClient(
 //      supplier a product belongs to.
 const SUPPLIERS = {
   faded: {
-    baseUrl: 'https://fadded.net/api/v1/reseller',
+    baseUrl: 'https://api.fadded.net/api/v1/reseller',
     apiKey: process.env.FADDED_API_KEY
   }
   // example second supplier:
@@ -1126,7 +1126,7 @@ async function handleFaddedSync(req, res) {
     const products = [];
     let lastSupplierData = null;
     for (let page = 1; page <= 1; page++) {
-      const apiRes = await fetch(`https://fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
+      const apiRes = await fetch(`https://api.fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
         method: 'GET',
         headers: {
           'X-Api-Key': process.env.FADDED_API_KEY,
