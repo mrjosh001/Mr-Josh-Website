@@ -1254,15 +1254,28 @@ async function handleFaddedSync(req, res) {
         });
       }
     }
+    // Fadded catalogue payloads have used more than one identifier name.
+    // Resolve the supplier's stable product key before matching or writing.
+    // Keep the original payload fields intact for stock/price parsers.
+    const normalizedByKey = new Map();
+    let skippedMissingKey = 0;
+    for (const item of products) {
+      const rawKey = item?.product_key ?? item?.productKey ?? item?.product_id ??
+        item?.product_code ?? item?.code ?? item?.sku ?? item?.id;
+      const productKey = rawKey == null ? '' : String(rawKey).trim();
+      if (!productKey) {
+        skippedMissingKey++;
+        continue;
+      }
+      if (!normalizedByKey.has(productKey)) normalizedByKey.set(productKey, { ...item, product_key: productKey });
+    }
+    const catalogueProducts = Array.from(normalizedByKey.values());
     let newCount = 0;
     let updatedCount = 0;
+    let skippedCount = skippedMissingKey;
 
-    // One batched query for every product_key in this sync, instead of a
-    // separate select('*') per item (was N+1 — one full-row round trip per
-    // product just to check truthiness, times however many products Fadded
-    // returns, plus a second round trip each for the actual insert/update).
-    // Only the column actually needed for the existence check is selected.
-    const allKeys = products.map((item) => item.product_key).filter(Boolean);
+    // Fetch existing keys in batches so admin visibility settings are preserved.
+    const allKeys = catalogueProducts.map((item) => item.product_key);
     const existingKeySet = new Set();
     const adminHiddenSet = new Set();
     const EXISTS_CHECK_BATCH = 500;
@@ -1273,63 +1286,58 @@ async function handleFaddedSync(req, res) {
         .select('product_key, admin_hidden')
         .in('product_key', keyBatch);
       if (existErr) {
-        console.error('[fadded sync] existing-product lookup failed; aborting to preserve admin visibility', existErr.message);
+        console.error('[fadded sync] existing-product lookup failed; aborting before writes', existErr.message);
         return res.status(500).json({
           success: false,
           message: 'Could not verify existing product visibility settings. No catalogue updates were applied.'
         });
       }
-      (existingRows || []).forEach((r) => { if (r.product_key) existingKeySet.add(String(r.product_key)); if (r.admin_hidden) adminHiddenSet.add(String(r.product_key)); });
+      (existingRows || []).forEach((row) => {
+        if (row.product_key) existingKeySet.add(String(row.product_key));
+        if (row.product_key && row.admin_hidden) adminHiddenSet.add(String(row.product_key));
+      });
     }
 
     const toInsert = [];
-    const toUpdate = []; // { product_key, patch }
+    const toUpdate = [];
 
-    for (const item of products) {
-      if (!item.product_key) continue;
+    for (const item of catalogueProducts) {
       const cleanDescription = stripHtml(item.description);
       const displayDescription = replaceChannelLinks(cleanDescription);
-
-      const supplierPrice = Number(
-        item.unit_price ??
-        item.price ??
-        item.cost ??
-        item.amount ??
-        item.reseller_price ??
-        item.buy_price ??
-        item.original_price ??
-        0
-      ) || 0;
+      const rawSupplierPrice = item.unit_price ?? item.unitPrice ?? item.reseller_price ??
+        item.resellerPrice ?? item.buy_price ?? item.buyPrice ?? item.cost_price ??
+        item.cost ?? item.price ?? item.amount ?? item.original_price;
+      const parsedSupplierPrice = rawSupplierPrice == null ? NaN : Number(rawSupplierPrice);
+      const supplierPrice = Number.isFinite(parsedSupplierPrice) && parsedSupplierPrice >= 0
+        ? parsedSupplierPrice
+        : null;
 
       const stock = readSupplierStock(item);
       const now = new Date().toISOString();
-      const key = String(item.product_key);
+      const key = item.product_key;
 
-      if (existingKeySet.has(key) || existingKeySet.has(item.product_key)) {
-        // EXISTING: NEVER touch admin customer-facing fields:
-        // price, category, name, description, display_description, is_available (except force off if stock 0).
-        // Only refresh supplier cost + stock so ordering still works.
-        updatedCount++;
+      if (existingKeySet.has(key)) {
+        // Existing customer-facing price, category, name and descriptions remain admin-controlled.
+        // A missing supplier price is not converted to zero and cannot erase a valid stored cost.
         const patch = {
-          supplier_price: supplierPrice,
           stock_quantity: stock,
           source: 'fadded',
           updated_at: now
         };
-        // 0 stock stays hidden. Stock back in → show again (this was leaving leftovers hidden).
-        if (stock <= 0) patch.is_available = false; else if (!adminHiddenSet.has(key)) patch.is_available = true;
-        toUpdate.push({ product_key: item.product_key, patch });
+        if (supplierPrice !== null) patch.supplier_price = supplierPrice;
+        if (stock <= 0) patch.is_available = false;
+        else if (!adminHiddenSet.has(key)) patch.is_available = true;
+        toUpdate.push({ product_key: key, patch });
       } else {
-        // NEW product only: full row + auto markup.
-        // Always OTHER so admin can sort; existing products keep their category.
-        newCount++;
+        // New catalogue items retain the existing initial markup behaviour.
+        const initialSupplierPrice = supplierPrice === null ? 0 : supplierPrice;
         toInsert.push({
-          product_key: item.product_key,
-          name: item.name,
+          product_key: key,
+          name: item.name || item.product_name || item.title || key,
           description: cleanDescription,
           display_description: displayDescription,
-          supplier_price: supplierPrice,
-          price: applyRandomMarkup(supplierPrice),
+          supplier_price: initialSupplierPrice,
+          price: applyRandomMarkup(initialSupplierPrice),
           stock_quantity: stock,
           is_available: stock > 0,
           category: 'OTHER',
@@ -1339,19 +1347,52 @@ async function handleFaddedSync(req, res) {
       }
     }
 
-    // Per-row UPDATE (not upsert) so omitted columns can never be nulled.
+    // Per-row UPDATE keeps admin-managed fields out of the write payload.
+    // Count only rows confirmed by Supabase, not rows merely queued for update.
+    const writeErrors = [];
     for (const row of toUpdate) {
-      const { error } = await supabase
+      const { data: updatedRows, error } = await supabase
         .from('products')
         .update(row.patch)
-        .eq('product_key', row.product_key);
-      if (error) console.error('Error updating product', row.product_key, error.message);
+        .eq('product_key', row.product_key)
+        .select('product_key');
+      if (error) {
+        writeErrors.push({ operation: 'update', product_key: row.product_key, message: error.message });
+        console.error('[fadded sync] product update failed', row.product_key, error.message);
+      } else if (Array.isArray(updatedRows) && updatedRows.length > 0) {
+        updatedCount += updatedRows.length;
+      } else {
+        skippedCount++;
+        console.warn('[fadded sync] update matched no product row', row.product_key);
+      }
     }
+
     const WRITE_BATCH = 200;
     for (let i = 0; i < toInsert.length; i += WRITE_BATCH) {
       const batch = toInsert.slice(i, i + WRITE_BATCH);
-      const { error } = await supabase.from('products').insert(batch);
-      if (error) console.error('Error inserting product batch:', error.message);
+      const { data: insertedRows, error } = await supabase
+        .from('products')
+        .insert(batch)
+        .select('product_key');
+      if (error) {
+        writeErrors.push({ operation: 'insert', batch_start: i, batch_size: batch.length, message: error.message });
+        console.error('[fadded sync] product insert batch failed', error.message);
+      } else {
+        newCount += Array.isArray(insertedRows) ? insertedRows.length : 0;
+      }
+    }
+
+    if (writeErrors.length) {
+      return res.status(500).json({
+        success: false,
+        message: 'Fadded catalogue sync was incomplete. Review write_errors before retrying.',
+        synced: catalogueProducts.length,
+        new_products: newCount,
+        updated_products: updatedCount,
+        skipped_products: skippedCount,
+        write_errors: writeErrors.slice(0, 20),
+        write_error_count: writeErrors.length
+      });
     }
 
     let nudge = { sent: 0 };
@@ -1364,13 +1405,15 @@ async function handleFaddedSync(req, res) {
 
     return res.status(200).json({
       success: true,
-      synced: products.length,
+      synced: catalogueProducts.length,
       pages_fetched: pagesFetched,
       supplier_last_page: expectedLastPage || null,
       pagination_warning: paginationWarning,
       new_products: newCount,
       updated_products: updatedCount,
-      in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
+      skipped_products: skippedCount,
+      write_error_count: 0,
+      in_stock_from_api: catalogueProducts.filter((p) => readSupplierStock(p) > 0).length,
       inactive_nudges: nudge
     });
   } catch (error) {
