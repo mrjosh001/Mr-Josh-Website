@@ -6,6 +6,7 @@ import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '..
 import { formatCredentials } from '../lib/formatCredentials.js';
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { handleBulkmailProxyAction } from '../lib/bulkmailProxy.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 
 /**
  * /api/order-logsdomain
@@ -47,10 +48,9 @@ function applyLdMarkup(p) {
 }
 
 function readLdStock(item) {
-  for (const k of ['available_quantity', 'stock', 'stock_quantity', 'quantity', 'available']) {
-    if (item[k] != null && !Number.isNaN(Number(item[k]))) return Math.max(0, Number(item[k]));
-  }
-  return 0;
+  // Logs Domain has used multiple stock field names across catalogue responses.
+  // Share the same nested-field-aware parser used by Fadded and Sujan.
+  return readSupplierStock(item);
 }
 
 async function handleLdSync(req, res) {
@@ -89,11 +89,19 @@ async function handleLdSync(req, res) {
       const supplierPrice = Number(item.price ?? item.unit_price ?? item.cost ?? 0) || 0;
       const sell = applyLdMarkup(supplierPrice);
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('products')
         .select('product_key, admin_hidden')
         .eq('product_key', productKey)
         .maybeSingle();
+
+      if (existingError) {
+        console.error('[logsdomain sync] existing-product lookup failed', productKey, existingError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Could not verify existing product visibility settings. Catalogue sync stopped.'
+        });
+      }
 
       if (existing) {
         // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
