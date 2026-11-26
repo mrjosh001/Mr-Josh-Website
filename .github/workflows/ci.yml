@@ -39,8 +39,11 @@ jobs:
             echo "check $f"
             node --check "$f"
             count=$((count + 1))
-          done < <(find . -type f \\( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) \\
-            -not -path './.git/*' -not -path './node_modules/*' -print0)
+          done < <(
+            find . -type f -name '*.js' -not -path './.git/*' -not -path './node_modules/*' -print0
+            find . -type f -name '*.mjs' -not -path './.git/*' -not -path './node_modules/*' -print0
+            find . -type f -name '*.cjs' -not -path './.git/*' -not -path './node_modules/*' -print0
+          )
           if [ "$count" -eq 0 ]; then
             echo "No JavaScript source files matched"
             exit 1
