@@ -31,17 +31,18 @@ jobs:
           fi
           echo "OK"
 
-      - name: Syntax check API and lib JS
+      - name: Syntax check all JavaScript source files
         run: |
-          set -e
-          shopt -s nullglob
-          files=(api/*.js lib/*.js)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No JS files matched"
-            exit 1
-          fi
-          for f in "${files[@]}"; do
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
             echo "check $f"
             node --check "$f"
-          done
-          echo "Syntax OK"
+            count=$((count + 1))
+          done < <(find . -type f \\( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) \\
+            -not -path './.git/*' -not -path './node_modules/*' -print0)
+          if [ "$count" -eq 0 ]; then
+            echo "No JavaScript source files matched"
+            exit 1
+          fi
+          echo "Syntax OK: checked $count JavaScript files"
