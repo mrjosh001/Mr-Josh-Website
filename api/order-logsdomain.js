@@ -6,6 +6,7 @@ import { applyApiCors, handleOptions, requireUser, requireAdminOrCron } from '..
 import { formatCredentials } from '../lib/formatCredentials.js';
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import { handleBulkmailProxyAction } from '../lib/bulkmailProxy.js';
+import { readSupplierStock } from '../lib/supplierStock.js';
 
 /**
  * /api/order-logsdomain
@@ -47,10 +48,9 @@ function applyLdMarkup(p) {
 }
 
 function readLdStock(item) {
-  for (const k of ['available_quantity', 'stock', 'stock_quantity', 'quantity', 'available']) {
-    if (item[k] != null && !Number.isNaN(Number(item[k]))) return Math.max(0, Number(item[k]));
-  }
-  return 0;
+  // Logs Domain has used multiple stock field names across catalogue responses.
+  // Share the same nested-field-aware parser used by Fadded and Sujan.
+  return readSupplierStock(item);
 }
 
 async function handleLdSync(req, res) {
@@ -89,11 +89,19 @@ async function handleLdSync(req, res) {
       const supplierPrice = Number(item.price ?? item.unit_price ?? item.cost ?? 0) || 0;
       const sell = applyLdMarkup(supplierPrice);
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('products')
         .select('product_key, admin_hidden')
         .eq('product_key', productKey)
         .maybeSingle();
+
+      if (existingError) {
+        console.error('[logsdomain sync] existing-product lookup failed', productKey, existingError.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Could not verify existing product visibility settings. Catalogue sync stopped.'
+        });
+      }
 
       if (existing) {
         // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
@@ -232,8 +240,8 @@ async function handleBulkmailSync(req, res) {
       if (p.id == null) continue;
       const productKey = 'bm_' + p.id;
       const usd = Number(p.price || 0) || 0;
-      const stockRaw = p.stock_quantity != null ? p.stock_quantity : (p.stock != null ? p.stock : 0);
-      const stockQty = Math.max(0, Number(stockRaw) || 0);
+      // Use the shared parser for available_stock and nested stock payloads too.
+      const stockQty = readSupplierStock(p);
       const name = String(p.name || p.sku || ('BulkMail #' + p.id)).trim();
       const isTikTok = isBulkmailTikTokProduct(name);
       const mailProduct = BM_MAIL_PRODUCTS[productKey] || null;
@@ -331,10 +339,7 @@ async function handleAccszoneSync(req, res) {
       if (id == null) continue;
       const productKey = 'az_' + id;
       const usd = Number(item.price != null ? item.price : (item.unit_price != null ? item.unit_price : 0)) || 0;
-      let stockQty = 0;
-      for (const k of ['stock', 'stock_quantity', 'available', 'available_quantity', 'quantity']) {
-        if (item[k] != null && !Number.isNaN(Number(item[k]))) { stockQty = Math.max(0, Number(item[k])); break; }
-      }
+      const stockQty = readSupplierStock(item);
       const sell = azSellPriceNgn(usd);
       const name = String(item.name || item.title || item.slug || ('AccsZone #' + id)).trim();
       const category = String(

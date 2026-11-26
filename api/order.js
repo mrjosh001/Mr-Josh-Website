@@ -1125,7 +1125,11 @@ async function handleFaddedSync(req, res) {
 
     const products = [];
     let lastSupplierData = null;
-    for (let page = 1; page <= 1; page++) {
+    let expectedLastPage = null;
+    let pagesFetched = 0;
+    const FADDED_MAX_PAGES = 50;
+    for (let page = 1; page <= FADDED_MAX_PAGES; page++) {
+      pagesFetched = page;
       const apiRes = await fetch(`https://api.fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
         method: 'GET',
         headers: {
@@ -1136,31 +1140,49 @@ async function handleFaddedSync(req, res) {
 
       if (!apiRes.ok) {
         const errorText = await apiRes.text();
-        if (page === 1) {
-          return res.status(apiRes.status).json({
-            success: false,
-            message: `Supplier API error: ${apiRes.status}`,
-            details: errorText
-          });
-        }
-        break;
+        console.error('[fadded sync] supplier page failed', { page, status: apiRes.status });
+        return res.status(apiRes.status).json({
+          success: false,
+          message: `Supplier API error on page ${page}: ${apiRes.status}`,
+          details: errorText.slice(0, 300)
+        });
       }
 
       const supplierData = await apiRes.json();
       lastSupplierData = supplierData;
-      if (supplierData && supplierData.success === false && page === 1) {
+      if (supplierData && supplierData.success === false) {
         return res.status(400).json({
           success: false,
           message: 'Supplier reported failure',
           error: supplierData
         });
       }
-      const batch = Array.isArray(supplierData.data)
-        ? supplierData.data
-        : (supplierData.data?.data || supplierData.products || []);
-      if (!Array.isArray(batch) || !batch.length) break;
+      const nested = supplierData && supplierData.data;
+      const batch = Array.isArray(nested)
+        ? nested
+        : (Array.isArray(nested?.data) ? nested.data
+          : (Array.isArray(nested?.products) ? nested.products
+            : (Array.isArray(supplierData?.products) ? supplierData.products : [])));
+      if (!Array.isArray(batch)) {
+        return res.status(502).json({ success: false, message: 'Fadded returned an unrecognised product-list response' });
+      }
+      if (!batch.length) break;
       products.push(...batch);
-      if (batch.length < 100) break;
+
+      const meta = supplierData?.meta || nested?.meta || supplierData?.pagination || nested?.pagination || {};
+      const lastPage = Number(meta.last_page || meta.total_pages || meta.lastPage || supplierData?.last_page || nested?.last_page || 0);
+      if (lastPage > 0) expectedLastPage = lastPage;
+      const hasNextLink = Boolean(meta.next_page_url || meta.next || supplierData?.next_page_url || nested?.next_page_url);
+      const hasMore = lastPage > page || hasNextLink || (lastPage === 0 && batch.length >= 100);
+      if (!hasMore) break;
+      if (page === FADDED_MAX_PAGES) {
+        return res.status(502).json({
+          success: false,
+          message: 'Fadded catalogue exceeds the safe pagination limit; no database updates were applied.',
+          pages_fetched: page,
+          expected_last_page: expectedLastPage
+        });
+      }
     }
     let newCount = 0;
     let updatedCount = 0;
@@ -1181,8 +1203,11 @@ async function handleFaddedSync(req, res) {
         .select('product_key, admin_hidden')
         .in('product_key', keyBatch);
       if (existErr) {
-        console.error('Error checking existing product_keys:', existErr.message);
-        continue;
+        console.error('[fadded sync] existing-product lookup failed; aborting to preserve admin visibility', existErr.message);
+        return res.status(500).json({
+          success: false,
+          message: 'Could not verify existing product visibility settings. No catalogue updates were applied.'
+        });
       }
       (existingRows || []).forEach((r) => { if (r.product_key) existingKeySet.add(String(r.product_key)); if (r.admin_hidden) adminHiddenSet.add(String(r.product_key)); });
     }
@@ -1270,6 +1295,8 @@ async function handleFaddedSync(req, res) {
     return res.status(200).json({
       success: true,
       synced: products.length,
+      pages_fetched: pagesFetched,
+      supplier_last_page: expectedLastPage || null,
       new_products: newCount,
       updated_products: updatedCount,
       in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
