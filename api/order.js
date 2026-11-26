@@ -1126,8 +1126,10 @@ async function handleFaddedSync(req, res) {
     const products = [];
     let lastSupplierData = null;
     let expectedLastPage = null;
+    let pagesFetched = 0;
     const FADDED_MAX_PAGES = 50;
     for (let page = 1; page <= FADDED_MAX_PAGES; page++) {
+      pagesFetched = page;
       const apiRes = await fetch(`https://api.fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
         method: 'GET',
         headers: {
@@ -1293,7 +1295,8 @@ async function handleFaddedSync(req, res) {
     return res.status(200).json({
       success: true,
       synced: products.length,
-      pages_fetched: expectedLastPage || undefined,
+      pages_fetched: pagesFetched,
+      supplier_last_page: expectedLastPage || null,
       new_products: newCount,
       updated_products: updatedCount,
       in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
