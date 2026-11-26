@@ -1307,7 +1307,7 @@ async function handleFaddedSync(req, res) {
       const rawSupplierPrice = item.unit_price ?? item.unitPrice ?? item.reseller_price ??
         item.resellerPrice ?? item.buy_price ?? item.buyPrice ?? item.cost_price ??
         item.cost ?? item.price ?? item.amount ?? item.original_price;
-      const parsedSupplierPrice = Number(rawSupplierPrice);
+      const parsedSupplierPrice = rawSupplierPrice == null ? NaN : Number(rawSupplierPrice);
       const supplierPrice = Number.isFinite(parsedSupplierPrice) && parsedSupplierPrice >= 0
         ? parsedSupplierPrice
         : null;
@@ -1411,7 +1411,9 @@ async function handleFaddedSync(req, res) {
       pagination_warning: paginationWarning,
       new_products: newCount,
       updated_products: updatedCount,
-      in_stock_from_api: products.filter((p) => readSupplierStock(p) > 0).length,
+      skipped_products: skippedCount,
+      write_error_count: 0,
+      in_stock_from_api: catalogueProducts.filter((p) => readSupplierStock(p) > 0).length,
       inactive_nudges: nudge
     });
   } catch (error) {
