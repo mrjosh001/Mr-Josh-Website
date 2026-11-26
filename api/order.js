@@ -1389,8 +1389,6 @@ async function handleFaddedSync(req, res) {
         synced: catalogueProducts.length,
         new_products: newCount,
         updated_products: updatedCount,
-      skipped_products: skippedCount,
-      write_error_count: 0,
         skipped_products: skippedCount,
         write_errors: writeErrors.slice(0, 20),
         write_error_count: writeErrors.length
