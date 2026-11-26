@@ -1327,20 +1327,22 @@ async function handleFaddedSync(req, res) {
 
       const matchedKeys = aliasKeysFor(key).filter((candidate) => existingKeySet.has(candidate));
       if (matchedKeys.length) {
-        // Refresh every legacy/current alias row for this supplier product.
-        // This prevents a prefixed legacy row from retaining stale stock.
-        for (const matchedKey of matchedKeys) {
-          // Existing customer-facing price, category, name and descriptions remain admin-controlled.
-          const patch = {
-            stock_quantity: stock,
-            source: 'fadded',
-            updated_at: now
-          };
-          if (supplierPrice !== null) patch.supplier_price = supplierPrice;
-          if (stock <= 0) patch.is_available = false;
-          else if (!adminHiddenSet.has(matchedKey)) patch.is_available = true;
-          toUpdate.push({ product_key: matchedKey, patch });
-        }
+        // Prefer the established prod_<supplier-id> row when it exists.
+        // The numeric alias was created by an older sync and must never be
+        // refreshed or treated as a second catalogue product.
+        const canonicalKey = matchedKeys.includes(`prod_${key.replace(/^prod_/, '')}`)
+          ? `prod_${key.replace(/^prod_/, '')}`
+          : matchedKeys[0];
+        // Existing customer-facing price, category, name and descriptions remain admin-controlled.
+        const patch = {
+          stock_quantity: stock,
+          source: 'fadded',
+          updated_at: now
+        };
+        if (supplierPrice !== null) patch.supplier_price = supplierPrice;
+        if (stock <= 0) patch.is_available = false;
+        else if (!adminHiddenSet.has(canonicalKey)) patch.is_available = true;
+        toUpdate.push({ product_key: canonicalKey, patch });
       } else {
         // New catalogue items retain the existing initial markup behaviour.
         const initialSupplierPrice = supplierPrice === null ? 0 : supplierPrice;
