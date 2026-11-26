@@ -1124,13 +1124,15 @@ async function handleFaddedSync(req, res) {
     }
 
     const products = [];
-    let lastSupplierData = null;
     let expectedLastPage = null;
     let pagesFetched = 0;
+    const FADDED_PAGE_SIZE = 100;
     const FADDED_MAX_PAGES = 50;
+    const seenPageSignatures = new Set();
+
     for (let page = 1; page <= FADDED_MAX_PAGES; page++) {
       pagesFetched = page;
-      const apiRes = await fetch(`https://api.fadded.net/api/v1/reseller/products?page=${page}&per_page=100`, {
+      const apiRes = await fetch(`https://api.fadded.net/api/v1/reseller/products?page=${page}&per_page=${FADDED_PAGE_SIZE}`, {
         method: 'GET',
         headers: {
           'X-Api-Key': process.env.FADDED_API_KEY,
@@ -1149,7 +1151,6 @@ async function handleFaddedSync(req, res) {
       }
 
       const supplierData = await apiRes.json();
-      lastSupplierData = supplierData;
       if (supplierData && supplierData.success === false) {
         return res.status(400).json({
           success: false,
@@ -1157,6 +1158,7 @@ async function handleFaddedSync(req, res) {
           error: supplierData
         });
       }
+
       const nested = supplierData && supplierData.data;
       const batch = Array.isArray(nested)
         ? nested
@@ -1167,20 +1169,85 @@ async function handleFaddedSync(req, res) {
         return res.status(502).json({ success: false, message: 'Fadded returned an unrecognised product-list response' });
       }
       if (!batch.length) break;
+
+      // Detect a supplier that ignores the requested page and repeats the same
+      // catalogue page. Do not mistake a repeated page for new catalogue data.
+      const pageSignature = batch.map((item) => String(
+        item?.product_key ?? item?.id ?? item?.product_id ?? item?.code ?? item?.name ?? ''
+      )).join('\\u001f');
+      if (pageSignature && seenPageSignatures.has(pageSignature)) {
+        console.error('[fadded sync] repeated catalogue page; aborting before database writes', {
+          page,
+          products_in_page: batch.length
+        });
+        return res.status(502).json({
+          success: false,
+          message: `Fadded repeated catalogue results on page ${page}; no database updates were applied.`,
+          pages_fetched: page,
+          products_in_repeated_page: batch.length
+        });
+      }
+      if (pageSignature) seenPageSignatures.add(pageSignature);
       products.push(...batch);
 
-      const meta = supplierData?.meta || nested?.meta || supplierData?.pagination || nested?.pagination || {};
-      const lastPage = Number(meta.last_page || meta.total_pages || meta.lastPage || supplierData?.last_page || nested?.last_page || 0);
-      if (lastPage > 0) expectedLastPage = lastPage;
-      const hasNextLink = Boolean(meta.next_page_url || meta.next || supplierData?.next_page_url || nested?.next_page_url);
-      const hasMore = lastPage > page || hasNextLink || (lastPage === 0 && batch.length >= 100);
+      // Pagination metadata can be returned at the root or inside data.
+      // Prefer an actual last-page value when present. Some suppliers include
+      // a stale/truthy "next" field even on the final page; treating that field
+      // as authoritative caused the old loop to run to its 50-page safety cap.
+      const metadataCandidates = [
+        supplierData?.meta,
+        nested?.meta,
+        supplierData?.pagination,
+        nested?.pagination,
+        nested?.data?.meta,
+        nested?.data?.pagination
+      ].filter((value) => value && typeof value === 'object');
+
+      const meta = metadataCandidates.find((value) =>
+        value.last_page != null || value.lastPage != null || value.total_pages != null ||
+        value.current_page != null || value.next_page_url != null || value.has_more != null
+      ) || metadataCandidates[0] || {};
+
+      const lastPageRaw =
+        meta.last_page ?? meta.lastPage ?? meta.total_pages ??
+        supplierData?.last_page ?? supplierData?.lastPage ??
+        nested?.last_page ?? nested?.lastPage;
+      const parsedLastPage = Number(lastPageRaw);
+      const hasValidLastPage = lastPageRaw != null && Number.isFinite(parsedLastPage) && parsedLastPage > 0;
+      if (hasValidLastPage) expectedLastPage = parsedLastPage;
+
+      const nextRaw =
+        meta.next_page_url ?? meta.nextPageUrl ??
+        supplierData?.next_page_url ?? supplierData?.nextPageUrl ??
+        nested?.next_page_url ?? nested?.nextPageUrl;
+      const hasNextLink = typeof nextRaw === 'string' && nextRaw.trim().length > 0;
+      const hasMoreRaw = meta.has_more ?? meta.hasMore ?? meta.has_next ?? meta.hasNext ??
+        supplierData?.has_more ?? nested?.has_more;
+      const hasExplicitHasMore = typeof hasMoreRaw === 'boolean';
+
+      // A documented last-page count is the strongest signal. Only fall back
+      // to continuation flags, then full-page length when metadata is absent.
+      const hasMore = hasValidLastPage
+        ? parsedLastPage > page
+        : hasNextLink
+          ? true
+          : hasExplicitHasMore
+            ? hasMoreRaw
+            : batch.length >= FADDED_PAGE_SIZE;
+
       if (!hasMore) break;
       if (page === FADDED_MAX_PAGES) {
+        console.error('[fadded sync] safe pagination cap reached', {
+          pages_fetched: page,
+          expected_last_page: expectedLastPage,
+          products_collected: products.length
+        });
         return res.status(502).json({
           success: false,
           message: 'Fadded catalogue exceeds the safe pagination limit; no database updates were applied.',
           pages_fetched: page,
-          expected_last_page: expectedLastPage
+          expected_last_page: expectedLastPage,
+          products_collected: products.length
         });
       }
     }
