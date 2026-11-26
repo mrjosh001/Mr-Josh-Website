@@ -213,7 +213,7 @@ async function handleSync(req, res) {
 
     const { data: existingBatch, error: existingError } = await supabase
       .from('products')
-      .select('product_key, price, is_available, category, name, admin_hidden')
+      .select('product_key, price, is_available, category, name, description, display_description, admin_hidden')
       .in('product_key', batchKeys);
     if (existingError) {
       console.error('[classy sync] existing product lookup failed', {
@@ -272,14 +272,21 @@ async function handleSync(req, res) {
     const prev = existing.get(product_key);
 
     if (prev) {
-      // EXISTING: never touch admin customer-facing fields (price, category, name, descriptions).
-      // Only refresh supplier cost + stock so orders still work.
+      // Refresh supplier name and description on every sync. Keep customer price,
+      // category, admin visibility, and any deliberate custom display-description.
       const patch = {
+        name,
+        description: desc,
         supplier_price: supplierPrice,
         stock_quantity: stock,
         source: 'classy',
         updated_at: new Date().toISOString()
       };
+      const previousDescription = String(prev.description || '').trim();
+      const previousDisplayDescription = String(prev.display_description || '').trim();
+      if (!previousDisplayDescription || previousDisplayDescription === previousDescription) {
+        patch.display_description = desc;
+      }
       // 0 stock hidden. In stock visible again.
       if (!inStock || stock <= 0) patch.is_available = false;
       else if (adminHiddenSet.has(product_key)) { /* admin hid — stay hidden */ }
