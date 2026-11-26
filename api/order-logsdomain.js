@@ -258,14 +258,25 @@ async function handleBulkmailSync(req, res) {
       const sell = isTikTok ? bulkmailTikTokPrice(usd) : (mailProduct ? mailProduct.price : bmSellPriceNgn(usd));
       const description = cleanBulkmailText(p.description || '') || null;
 
-      const { data: existing } = await supabase.from('products').select('product_key, admin_hidden').eq('product_key', productKey).maybeSingle();
+      const { data: existing } = await supabase.from('products').select('product_key, admin_hidden, description, display_description').eq('product_key', productKey).maybeSingle();
       if (existing) {
         // TikTok listings follow the supplier's exact stock on every sync.
-        const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'bulkmail', updated_at: now };
+        const patch = {
+          name,
+          description,
+          supplier_price: usd,
+          stock_quantity: stockQty,
+          source: 'bulkmail',
+          updated_at: now
+        };
+        const previousDescription = String(existing.description || '').trim();
+        const previousDisplayDescription = String(existing.display_description || '').trim();
+        if (!previousDisplayDescription || previousDisplayDescription === previousDescription) {
+          patch.display_description = description;
+        }
         if (isTikTok) {
           patch.category = BM_TIKTOK_CATEGORY;
           patch.price = sell;
-          patch.description = description;
           patch.is_available = stockQty > 0 && existing.admin_hidden !== true;
         } else if (mailProduct) {
           patch.category = 'MAILS';
@@ -285,7 +296,7 @@ async function handleBulkmailSync(req, res) {
           is_available: isTikTok ? stockQty > 0 : (mailProduct ? stockQty > 0 : (BM_STOCK_VISIBILITY_KEYS.has(productKey) && stockQty > 0)),
           admin_hidden: isTikTok ? stockQty <= 0 : (mailProduct ? stockQty <= 0 : !BM_STOCK_VISIBILITY_KEYS.has(productKey)),
           category: isTikTok ? BM_TIKTOK_CATEGORY : (mailProduct ? 'MAILS' : 'BulkMail'), source: 'bulkmail',
-          description: description, updated_at: now
+          description: description, display_description: description, updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); } else totalNew++;
       }
@@ -360,14 +371,27 @@ async function handleAccszoneSync(req, res) {
 
       const { data: existing } = await supabase
         .from('products')
-        .select('product_key, admin_hidden, is_available')
+        .select('product_key, admin_hidden, is_available, description, display_description')
         .eq('product_key', productKey)
         .maybeSingle();
 
       if (existing) {
-        // EXISTING: only supplier cost + stock + availability. Never overwrite name/price/category/desc.
-        // AccsZone stays admin-gated: do not auto-show even when stock returns unless admin cleared admin_hidden / enabled it.
-        const patch = { supplier_price: usd, stock_quantity: stockQty, source: 'accszone', updated_at: now };
+        // Refresh supplier name and description, but retain admin price/category,
+        // visibility controls, and deliberate custom display-description overrides.
+        const patch = {
+          name,
+          description,
+          supplier_price: usd,
+          stock_quantity: stockQty,
+          source: 'accszone',
+          updated_at: now
+        };
+        const previousDescription = String(existing.description || '').trim();
+        const previousDisplayDescription = String(existing.display_description || '').trim();
+        if (!previousDisplayDescription || previousDisplayDescription === previousDescription) {
+          patch.display_description = description;
+        }
+        // AccsZone stays admin-gated: do not auto-show when stock returns unless admin enabled it.
         if (stockQty <= 0) patch.is_available = false;
         else if (existing.admin_hidden || existing.is_available === false) { /* stay hidden until admin enables */ }
         else patch.is_available = true;
@@ -377,7 +401,7 @@ async function handleAccszoneSync(req, res) {
       } else {
         const { error } = await supabase.from('products').insert({
           product_key: productKey, name: name, price: sell, supplier_price: usd, stock_quantity: stockQty,
-          is_available: false, category: category, source: 'accszone', description: description, updated_at: now
+          is_available: false, category: category, source: 'accszone', description: description, display_description: description, updated_at: now
         });
         if (error) { writeErrors++; if (errorSamples.length < 3) errorSamples.push(error.message); }
         else totalNew++;
