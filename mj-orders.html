@@ -137,7 +137,7 @@
     .actions button,.actions a{flex:1;min-width:100px;text-align:center;text-decoration:none;border:none;border-radius:12px;padding:11px 10px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
     .btn-copy{background:#eff6ff;color:#1d4ed8}
     .btn-dl{background:#f1f5f9;color:#334155}
-    .btn-guide{background:#ecfdf5;color:#047857}
+    .btn-guide{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.3)}
     .warn{background:#fff7ed;color:#9a3412;border-radius:12px;padding:12px;font-size:12px;font-weight:600;line-height:1.45;margin-bottom:12px}
     .cred{background:#0f172a;color:#e2e8f0;border-radius:14px;padding:14px;font-size:13px;font-weight:600;white-space:pre-wrap;word-break:break-word;line-height:1.55;font-family:ui-monospace,Menlo,monospace}
     .detail-grid{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
@@ -1383,7 +1383,7 @@ async function openModal(kind, i) {
       return result.filter((field) => {
         const label = String(field.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const val = String(field.value || '').trim();
-        const alias = ['username', 'user name', 'login', 'email'].includes(label) ? 'identity'
+        const alias = ['username', 'login', 'email'].includes(label) ? 'identity'
           : ['password', 'emailpassword'].includes(label) ? 'secret'
           : ['2fatoken', 'token', 'authenticator'].includes(label) ? 'token'
           : label;
