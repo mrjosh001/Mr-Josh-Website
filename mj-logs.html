@@ -1370,12 +1370,11 @@ if(buyBtn){ buyBtn.disabled = true; buyBtn.innerHTML = '<i class="fa-solid fa-sp
 if(!purchaseNonce) purchaseNonce = 'MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
 const externalOrderId = purchaseNonce;
 try{
-await refreshBalance();
-if(currentBalanceNgn < total){
-showToast('Insufficient balance. Redirecting to deposit...','error');
-setTimeout(function(){ window.location.href='deposit.html'; }, 900);
-return;
-}
+// The server is authoritative for affordability. Manual orders use the
+// atomic NGN-first + USD-remainder wallet debit, so a client-side NGN-only
+// check can incorrectly reject customers who have sufficient combined funds.
+// Let the purchase endpoint perform the atomic balance check and return its
+// precise insufficient-balance response when the combined wallet is short.
 const productSource = purchasedProduct.source
 || (String(purchasedProduct.product_key || '').startsWith('ld_') ? 'logsdomain'
 : String(purchasedProduct.product_key || '').startsWith('bm_') ? 'bulkmail'
