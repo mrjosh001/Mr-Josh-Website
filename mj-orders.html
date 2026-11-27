@@ -1331,8 +1331,8 @@ async function openModal(kind, i) {
       const lines = source.split(/\n/);
       const starts = [];
       lines.forEach((line, index) => {
-        const match = line.match(/^\s*(?:ITEM\s*)?(\d+)[.)]\s*(.*)$/i);
-        if (match) starts.push({ index, first: match[2] });
+        const match = line.match(/^\s*(?:ITEM\s*(\d+)|(\d+)[.)])\s*(.*)$/i);
+        if (match) starts.push({ index, first: match[3] || '' });
       });
       if (starts.length > 1) {
         return starts.map((start, i) => {
@@ -1409,8 +1409,8 @@ async function openModal(kind, i) {
     }).join('');
 
     const allText = allAccounts.map((credentialText, idx) =>
-      (allAccounts.length > 1 ? 'ITEM ' + (idx + 1) + '\\n' : '') + credentialText
-    ).join('\\n\\n');
+      (allAccounts.length > 1 ? 'ITEM ' + (idx + 1) + '\n' : '') + credentialText
+    ).join('\n\n');
 
     body.innerHTML =
       '<div class="log-actions">' +
