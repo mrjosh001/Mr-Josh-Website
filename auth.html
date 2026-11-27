@@ -1137,6 +1137,19 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             }
         });
 
+        // A normal signed-in session is not sufficient for password recovery.
+        // Supabase emits PASSWORD_RECOVERY after validating the recovery link.
+        let mjRecoverySessionReady = false;
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY' && session) {
+                mjRecoverySessionReady = true;
+                const form = document.getElementById('updatePasswordForm');
+                const submit = document.getElementById('updatePassSubmitBtn');
+                if (form) form.dataset.recoveryReady = 'true';
+                if (submit) submit.disabled = false;
+            }
+        });
+
         window.addEventListener('DOMContentLoaded', async () => {
             // Check for saved "Remember Me" details within the 24-hour expiry window
             const rememberedDataString = localStorage.getItem('mjhub_remember_user');
@@ -1160,17 +1173,25 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
             const type = urlParams.get('type') || hashParams.get('type');
 
             if (type === 'recovery') {
-                switchTab('updatePassword');
-                // Links expire (Supabase default ~1 hour). If session missing, show help.
-                setTimeout(async function () {
-                    try {
-                        var s = await supabaseClient.auth.getSession();
-                        if (!s.data || !s.data.session) {
-                            showError('This reset link is invalid or has expired. Request a new one below.');
-                            switchTab('forgot');
-                        }
-                    } catch (e) {}
-                }, 800);
+                // getSession() waits for Supabase URL detection / PKCE exchange to
+                // finish. Do not use a fixed delay or accept an unrelated login session.
+                try {
+                    const { data, error } = await supabaseClient.auth.getSession();
+                    if (!error && data && data.session && mjRecoverySessionReady) {
+                        const form = document.getElementById('updatePasswordForm');
+                        if (form) form.dataset.recoveryReady = 'true';
+                        const submit = document.getElementById('updatePassSubmitBtn');
+                        if (submit) submit.disabled = false;
+                        switchTab('updatePassword');
+                    } else {
+                        showError('This password-reset link is invalid, expired, or was opened without completing verification. Request a new reset link and open it in the same browser.');
+                        switchTab('forgot');
+                    }
+                } catch (recoveryError) {
+                    console.error('Password recovery session initialization failed:', recoveryError);
+                    showError('We could not verify this password-reset link. Request a new reset link and try again.');
+                    switchTab('forgot');
+                }
                 return;
             }
 
@@ -1811,8 +1832,9 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
 
         async function handleUpdatePassword(e) {
             e.preventDefault();
-            const newPassword = document.getElementById('newPassword').value.trim();
+            const newPassword = document.getElementById('newPassword').value;
             const btn = document.getElementById('updatePassSubmitBtn') || e.target.querySelector('.btn-submit');
+            const form = document.getElementById('updatePasswordForm');
 
             var pwCheck = validatePasswordStrength(newPassword);
             if (!pwCheck.ok) {
@@ -1821,22 +1843,40 @@ html[data-theme="dark"] .logo-word, body[data-theme="dark"] .logo-word { color:#
                 return;
             }
 
-            setAuthButtonLoading(btn, true, 'Updating…');
-
-            const { data, error } = await supabaseClient.auth.updateUser({
-                password: newPassword
-            });
-
-            if (error) {
-                setAuthButtonLoading(btn, false);
-                showError(error.message);
+            // Re-check the recovery event and session at submit time. This prevents
+            // a stale page or an ordinary login session from authorizing a reset.
+            try {
+                const { data, error: sessionError } = await supabaseClient.auth.getSession();
+                if (sessionError || !data || !data.session || !mjRecoverySessionReady ||
+                    !form || form.dataset.recoveryReady !== 'true') {
+                    showError('Your password-reset session is no longer valid. Request a new reset link.');
+                    switchTab('forgot');
+                    return;
+                }
+            } catch (sessionCheckError) {
+                showError('We could not verify your password-reset session. Request a new reset link.');
+                switchTab('forgot');
                 return;
             }
 
-            showSuccess('Password successfully updated!');
-            setTimeout(() => {
-                window.location.href = 'dashboard.html';
-            }, 1500);
+            setAuthButtonLoading(btn, true, 'Updating…');
+            try {
+                const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+                if (error) {
+                    setAuthButtonLoading(btn, false);
+                    showError(formatAuthError(error));
+                    return;
+                }
+
+                showSuccess('Password successfully updated! Please sign in with your new password.');
+                setTimeout(async () => {
+                    try { await supabaseClient.auth.signOut(); } catch (signOutError) {}
+                    window.location.replace('auth.html?password_updated=1');
+                }, 1500);
+            } catch (updateError) {
+                setAuthButtonLoading(btn, false);
+                showError(formatAuthError(updateError));
+            }
         }
     </script>
 
