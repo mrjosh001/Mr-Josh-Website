@@ -1346,7 +1346,7 @@ async function openModal(kind, i) {
       if (blocks.length > 1) {
         const recordBlocks = blocks.filter((part) => {
           const labels = part.split(/\n/).filter((line) =>
-            /^(?:username|email|password|email password|2fa(?:\s*\/\s*token)?|token|extra)\s*:?$/i.test(line.trim())
+            /^(?:username|email|password|email password|2fa(?:\s*\/\s*token)?|token|extra)\s*(?::\s*.+)?$/i.test(line.trim())
           );
           return labels.length >= 2;
         });
