@@ -295,7 +295,7 @@
       font-size:12px;font-weight:800;letter-spacing:.12em;color:#64748b;text-transform:uppercase
     }
     .sheet-b .cred-card .copy-line{
-      border:0;background:transparent;color:#2563eb;font:700 12px inherit;cursor:pointer;
+      border:0;background:transparent;color:#2563eb;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;
       display:inline-flex;align-items:center;gap:6px;padding:5px 0
     }
     .sheet-b .cred-fields{display:flex;flex-direction:column;gap:9px}
@@ -1129,7 +1129,7 @@ function setHero() {
 }
 
 document.addEventListener('click', (e) => {
-  const b = e.target.closest('button.copy-one[data-copy]');
+  const b = e.target.closest('button.copy-one[data-copy], button.copy-line[data-copy]');
   if (!b) return;
   copyRaw(b.getAttribute('data-copy') || '');
 });
