@@ -283,30 +283,38 @@
       letter-spacing:.06em;margin-bottom:8px
     }
 
-    .sheet-b .cred-cards{display:flex;flex-direction:column;gap:10px}
+    .sheet-b .cred-cards{display:flex;flex-direction:column;gap:12px}
     .sheet-b .cred-card{
-      border-radius:16px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0
+      border-radius:18px;padding:14px;background:linear-gradient(145deg,rgba(59,130,246,.055),#fff);
+      border:1px solid rgba(59,130,246,.22);box-shadow:0 8px 22px rgba(15,23,42,.045)
+    }
+    .sheet-b .cred-card .cred-head{
+      display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px
     }
     .sheet-b .cred-card .idx{
-      font-size:13px;font-weight:700;color:#94a3b8;margin-bottom:12px
+      font-size:12px;font-weight:800;letter-spacing:.12em;color:#64748b;text-transform:uppercase
     }
-    .sheet-b .cred-line{
-      display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap
+    .sheet-b .cred-card .copy-line{
+      border:0;background:transparent;color:#2563eb;font:700 12px inherit;cursor:pointer;
+      display:inline-flex;align-items:center;gap:6px;padding:5px 0
     }
-    .sheet-b .cred-line:last-child{margin-bottom:0}
-    .sheet-b .cred-k{
-      min-width:88px;font-weight:800;font-size:12px;letter-spacing:.03em;color:#64748b
+    .sheet-b .cred-fields{display:flex;flex-direction:column;gap:9px}
+    .sheet-b .cred-field{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      min-width:0;padding:12px 13px;border-radius:14px;background:#f1f5f9;border:1px solid #e8edf5
     }
-    .sheet-b .cred-k.pass{color:#dc2626}
+    .sheet-b .cred-field-main{min-width:0;flex:1}
+    .sheet-b .cred-k{display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:4px}
     .sheet-b .cred-v{
-      flex:1;font-weight:700;word-break:break-all;color:#0f172a;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px
+      display:block;font-size:14px;font-weight:700;color:#0f172a;line-height:1.45;
+      overflow-wrap:anywhere;white-space:pre-wrap
     }
-    .sheet-b .cred-v button,
-    .sheet-b .cred-v .copy-one{
-      margin-left:8px;border:none;background:#e0e7ff;color:#3730a3;border-radius:8px;
-      padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit
+    .sheet-b .cred-field .copy-one{
+      flex:0 0 34px;width:34px;height:34px;border:0;border-radius:10px;
+      background:rgba(59,130,246,.1);color:#2563eb;cursor:pointer;font-size:14px
     }
+    :root[data-theme="light"] .sheet-b .cred-card{background:linear-gradient(145deg,rgba(59,130,246,.045),#fff)}
+    :root[data-theme="light"] .sheet-b .cred-field{background:#f1f5f9}
 
 
     .sheet-b .detail-grid{display:flex;flex-direction:column;gap:8px}
@@ -1304,25 +1312,67 @@ async function openModal(kind, i) {
     title.textContent = g.product_name || 'Order';
     if (sub) sub.textContent = (g.quantity || items.length || 1) + ' log' + ((g.quantity || items.length || 1) > 1 ? 's' : '') + (g.order_id ? ' · ' + g.order_id : '');
 
-    // The API/admin saves the final customer-view credential string once.
-    // Customer Orders must display that exact field without formatting or parsing it again.
-    const allAccounts = items.map((it) =>
-      String((it && it.login_credentials) || (g && g.login_credentials) || '').trim()
-    );
+    // Prefer independently stored supplier items. Older orders may have one
+    // combined, numbered credential string, which is split below for display.
+    const separateItems = items
+      .map((it) => String((it && (it.login_credentials || it.credentials)) || '').trim())
+      .filter(Boolean);
+    const combinedText = String((g && g.login_credentials) || separateItems[0] || '').trim();
+    function splitCredentialAccounts(value) {
+      const source = String(value || '').replace(/\\r\\n?/g, '\\n').trim();
+      if (!source) return [];
+      const lines = source.split('\\n');
+      const starts = [];
+      lines.forEach((line, index) => {
+        const match = line.match(/^\\s*(?:ITEM\\s*)?(\\d+)[.)]\\s*(.*)$/i);
+        if (match) starts.push({ index, first: match[2] });
+      });
+      if (starts.length > 1) {
+        return starts.map((start, i) => {
+          const end = i + 1 < starts.length ? starts[i + 1].index : lines.length;
+          return [start.first].concat(lines.slice(start.index + 1, end)).join('\\n').trim();
+        }).filter(Boolean);
+      }
+      return [source];
+    }
+    let allAccounts = separateItems.length > 1 ? separateItems : splitCredentialAccounts(combinedText);
+    if (!allAccounts.length) allAccounts = [combinedText || 'Credentials are not available for this order.'];
+
+    function credentialFields(value) {
+      const result = [];
+      String(value || '').split('\\n').forEach((line) => {
+        const cleanLine = line.replace(/^\\s+/, '').replace(/^\\d+[.)]\\s*/, '').trim();
+        if (!cleanLine) return;
+        const colon = cleanLine.indexOf(':');
+        if (colon > 0 && colon < 42) {
+          result.push({ label: cleanLine.slice(0, colon).trim(), value: cleanLine.slice(colon + 1).trim() });
+        } else {
+          result.push({ label: result.length ? 'Additional details' : 'Credentials', value: cleanLine });
+        }
+      });
+      return result;
+    }
 
     const cards = allAccounts.map((credentialText, idx) => {
-      return (
-        '<div class="cred-card">' +
-        '<div class="idx">' + (idx + 1) + (allAccounts.length > 1 ? ' of ' + allAccounts.length : '') + '</div>' +
-        '<div class="raw-block">' + esc(credentialText) + '</div>' +
-        '<button type="button" class="copy-one" style="margin-top:10px" data-copy="' + esc(credentialText).replace(/"/g, '&quot;') + '">Copy</button>' +
-        '</div>'
-      );
+      const fields = credentialFields(credentialText);
+      const fieldCards = fields.map((field) =>
+        '<div class="cred-field"><div class="cred-field-main">' +
+        '<span class="cred-k">' + esc(field.label) + '</span>' +
+        '<span class="cred-v">' + esc(field.value) + '</span></div>' +
+        '<button type="button" class="copy-one" aria-label="Copy ' + esc(field.label) +
+        '" data-copy="' + esc(field.value).replace(/"/g, '&quot;') + '"><i class="fa-regular fa-copy"></i></button></div>'
+      ).join('');
+      return '<div class="cred-card">' +
+        '<div class="cred-head">' +
+        (allAccounts.length > 1 ? '<div class="idx">ITEM ' + (idx + 1) + '</div>' : '<div class="idx">YOUR ITEM</div>') +
+        '<button type="button" class="copy-line" data-copy="' + esc(credentialText).replace(/"/g, '&quot;') +
+        '"><i class="fa-regular fa-copy"></i> Copy line</button></div>' +
+        '<div class="cred-fields">' + (fieldCards || '<div class="raw-block">' + esc(credentialText) + '</div>') + '</div></div>';
     }).join('');
 
     const allText = allAccounts.map((credentialText, idx) =>
-      (allAccounts.length > 1 ? '#' + (idx + 1) + '\n' : '') + credentialText
-    ).join('\n\n');
+      (allAccounts.length > 1 ? 'ITEM ' + (idx + 1) + '\\n' : '') + credentialText
+    ).join('\\n\\n');
 
     body.innerHTML =
       '<div class="log-actions">' +
