@@ -737,7 +737,7 @@ try{
 setStatus('Connecting to database...');
 if(!window.supabase){showError('Supabase library did not load.');return}
 if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: window.sessionStorage }
 });
 const sb = sbClient;
 setStatus('Fetching products...');
@@ -796,7 +796,7 @@ try{
 if(!window.supabase) return;
 if(!sbClient) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // Match auth.html/dashboard.html. The shared session is stored in localStorage.
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.sessionStorage }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: window.sessionStorage }
 });
 const { data: { session } } = await sbClient.auth.getSession();
 if(session && session.user){
@@ -1370,6 +1370,7 @@ if(buyBtn){ buyBtn.disabled = true; buyBtn.innerHTML = '<i class="fa-solid fa-sp
 if(!purchaseNonce) purchaseNonce = 'MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
 const externalOrderId = purchaseNonce;
 let purchaseConfirmed = false;
+let purchaseStage = 'Preparing checkout';
 try{
 // The server is authoritative for affordability. Manual orders use the
 // atomic NGN-first + USD-remainder wallet debit, so a client-side NGN-only
@@ -1389,9 +1390,11 @@ const orderEndpoint = productSource === 'manual' ? '/api/order-manual'
 : productSource === 'sujandepartment' ? '/api/sujan'
 : productSource === 'classy' ? '/api/classy'
 : '/api/order';
+purchaseStage = 'Checking sign-in session';
 const { data: { session: orderSess } } = await sbClient.auth.getSession();
 const orderToken = orderSess && orderSess.access_token;
 if (!orderToken) { showToast('Please sign in again', 'error'); return; }
+purchaseStage = 'Sending purchase request';
 const res = await fetch(orderEndpoint, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + orderToken },
@@ -1403,6 +1406,7 @@ external_order_id: externalOrderId,
 coupon_code: (activeCoupon && activeCoupon.code) || (document.getElementById('psCouponInput') && document.getElementById('psCouponInput').value) || undefined
 })
 });
+purchaseStage = 'Reading purchase response';
 const data = await res.json();
 if(!res.ok || !data.success){
 showToast(data.message || 'Order failed. Please try again.', 'error');
@@ -1440,8 +1444,8 @@ if(purchaseConfirmed){
   console.error('[mj-logs] post-purchase error after server confirmation',err);
   showToast('Purchase completed. Open My Orders to view your details.', 'success');
 }else{
-  console.error('[mj-logs] purchase request failed',err);
-  showToast('Unable to complete purchase: '+(err.message||err), 'error');
+  console.error('[mj-logs] purchase request failed at stage:',purchaseStage,err);
+  showToast('Unable to complete purchase ('+purchaseStage+'): '+(err.message||err), 'error');
 }
 }finally{
 isBuying = false;
