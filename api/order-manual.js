@@ -4,8 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { debitWallet, refundWalletDebit } from '../lib/wallet.js';
 import {
   joinRawLogDetails,
-  formatCredentials,
-  formatMultiLogCredentials
+  formatCredentials
 } from '../lib/formatCredentials.js';
 import { claimLogPurchaseCooldown } from '../lib/logPurchaseProtection.js';
 import esimHandler from './esim.js';
@@ -23,6 +22,17 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+function formatManualMultiLogCredentials(items, formatHint) {
+  if (!Array.isArray(items)) return '';
+  return items
+    .map((item) => {
+      const raw = item && (item.details ?? item.login_credentials ?? item.raw ?? '');
+      return raw ? formatCredentials(raw, formatHint) : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
 
 function isManualProduct(product) {
   if (!product) return false;
@@ -435,7 +445,7 @@ async function orderManualHandler(req, res) {
     let combinedCreds = detailsText;
     try {
       combinedCreds =
-        formatMultiLogCredentials(itemsForFmt, formatHint) ||
+        formatManualMultiLogCredentials(itemsForFmt, formatHint) ||
         (claimedRows[0]
           ? formatCredentials(claimedRows[0].credential, formatHint) || claimedRows[0].credential
           : null) ||
