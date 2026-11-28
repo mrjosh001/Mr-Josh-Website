@@ -97,14 +97,19 @@ async function requireAuthUser(req) {
   if (!token || token.includes('service_role')) {
     return { error: { status: 401, message: 'Not signed in' } };
   }
-  const {
-    data: { user },
-    error
-  } = await supabase.auth.getUser(token);
-  if (error || !user) {
-    return { error: { status: 401, message: 'Invalid or expired session' } };
+  try {
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return { error: { status: 401, message: 'Invalid or expired session' } };
+    }
+    return { user };
+  } catch (err) {
+    console.error('[order-manual] auth lookup threw', err?.message || err);
+    return { error: { status: 503, message: 'Authentication is temporarily unavailable. Please try again.' } };
   }
-  return { user };
 }
 
 /**
@@ -175,7 +180,7 @@ async function findExistingLogOrder(userId, orderRef) {
   return null;
 }
 
-export default async function handler(req, res) {
+async function orderManualHandler(req, res) {
   applyApiCors(req, res, { methods: 'POST, OPTIONS' });
   if (handleOptions(req, res)) return;
 
@@ -200,7 +205,12 @@ export default async function handler(req, res) {
   }
   const user_id = auth.user.id;
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+  let body;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+  } catch (parseErr) {
+    return res.status(400).json({ success: false, code: 'INVALID_REQUEST_BODY', message: 'The purchase request was invalid. Refresh the page and try again.' });
+  }
   const { product_key, quantity = 1, external_order_id , coupon_code} = body;
 
   if (!product_key) {
@@ -589,6 +599,31 @@ export default async function handler(req, res) {
       message: deducted
         ? (refundCompleted ? 'Purchase could not be completed. Your balance has been refunded.' : 'Purchase could not be completed. Your refund requires support review. Please do not retry yet.')
         : 'Something went wrong. Please try again.'
+    });
+  }
+}
+
+
+// Final route boundary: prevent unexpected pre-checkout/runtime exceptions from
+// escaping as Vercel's non-JSON 500 page. The paid fulfilment block above retains
+// its own exact-debit refund and inventory-retention handling.
+export default async function handler(req, res) {
+  try {
+    return await orderManualHandler(req, res);
+  } catch (err) {
+    const requestId = 'manual-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    console.error('[order-manual] uncaught route exception', {
+      request_id: requestId,
+      message: err?.message || String(err),
+      name: err?.name || 'Error'
+    });
+    if (res.headersSent) return;
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(500).json({
+      success: false,
+      code: 'ORDER_HANDLER_UNEXPECTED_ERROR',
+      request_id: requestId,
+      message: 'The purchase request could not be processed. Check My Orders and wallet history before trying again.'
     });
   }
 }
