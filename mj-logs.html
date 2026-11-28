@@ -1369,6 +1369,7 @@ if(buyBtn){ buyBtn.disabled = true; buyBtn.innerHTML = '<i class="fa-solid fa-sp
 // One stable id for this modal session — retries reuse it; second click does not create a new order
 if(!purchaseNonce) purchaseNonce = 'MJ-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
 const externalOrderId = purchaseNonce;
+let purchaseConfirmed = false;
 try{
 // The server is authoritative for affordability. Manual orders use the
 // atomic NGN-first + USD-remainder wallet debit, so a client-side NGN-only
@@ -1407,24 +1408,41 @@ if(!res.ok || !data.success){
 showToast(data.message || 'Order failed. Please try again.', 'error');
 return;
 }
+// The server has confirmed the purchase. From this point onward, no
+// receipt/UI exception may be presented as a failed purchase or trigger a retry.
+purchaseConfirmed = true;
+purchaseNonce = null;
 if(data.data && data.data.new_balance != null){
 currentBalanceNgn = Number(data.data.new_balance);
 }
 const items = (data.data && data.data.items) ? data.data.items : [];
 var creds = (data.data && data.data.login_credentials) || items.map(function(it){ return it.details; }).filter(Boolean).join('\n\n') || 'Delivered — see My Orders for details';
-creds = await formatReceiptCredentialsAsync(creds);
-const desc = getDisplayDescription(purchasedProduct);
-const purchasedQty = qtyRequested;
-closePurchaseModal();
-openReceiptModal(purchasedProduct, desc, creds, purchasedQty, data.data && data.data.order_id);
-showToast('Purchase successful!','success');
-// Reflect reduced stock locally so the grid doesn't show stale numbers
-const stock = parseInt(purchasedProduct.stock_quantity,10);
-if(!Number.isNaN(stock)) purchasedProduct.stock_quantity = Math.max(0, stock - purchasedQty);
-renderProducts(getFilteredProducts());
-if(data.success){ purchaseNonce = null; }
+// Use the synchronous, local formatter here. Do not dynamically import a
+// module during a confirmed checkout, where a browser URL parsing error
+// could otherwise make a completed purchase look like a failed one.
+try { creds = formatReceiptCredentials(creds) || creds; }
+catch (formatErr) { console.warn('[mj-logs] receipt formatting skipped after confirmed purchase', formatErr); }
+try {
+  const desc = getDisplayDescription(purchasedProduct);
+  const purchasedQty = qtyRequested;
+  closePurchaseModal();
+  openReceiptModal(purchasedProduct, desc, creds, purchasedQty, data.data && data.data.order_id);
+  showToast('Purchase successful!','success');
+  const stock = parseInt(purchasedProduct.stock_quantity,10);
+  if(!Number.isNaN(stock)) purchasedProduct.stock_quantity = Math.max(0, stock - purchasedQty);
+  renderProducts(getFilteredProducts());
+} catch (receiptErr) {
+  console.error('[mj-logs] purchase confirmed but receipt display failed', receiptErr);
+  showToast('Purchase completed. Open My Orders to view your details.', 'success');
+}
 }catch(err){
-showToast('Network error: '+(err.message||err), 'error');
+if(purchaseConfirmed){
+  console.error('[mj-logs] post-purchase error after server confirmation',err);
+  showToast('Purchase completed. Open My Orders to view your details.', 'success');
+}else{
+  console.error('[mj-logs] purchase request failed',err);
+  showToast('Unable to complete purchase: '+(err.message||err), 'error');
+}
 }finally{
 isBuying = false;
 if(buyBtn){ buyBtn.disabled = false; buyBtn.innerHTML = originalLabel; }
