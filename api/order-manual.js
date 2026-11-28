@@ -464,6 +464,12 @@ export default async function handler(req, res) {
         order_id: orderRef,
         product_key
       });
+      // A transient/duplicate response can occur after the database accepted
+      // the insert. Verify by the idempotency key before deciding to roll back.
+      const verifiedOrder = await findExistingLogOrder(user_id, orderRef);
+      if (!verifiedOrder) {
+        throw new Error('Order record could not be confirmed after insert: ' + (insertErr.message || 'unknown database error'));
+      }
     }
 
     await supabase.from('transactions').insert({
@@ -546,30 +552,42 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error('order-manual error:', err);
-    try {
-      if (claimedRows.length) await releaseClaims(claimedRows);
-      if (deducted) {
+    let refundCompleted = !deducted;
+    if (deducted) {
+      try {
         const refund = await refundWalletDebit(supabase, user_id, walletDebitId);
         if (!refund.ok) throw new Error(refund.error || refund.message || 'Exact wallet refund failed');
-
+        refundCompleted = true;
         // Exact-debit RPC records the refund transaction atomically.
-      try {
-        await sendPushToUser(supabase, user_id, {
-          title: 'Refund processed',
-          body: 'Your wallet was restored for a failed order.',
-          url: '/dashboard.html',
-          type: 'refund'
-        });
-      } catch (_) {}
+        try {
+          await sendPushToUser(supabase, user_id, {
+            title: 'Refund processed',
+            body: 'Your wallet was restored for a failed order.',
+            url: '/dashboard.html',
+            type: 'refund'
+          });
+        } catch (_) {}
+      } catch (refundErr) {
+        console.error('CRITICAL: Auto-refund failed; inventory claims are retained to prevent resale', refundErr);
       }
-    } catch (refundErr) {
-      console.error('CRITICAL: Auto-refund failed', refundErr);
+    }
+
+    // Never release credentials back to stock unless the debit was not made
+    // or its exact refund has been confirmed.
+    if (refundCompleted && claimedRows.length) {
+      try {
+        await releaseClaims(claimedRows);
+        if (product_key) await syncStockCount(product_key);
+      } catch (releaseErr) {
+        console.error('CRITICAL: Inventory release after failed purchase did not complete', releaseErr);
+      }
     }
 
     return res.status(500).json({
       success: false,
+      code: refundCompleted && deducted ? 'PURCHASE_FAILED_REFUNDED' : (deducted ? 'REFUND_REVIEW_REQUIRED' : 'PURCHASE_FAILED'),
       message: deducted
-        ? 'Something went wrong. Your balance has been refunded.'
+        ? (refundCompleted ? 'Purchase could not be completed. Your balance has been refunded.' : 'Purchase could not be completed. Your refund requires support review. Please do not retry yet.')
         : 'Something went wrong. Please try again.'
     });
   }
