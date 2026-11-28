@@ -1705,5 +1705,28 @@ loadProducts();
 </script>
 
   <script src="/js/haptic.js" defer></script>
+<script id="mj-logs-idle-activity">
+(function () {
+  // Keep the dashboard's 30-minute idle timer current while customers use MJ Logs.
+  // Dashboard reads this exact key before deciding whether to sign the user out.
+  var IDLE_KEY = 'mjhub-last-activity';
+  function markMjActivity() {
+    try { localStorage.setItem(IDLE_KEY, String(Date.now())); } catch (e) {}
+  }
+  ['pointerdown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(function (eventName) {
+    document.addEventListener(eventName, markMjActivity, { passive: true, capture: true });
+  });
+  window.addEventListener('pageshow', markMjActivity);
+  window.addEventListener('pagehide', markMjActivity);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') markMjActivity();
+  });
+  var ordersLink = document.querySelector('#receiptModal a[href="dashboard.html#orders"]');
+  if (ordersLink) {
+    ordersLink.addEventListener('click', markMjActivity, { capture: true });
+  }
+  markMjActivity();
+})();
+</script>
 </body>
 </html>
