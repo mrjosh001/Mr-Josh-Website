@@ -1407,8 +1407,32 @@ coupon_code: (activeCoupon && activeCoupon.code) || (document.getElementById('ps
 })
 });
 purchaseStage = 'Reading purchase response';
-const data = await res.json();
-if(!res.ok || !data.success){
+const purchaseResponseStatus = res.status;
+const purchaseResponseType = (res.headers && res.headers.get('content-type')) || '';
+// Read as text first, then parse explicitly. This avoids relying on Safari's
+// Response.json() decoder path and keeps malformed responses distinguishable.
+let purchaseResponseText = '';
+let data = null;
+try {
+  purchaseResponseText = await res.text();
+  data = purchaseResponseText ? JSON.parse(purchaseResponseText) : null;
+} catch (responseParseError) {
+  console.error('[mj-logs] purchase response could not be parsed', {
+    status: purchaseResponseStatus,
+    contentType: purchaseResponseType,
+    error: responseParseError
+  });
+  // /api/order-manual returns HTTP 2xx only after it has confirmed and saved
+  // the order. Do not invite a second charge when its success body is unreadable.
+  if (res.ok) {
+    purchaseConfirmed = true;
+    purchaseNonce = null;
+    showToast('Purchase may have completed. Check My Orders before trying again.', 'warning');
+    return;
+  }
+  throw new Error('Server response could not be read (HTTP ' + purchaseResponseStatus + ').');
+}
+if(!res.ok || !data || !data.success){
 showToast(data.message || 'Order failed. Please try again.', 'error');
 return;
 }
